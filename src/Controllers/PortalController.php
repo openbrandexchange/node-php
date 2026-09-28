@@ -236,9 +236,13 @@ final class PortalController extends Controller
         }
         $w = $this->where($f, $v, 'color');
         if ($w !== null) {
-            $rows = $this->app->db->all('SELECT v.color_code AS value, COUNT(DISTINCT p.id) AS n, MIN(v.rep) AS rep FROM obx_products p JOIN obx_variants v ON v.product_id = p.id AND v.visible = 1 WHERE ' . $w[0] . ' AND v.color_code IS NOT NULL GROUP BY v.color_code ORDER BY v.color_code', $w[1]);
+            // Driven by the variants' (visible, colour, product) index; the colour's name comes
+            // from one variant per colour instead of from every row's JSON.
+            $rows = $this->app->db->all('SELECT v.color_code AS value, COUNT(DISTINCT v.product_id) AS n FROM obx_variants v WHERE v.visible = 1 AND v.color_code IS NOT NULL AND v.product_id IN (SELECT p.id FROM obx_products p WHERE ' . $w[0] . ') GROUP BY v.color_code ORDER BY v.color_code', $w[1]);
             foreach ($rows as $r) {
-                $rep = Json::decode((string) $r['rep'], []);
+                // Within the same filter, so a colour name never comes from a brand the viewer cannot see.
+                $sample = $this->app->db->value('SELECT v.rep FROM obx_variants v JOIN obx_products p ON p.id = v.product_id WHERE v.visible = 1 AND v.color_code = ? AND ' . $w[0] . ' LIMIT 1', array_merge([(string) $r['value']], $w[1]));
+                $rep = Json::decode(is_string($sample) ? $sample : null, []);
                 $item = ['value' => (string) $r['value'], 'count' => (int) $r['n']];
                 if (!empty($rep['color']['name'])) {
                     $item['label'] = $rep['color']['name'];

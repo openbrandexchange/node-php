@@ -161,6 +161,19 @@ final class Schema
                 'CREATE INDEX obx_audit_log_at ON obx_audit_log (at_ts)',
                 'CREATE INDEX obx_audit_log_actor ON obx_audit_log (actor_id)',
             ],
+            // 0.1.0: indexes found with the seeded load test (scripts/load-test.sh).
+            3 => [
+                'CREATE INDEX obx_variants_color ON obx_variants (visible, color_code, product_id)',
+                'CREATE INDEX obx_products_list ON obx_products (visible, style_number)',
+                'CREATE INDEX obx_products_newest ON obx_products (visible, content_updated_at)',
+                'CREATE INDEX obx_download_events_retailer ON obx_download_events (retailer_id)',
+                'CREATE INDEX obx_download_events_actor ON obx_download_events (actor_id)',
+                'CREATE INDEX obx_users_retailer ON obx_users (retailer_id)',
+                'CREATE INDEX obx_api_clients_retailer ON obx_api_clients (retailer_id)',
+                'CREATE INDEX obx_access_requests_retailer ON obx_access_requests (retailer_id)',
+                'CREATE INDEX obx_import_runs_source ON obx_import_runs (source_id, created_ts)',
+                'CREATE INDEX obx_import_runs_job ON obx_import_runs (job_id)',
+            ],
         ];
     }
 
@@ -313,7 +326,8 @@ final class Schema
                 '{text}' => 'TEXT',
                 '{int}' => 'INTEGER',
             ];
-            return strtr($sql, $map);
+            // Idempotent, like the MySQL path (alreadyApplied): re-running a version is harmless.
+            return (string) preg_replace('/^CREATE (UNIQUE )?(TABLE|INDEX) /', 'CREATE $1$2 IF NOT EXISTS ', strtr($sql, $map));
         }
         $map = [
             '{pk}' => 'BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY',
