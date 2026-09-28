@@ -130,6 +130,7 @@ final class App
                 'encryption' => $config->get('smtp_encryption'),
             ],
         );
+        $this->mailer->fromNameResolver = fn (): string => $this->settings->setupDone() ? $this->settings->displayName() : 'Open Brand Exchange';
         $localesDir = $config->get('locales_dir') ?? (rtrim((string) $config->get('ui_dir'), '/') . '/locales');
         $this->emails = new Emails($this->settings, is_dir((string) $localesDir) ? (string) $localesDir : null);
         $this->auth = new Auth($this);

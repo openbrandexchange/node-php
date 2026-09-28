@@ -14,6 +14,9 @@ final class Mailer
     /** @var list<array{to: string, subject: string, text: string, html: string}> */
     public array $sent = [];
 
+    /** @var (callable(): string)|null sender name, e.g. the brand's display name */
+    public $fromNameResolver = null;
+
     /** @param array<string, mixed> $smtp */
     public function __construct(
         private string $transport,
@@ -39,7 +42,10 @@ final class Mailer
             return true;
         }
         $boundary = 'obx' . bin2hex(random_bytes(12));
-        $fromHeader = self::encodeHeader($this->fromName) . ' <' . $this->from . '>';
+        $name = $this->fromNameResolver !== null ? (string) ($this->fromNameResolver)() : $this->fromName;
+        $name = str_replace(["\r", "\n"], '', $name);
+        $display = preg_match('/^[\x20-\x7E]*$/', $name) ? '"' . addcslashes($name, '"\\') . '"' : self::encodeHeader($name);
+        $fromHeader = $display . ' <' . $this->from . '>';
         $headers = [
             'From' => $fromHeader,
             'MIME-Version' => '1.0',
