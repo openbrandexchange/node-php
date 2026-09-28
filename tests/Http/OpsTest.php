@@ -330,6 +330,20 @@ final class OpsTest extends NodeTestCase
         $this->assertSame('10.1.2.3', Request::clientAddress('10.1.2.3', 'garbage', '*'));
     }
 
+    public function testALongRunningWorkerNeverWritesBackAnOldCopyOfTheState(): void
+    {
+        // The worker process started before first-run setup (its cached state has no setup_done).
+        $worker = $this->makeApp();
+        $this->assertFalse($worker->settings->setupDone());
+        $this->setupNode();
+        $this->assertTrue($this->app->settings->setupDone());
+        // Its next pass records its heartbeat: setup must stay done.
+        $worker->worker()->tick(1);
+        $worker->settings->updateState(['housekeeping_ts' => 1]);
+        $this->assertTrue($this->makeApp()->settings->setupDone());
+        $this->assertSame(200, $this->http('GET', '/.well-known/obx')->status);
+    }
+
     public function testInterruptedJobIsPickedUpAgainAndSucceeds(): void
     {
         $this->freshNode();

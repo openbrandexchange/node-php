@@ -99,6 +99,8 @@ final class Worker
             return $done;
         }
         try {
+            // A long-running worker must see what the web requests changed since its last pass.
+            $this->app->settings->clearCache();
             if ((int) ($this->app->settings->state()['worker_ts'] ?? 0) < Clock::time() - 30) {
                 $this->app->settings->updateState(['worker_ts' => Clock::time()]);
             }

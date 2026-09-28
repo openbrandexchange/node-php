@@ -139,17 +139,27 @@ final class Settings
         return $this->stateCache;
     }
 
-    /** @param array<string, mixed> $changes */
+    /**
+     * Changes some state keys. Reads the stored state inside the write transaction, so a
+     * long-running process (the worker) never writes back an old copy over keys that another
+     * process changed meanwhile (for example setup_done).
+     *
+     * @param array<string, mixed> $changes
+     */
     public function updateState(array $changes): void
     {
-        $state = array_replace($this->state(), $changes);
-        $json = Json::encode($state);
-        if ($this->db->value("SELECT k FROM obx_settings WHERE k = 'state'") === null) {
-            $this->db->insert('obx_settings', ['k' => 'state', 'v' => $json]);
-        } else {
-            $this->db->run("UPDATE obx_settings SET v = ? WHERE k = 'state'", [$json]);
-        }
-        $this->stateCache = $state;
+        $this->db->tx(function () use ($changes): void {
+            $raw = $this->db->value("SELECT v FROM obx_settings WHERE k = 'state'");
+            $stored = Json::decode(is_string($raw) ? $raw : null, []);
+            $state = array_replace(is_array($stored) ? $stored : [], $changes);
+            $json = Json::encode($state);
+            if ($raw === null) {
+                $this->db->insert('obx_settings', ['k' => 'state', 'v' => $json]);
+            } else {
+                $this->db->run("UPDATE obx_settings SET v = ? WHERE k = 'state'", [$json]);
+            }
+            $this->stateCache = $state;
+        });
     }
 
     public function setupDone(): bool
