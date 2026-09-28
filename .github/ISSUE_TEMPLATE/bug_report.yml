@@ -1,0 +1,52 @@
+name: Something does not work
+description: A bug in the portal, the installer, the API or the Docker image
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security problems do not belong here: e-mail security@openbrandexchange.com (see SECURITY.md).
+        Never paste passwords, API keys, upload keys, cookies or customer data.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Open …\n2. Click …\n3. …"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`php bin/obx version`, or the footer of the installer"
+    validations:
+      required: true
+  - type: dropdown
+    id: hosting
+    attributes:
+      label: Where does the portal run?
+      options:
+        - Shared web hosting (release zip)
+        - Docker / Docker Compose
+        - Google Cloud Run
+        - Own server with nginx or Apache
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: PHP version, database, web server
+      placeholder: "PHP 8.3, SQLite, Apache (output of php bin/obx check helps)"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines
+      description: With the request id from the X-Request-Id header or the error message, if you have one.
+      render: text

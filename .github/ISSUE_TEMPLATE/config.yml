@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security problem
+    url: https://github.com/openbrandexchange/node-php/security/policy
+    about: Privately, by e-mail to security@openbrandexchange.com. Never in a public issue.
+  - name: A change to the protocol or the import format
+    url: https://github.com/openbrandexchange/spec/issues
+    about: The specification is shared by every portal edition.
+  - name: The web interface (screens, texts, translations)
+    url: https://github.com/openbrandexchange/admin-ui/issues
+    about: The admin and retailer screens are the same in every portal edition.

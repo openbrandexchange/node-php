@@ -1,0 +1,31 @@
+Open Brand Exchange · Portal for web hosting (node-php)
+Copyright 2026 Richard Lindhout and contributors
+
+An initiative of Richard Lindhout · Open Brand Exchange Foundation (in formation)
+Contact: hello@openbrandexchange.com · Security reports: security@openbrandexchange.com
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License, version 3 only (see
+LICENSE). If you run a modified version for others over a network, you must
+offer them its source code (AGPL-3.0 section 13).
+
+The copyright of the publisher and the name "Open Brand Exchange" are to be
+transferred to the Open Brand Exchange Foundation, a Dutch stichting that is
+being set up (see https://github.com/openbrandexchange/spec/blob/main/docs/governance.md).
+Contributions by others remain the copyright of their authors and are licensed
+under the same licence (Developer Certificate of Origin, see CONTRIBUTING.md).
+
+This product includes:
+
+- The Open Brand Exchange admin UI (public/ui), Apache-2.0,
+  https://github.com/openbrandexchange/admin-ui. Its own licence and
+  third-party notices are shipped with it in public/ui (LICENSE, NOTICE,
+  THIRD-PARTY-LICENSES.txt).
+- Fixtures of the Open Brand Exchange specification (tests/fixtures/spec, not
+  part of the release zip), CC-BY-4.0, "Open Brand Exchange specification,
+  © Richard Lindhout and contributors", https://github.com/openbrandexchange/spec.
+- PHP packages in vendor/ (release zip and Docker image), all under the MIT
+  licence: phpseclib/phpseclib, paragonie/constant_time_encoding and
+  paragonie/random_compat. Their licence files are in vendor/<package>/.
+- The Docker image is based on the official php:8.3-apache image (PHP licence,
+  Apache License 2.0 and Debian packages under their own licences).
