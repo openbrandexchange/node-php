@@ -7,10 +7,10 @@ extensions. Each is the simplest reading; the spec repository is the source of t
 
 1. **Upserts are filtered at read time.** Change entries store identity only; `data` is read when
    the feed is served, and an upsert whose object is no longer visible is left out
-   (protocol.md §6.2). Consequence for conformance test I-REPLAY-2: when a whole batch is read
-   *after* it finished, the upsert entries of objects that the same batch deleted at the end are
-   not returned (the delete entries are). Reading after each operation (I-REPLAY-1) returns
-   exactly `expected-changes.json`. The spec should say which of the two I-REPLAY-2 expects.
+   (protocol.md §6.2). Conformance test I-REPLAY-2 reads the feed once after the whole batch and,
+   since spec 2053882, expects exactly that: `expected-changes.json` without the upserts of objects
+   that are not visible after the last operation (every delete stays). Reading after each
+   operation (I-REPLAY-1) returns exactly `expected-changes.json`. All nodes follow §6.2.
 2. **Ordering within a brand cascade**: brand, products (by external id), variants (by external
    id), assets (by product external id, then colour with `null` first, then position).
 3. **MySQL**: writers are serialised on a lock row (`SELECT … FOR UPDATE`) so feed sequence
@@ -40,8 +40,10 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     GD cannot read it.
 12. **Filename qualifiers** also recognise the two-part keys `size_chart`, `tilted_left` and
     `tilted_right` (`X_RED_1_tilted_left.jpg`).
-13. **assets.csv rows with an empty `color_code`** (all colours) and a file name that does not follow
-    the pattern get the external id `{style}_ALL_{position}` unless `asset_id` is given.
+13. **Images without a colour** (import-format.md, "Images without a colour"): the colour part `ALL`
+    in a file name (any case) means every colour (`color_code: null`), and the external id is
+    `{style}_ALL_{position}`; the same id is used for assets.csv rows with an empty `color_code`
+    unless `asset_id` is given. Only assets.csv can address a colour whose code really is `ALL`.
 14. **Materials** accept a decimal comma (`87,5% wool, 12,5% cashmere`).
 15. **Product-level validation problems** in `products.csv` that make the product unusable (no name,
     empty brand column while the node has several brands, invalid care code) skip the product with its variants; field
@@ -62,12 +64,20 @@ extensions. Each is the simplest reading; the spec repository is the source of t
 
 ## Admin and portal
 
-20. **Extensions of the non-normative admin API** (admin-ui may use them):
-    - `Settings.branding.portal_name` and `PublicBranding.portal_name` (LocalizedText or null, as
-      the admin-ui uses it): the brand's own word for the portal ("<Brand> · <word>"); default per
-      language from the glossary (nl Beeldbank, de Händlerportal, fr Espace revendeurs, en Brand portal).
+20. **Admin API beyond node-admin.yaml** (the web interface may use them; node-go and node-ts use
+    the same paths and shapes):
+    - `Settings.branding.portal_name` (now in node-admin.yaml): the brand's own portal word per
+      language; default per language from the glossary.
     - `Settings.node.cron` = `{url, command, last_run_at}` for hosts without a cron job.
+    - `Settings.retention` = `{download_events_days, audit_log_days, ip_days, access_requests_days}`
+      (PATCH validates the ranges; docs/operations.md).
+    - `GET /admin/api/audit-log` (shared entry shape, dotted action names, filters `action`,
+      `actor_id`, `target_id`, `outcome`), `GET /admin/api/retailers/{id}/export`,
+      `GET /admin/api/users/{id}/export`, `GET /admin/api/me/export`
+      (`obx-personal-data-export/1`) and `DELETE /admin/api/me`.
     - `GET /admin/api/portal/products?sort=newest` (default: style number).
+    The admin-ui does not show the audit log, retention settings or "download my data" yet; the
+    API is there for it and for scripts.
 21. **Facets are disjunctive**: each facet's counts apply all *other* filters, so choosing one brand
     still shows the other brands with their counts.
 22. **EAN paste** splits `text` on every non-digit (as specified), so a code written with a space
@@ -112,3 +122,70 @@ extensions. Each is the simplest reading; the spec repository is the source of t
 31. **Approval e-mails**: approving a request that creates a portal invitation sends only the
     invitation (it carries the link to choose a password). The "access is ready" mail is sent when
     no invitation was created (existing account, API only) or when an API key was also created.
+
+## Operations and security (0.1.0 hardening)
+
+32. **CORS only on the discovery document.** `/.well-known/obx` (and its preflight) answers
+    `Access-Control-Allow-Origin: *`; the protocol, ingest and admin APIs send no CORS headers and
+    answer preflights with an error. The APIs are for servers, so a browser on another site can
+    never read them with a retailer's token. Same rule in every node.
+33. **Outbound requests (SSRF), same rule in every node:** only `https` (plus `sftp`), the host is
+    resolved by the node and every address checked; link-local and cloud-metadata addresses
+    (169.254/16, fe80::/10), multicast and unspecified addresses are always refused, also with
+    `OBX_ALLOW_PRIVATE_URLS=true`, which only opens loopback, private ranges and plain http. The
+    checked address is pinned for the connection (curl `CURLOPT_RESOLVE`; SFTP connects to the
+    IP), every redirect is checked again. The operator's own blob store endpoint is exempt.
+34. **Security headers on every response:** nosniff, `Referrer-Policy`, `X-Frame-Options: DENY`,
+    a CSP with `frame-ancestors 'none'` (`default-src 'none'` outside the web interface), HSTS
+    (two years, no `includeSubDomains`) when the request came over HTTPS.
+35. **Request ids** (`X-Request-Id`, kept when a proxy sends 8–128 of `[A-Za-z0-9._-]`), in every
+    log line, audit entry and internal-error message.
+36. **Health:** `/healthz` answers from the front controller without configuration or database
+    (liveness); `/readyz` checks the database at the current schema, the data folder and the blob
+    store. `/metrics` (Prometheus, gauges from the database) only with `OBX_METRICS_TOKEN`.
+37. **Configuration is validated** on every start (`Config::validate`): every problem is named with
+    its environment variable and config.php key; the Docker entrypoint exits 78.
+38. **Migrations** are forward-only and idempotent (SQLite `IF NOT EXISTS`, MySQL skips existing
+    tables/indexes), run under a lock (SQLite `BEGIN IMMEDIATE`, MySQL `GET_LOCK`), and a database
+    with a higher `schema_version` than the code is refused (`SchemaTooNew`). Schema 2 adds the
+    audit log, schema 3 indexes found with the load test.
+39. **Node state writes** (`obx_settings.state`) read the stored state inside the write
+    transaction; the worker clears its caches every pass. Before this, a worker started before
+    first-run setup wrote its old copy back and undid `setup_done`.
+40. **Audit log** records every state-changing admin API request after it ran, personal-data
+    exports and login attempts; never bodies or values, only field names. Unlike node-go it keeps
+    the client address, for at most `retention.ip_days` (≤ 30, security.md §9), because shared
+    hosting has no other place to see who signed in from where.
+41. **Backups** (`php bin/obx backup`/`restore`) are logical (NDJSON per table + blobs + the secret
+    key) so they move between SQLite and MySQL; the database snapshot is one read transaction.
+42. **Client address behind proxies:** only when `OBX_TRUSTED_PROXIES` (list, `private`, `*`) or
+    `OBX_TRUST_PROXY=true` (the other nodes' switch, = `*`) is set; then the right-most untrusted
+    `X-Forwarded-For` hop. The access log holds no client addresses.
+43. **Graceful stop** in Docker: the entrypoint turns SIGTERM into Apache's graceful stop and a
+    pcntl-based worker stop after the current job. Interrupted jobs are resumed through their
+    lease (at most 10 minutes later); every job kind is idempotent.
+44. **Installer languages:** `resources/installer/<lang>.json` for all 25 languages, chosen from
+    Accept-Language or `?lang=`, with the glossary's portal word and setup-code term; the badge
+    text comes from the vendored web interface.
+
+## Known limitations (tracked)
+
+Each is a deliberate choice for 0.1.0 with its reason; none is reachable as a broken screen.
+
+- **Renditions ignore EXIF orientation and ICC profiles** (GD has no colour management); originals
+  are byte-exact and brands export sRGB in practice. Revisit when a host offers Imagick widely.
+- **TIFF originals are refused** (GD cannot read TIFF); the installer and import errors say so.
+- **Brand `logo_url` from the Ingest API is published as given**, not fetched and mirrored (a
+  fetch would be one more SSRF surface for little gain; the admin upload path stores logos).
+- **New API clients get every scope their grant allows**, including `usage:write`
+  (node-admin.yaml names catalog:read, media:read and media:original as defaults); token scopes
+  are intersected with the grant on every call.
+- **Request metrics** (rates, latencies) are not kept by PHP between requests; `/metrics` has
+  gauges from the database, and request metrics come from the web server or proxy.
+- **Hosts that ignore `.user.ini` and `.htaccess`** keep PHP's own upload parsing: several files
+  under the same field name lose all but the last there; upload images as one zip.
+- **`deploy/cloudrun.sh`** is checked with shellcheck (and its cron-key derivation against the
+  PHP one) but was not run against a real Google Cloud project here (no account; the owner can run
+  it). The Docker image it deploys is the tested one.
+- **The 21 languages other than en, nl, de and fr** in the installer are machine-quality
+  translations that follow the glossary; they need a native review, like the web interface's.
