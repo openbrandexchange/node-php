@@ -103,3 +103,12 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     derives it the same way with openssl). SQLite on Cloud Run is only for trying out.
 29. **Root installs** (everything uploaded into `public_html`): the root `.htaccess` forwards to
     `public/` and denies the other folders; the request's base path then excludes `/public`.
+
+## Integration with the web interface
+
+30. **Vendored UI**: `public/ui` holds admin-ui's committed `dist/` (version in `public/ui/VERSION`),
+    copied by `scripts/update-ui.sh` from git, so half-finished local admin-ui changes are never
+    vendored. `scripts/ui-walk.sh` clicks through the main flows against a fresh Docker node.
+31. **Approval e-mails**: approving a request that creates a portal invitation sends only the
+    invitation (it carries the link to choose a password). The "access is ready" mail is sent when
+    no invitation was created (existing account, API only) or when an API key was also created.
