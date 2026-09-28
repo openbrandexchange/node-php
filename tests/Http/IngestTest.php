@@ -190,6 +190,17 @@ final class IngestTest extends NodeTestCase
         $this->assertSame(['ai_generated' => false, 'ai_edited' => false, 'source' => 'photo', 'c2pa' => 'none', 'c2pa_manifest_url' => null, 'generator' => null], $record['data']['provenance']);
         $product = $this->json($this->http('GET', '/obx/v1/ingest/products/P1', ['bearer' => $this->ingest]));
         $this->assertArrayNotHasKey('missing_files', $product);
+        // Writing back what GET returned (defaults spelled out) changes nothing.
+        $back = $this->json($this->http('PUT', '/obx/v1/ingest/assets/P1_X_1', ['bearer' => $this->ingest, 'json' => $record['data']]));
+        $this->assertSame('unchanged', $back['result']);
+        // Non-default provenance survives; its implied source is shown.
+        $ai = $record['data'];
+        $ai['provenance'] = ['ai_generated' => true, 'generator' => 'fictional-model 1'];
+        $this->assertSame('updated', $this->json($this->http('PUT', '/obx/v1/ingest/assets/P1_X_1', ['bearer' => $this->ingest, 'json' => $ai]))['result']);
+        $prov = $this->json($this->http('GET', '/obx/v1/ingest/assets/P1_X_1', ['bearer' => $this->ingest]))['data']['provenance'];
+        $this->assertTrue($prov['ai_generated']);
+        $this->assertSame('generated', $prov['source']);
+        $this->assertSame('fictional-model 1', $prov['generator']);
     }
 
     public function testResumableMultipartUpload(): void

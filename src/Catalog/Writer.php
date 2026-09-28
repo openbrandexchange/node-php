@@ -327,6 +327,15 @@ final class Writer
                 $sync['assets'] = $this->db->column("SELECT id FROM obx_assets WHERE product_id = ? AND input LIKE '%variant_external_ids\":[%'", [$product['id']]);
                 break;
             case 'asset':
+                // Keep only the rights and provenance fields that differ from the defaults, so
+                // a record read with defaults applied and written back is unchanged, and an
+                // asset keeps following the node's default rights.
+                $model['rights'] = self::withoutDefaults($model['rights'] ?? null, $this->settings->defaultRights());
+                $aiGenerated = (bool) ($model['provenance']['ai_generated'] ?? false);
+                $model['provenance'] = self::withoutDefaults($model['provenance'] ?? null, [
+                    'ai_generated' => false, 'ai_edited' => false, 'source' => $aiGenerated ? 'generated' : 'photo',
+                    'c2pa' => 'none', 'c2pa_manifest_url' => null, 'generator' => null,
+                ]);
                 $product = $this->load('product', (string) $model['product_external_id']);
                 if ($product === null) {
                     throw new ApiError('unknown_parent', 'Product "' . $model['product_external_id'] . '" does not exist. Create it first.', [['pointer' => '/product_external_id', 'detail' => 'Unknown product.', 'obx_error' => 'unknown_parent']]);
@@ -893,6 +902,27 @@ final class Writer
             $out['missing_files'] = $missing;
         }
         return $out;
+    }
+
+    /**
+     * The fields of $given that differ from $defaults (null when none do).
+     *
+     * @param array<string, mixed>|null $given
+     * @param array<string, mixed> $defaults
+     * @return array<string, mixed>|null
+     */
+    public static function withoutDefaults(?array $given, array $defaults): ?array
+    {
+        if ($given === null) {
+            return null;
+        }
+        $out = [];
+        foreach ($given as $k => $v) {
+            if (!array_key_exists($k, $defaults) || $defaults[$k] !== $v) {
+                $out[$k] = $v;
+            }
+        }
+        return $out === [] ? null : $out;
     }
 
     /** @return list<string> */
