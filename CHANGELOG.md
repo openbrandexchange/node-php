@@ -4,6 +4,16 @@ All notable changes to the PHP edition of the Open Brand Exchange portal ("Porta
 
 ## [Unreleased]
 
+### Changed
+
+- The web interface is served under admin-ui's strict Content-Security-Policy: no inline styles.
+- The public logo no longer sends a CORS header; CORS is only on the discovery document, as in every edition.
+
+### Fixed
+
+- A missing file under `/assets/` or `/locales/` is a 404, also when the browser accepts HTML, so a tab left open during an upgrade reloads once instead of reading the start page as code.
+- `LICENSE` and `NOTICE` of the web interface are served as plain text.
+
 ## [0.1.0] - 2026-09-28
 
 The first release. It implements Open Brand Exchange specification 0.1.0 (OBX Protocol 0.1) and passes the official conformance suite: protocol, ingest, portal and security profiles, with server-made and with client-made image versions.
