@@ -1,0 +1,32 @@
+# Local or single-server hosting with Docker Compose:  docker compose up -d
+# Then open http://localhost:8080 and follow the setup wizard (the setup code is in the logs:
+# docker compose logs portal | grep "Setup code").
+services:
+  portal:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      OBX_PUBLIC_URL: ${OBX_PUBLIC_URL:-http://localhost:8080}
+      # OBX_SETUP_CODE: choose-your-own-code
+      # E-mail (optional): OBX_MAIL_FROM, OBX_SMTP_HOST, OBX_SMTP_USER, OBX_SMTP_PASSWORD
+    volumes:
+      - portal-data:/var/www/html/data
+    restart: unless-stopped
+
+  # Optional MySQL instead of SQLite: `docker compose --profile mysql up -d` and set
+  # OBX_DB_DSN=mysql:host=db;dbname=obx;charset=utf8mb4, OBX_DB_USER=obx, OBX_DB_PASSWORD=...
+  db:
+    image: mysql:8.4
+    profiles: ["mysql"]
+    environment:
+      MYSQL_DATABASE: obx
+      MYSQL_USER: obx
+      MYSQL_PASSWORD: ${OBX_DB_PASSWORD:-change-me}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - db-data:/var/lib/mysql
+
+volumes:
+  portal-data:
+  db-data:

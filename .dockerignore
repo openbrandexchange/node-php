@@ -1,0 +1,8 @@
+.git
+vendor
+data/*
+!data/.htaccess
+config/config.php
+build
+tests
+.phpunit.cache
