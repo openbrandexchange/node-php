@@ -12,7 +12,7 @@ final class Config
 {
     public const VERSION = '0.1.0';
     public const SOFTWARE = 'obx-node-php';
-    public const SPEC_VERSION = '0.1.0-draft';
+    public const SPEC_VERSION = '0.1.0';
     public const OBX_VERSION = '0.1';
 
     /** @param array<string, mixed> $values */

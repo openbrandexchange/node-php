@@ -1,6 +1,6 @@
 # Implementation notes (node-php)
 
-Decisions taken where the spec (v0.1.0-draft) was silent or ambiguous, and deliberate
+Decisions taken where the spec (v0.1.0) was silent or ambiguous, and deliberate
 extensions. Each is the simplest reading; the spec repository is the source of truth.
 
 ## Protocol and feed
