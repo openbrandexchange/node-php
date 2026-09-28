@@ -70,18 +70,21 @@ server is for trying the portal out; for real use pick one of the hosting option
    `brands.yourbrand.com → /obx-portal/public`. If you can only upload into `public_html`, upload
    the *contents* of the folder there; the included `.htaccess` files keep everything except
    `public` private.
-3. Make the `data` and `config` folders writable for the web server (usually permission 775).
-4. Open `https://brands.yourbrand.com/install` (in your browser's language; 25 languages). The
+3. Make the `data` and `config` folders writable for the web server: in your FTP program,
+   *File permissions* 775 (if the installer still says "not writable" after a reload: 777).
+4. Open `https://brands.yourbrand.com` (in your browser's language; 25 languages). The
    installer checks your server, then asks for the **setup code** from `data/SETUP-CODE.txt`
    (open it with your FTP program: this proves you uploaded the files), the web address, the
    database ("Simple", a file in the data folder, or your MySQL/MariaDB) and optionally the
    e-mail sender.
-5. Click *Open the setup wizard* and create your admin account. There is no default password.
-6. Add a **cron job** in your hosting control panel (every minute or every 5 minutes):
-   `php /path/to/obx-portal/bin/obx cron`, or the cron web address the installer shows. Without a
-   cron job the portal still works: it does the background work after its own requests.
+5. Click *Open the setup wizard* (the setup code is filled in) and create your admin account.
+   There is no default password.
+6. Add a **cron job** in your hosting control panel (every minute or every 5 minutes) with what
+   the installer shows: `php /path/to/obx-portal/bin/obx cron`, or the cron web address (on hosts
+   where PHP runs as the web server's user, only the web address works). Without a cron job the
+   portal still works: it does the background work after its own requests.
 
-Requirements: PHP 8.2, 8.3 or 8.4 with PDO (SQLite or MySQL), OpenSSL and mbstring. GD (image
+Requirements: Apache with mod_rewrite (or nginx), PHP 8.2, 8.3 or 8.4 with PDO (SQLite or MySQL), OpenSSL and mbstring. GD (image
 versions on the server), zip (zip uploads) and curl (scheduled imports, webhooks) are strongly
 recommended; the installer tells you what is missing. This path is tested on every change on
 stock Apache hosting with only PDO SQLite, GD, curl, zip and mbstring, and without cron.

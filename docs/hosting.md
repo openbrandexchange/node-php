@@ -27,16 +27,17 @@ Whatever you choose, the portal is the same: the same screens, the same API, and
 2. **Upload** it with your FTP program (FileZilla, Cyberduck, WinSCP) or the file manager of your host.
    - *Best:* upload the folder next to (not into) your web folder, and make its `public` folder the **document root** of a (sub)domain in the hosting panel, e.g. `brands.yourbrand.com → /obx-portal/public`.
    - *If you can only use `public_html`:* upload the **contents** of `obx-portal` into it. The `.htaccess` files send every request to `public/` and refuse the other folders (`config`, `data`, `src`, `vendor` …), so nothing private can be downloaded.
-3. **Permissions:** make `data` and `config` writable for the web server (usually 775; your FTP program calls it "file permissions").
-4. **Install:** open `https://brands.yourbrand.com/install`. The page is in the language of your browser (25 languages; switch at the top). It checks your server, then asks for:
-   - the **setup code**: open `data/SETUP-CODE.txt` with your FTP program. This proves you are the one who uploaded the files; nobody else can claim a freshly uploaded portal.
+3. **Permissions:** make `data` and `config` writable for the web server. Your FTP program calls it "file permissions" (FileZilla: right-click the folder → *File permissions*). 775 is usually enough; if the installer still says "not writable" after a reload, use 777. That happens on hosts where PHP runs as the web server's own user (Apache with mod_php) instead of as your FTP account.
+4. **Install:** open `https://brands.yourbrand.com` (or `…/install`). The page is in the language of your browser (25 languages; switch at the top). It checks your server, then asks for:
+   - the **setup code**: open `data/SETUP-CODE.txt` with your FTP program (download it, or view it in your host's file manager). The file appears once `data` is writable. This proves you are the one who uploaded the files; nobody else can claim a freshly uploaded portal.
    - the web address of the portal;
    - the database: *Simple* (a file in the data folder, fine for most brands) or the MySQL/MariaDB database from your hosting package;
    - optionally the sender address (and SMTP server) for invitations and "your download is ready" e-mails.
-5. **Setup wizard:** click *Open the setup wizard* and create your admin account. There is no default password.
-6. **Background work:** add a cron job in the hosting panel, every minute or every 5 minutes:
-   `php /home/you/obx-portal/bin/obx cron` (the installer shows the exact path), or, if your host can only call a web address, the cron address it shows. Without a cron job the portal still works: it does the work right after the request that asked for it and catches up whenever someone uses the portal.
-7. **Backups:** add a second cron job, daily: `php /home/you/obx-portal/bin/obx backup /home/you/backups/portal-$(date +\%u).zip` ([operations.md](operations.md#backups)).
+5. **Setup wizard:** click *Open the setup wizard*; the setup code is already filled in. Enter your company, languages and your own admin password. There is no default password.
+6. **Background work:** add a cron job in the hosting panel, every minute or every 5 minutes, with what the installer shows: `php /home/you/obx-portal/bin/obx cron`, or the cron web address. On hosts where PHP runs as the web server's user, the installer shows only the web address: a cron job runs as your FTP account there, which may not read `config/config.php`. Without a cron job the portal still works: it does the work right after the request that asked for it and catches up whenever someone uses the portal.
+7. **Backups:** add a second cron job, daily: `php /home/you/obx-portal/bin/obx backup /home/you/backups/portal-$(date +\%u).zip` ([operations.md](operations.md#backups)). Where the installer showed only the cron web address, that command cannot read the portal's files either; use your host's own backup of the whole account (it includes the `data` folder), or ask the host to run the command as the web server's user.
+
+**No mod_rewrite?** Apache needs `mod_rewrite` to route the portal's pages; almost every host has it. Without it every address answers with a short page that says so. nginx-only hosts ignore `.htaccess`: use [nginx.conf](nginx.conf).
 
 **Uploads.** `public/.user.ini` (PHP-FPM hosts) and `public/.htaccess` (Apache with mod_php) raise the upload limit to 512 MB and switch PHP's own form parsing off, so many images can be uploaded at once. Some hosts ignore both files: then the installer's check shows a lower limit; ask the host to raise `upload_max_filesize` and `post_max_size`, and upload many images as one zip.
 
