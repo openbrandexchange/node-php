@@ -481,7 +481,7 @@ final class Writer
             } else {
                 $r = $this->renditions->ensure($orig['sha256']);
             }
-            return [['original' => $orig] + $r, null];
+            return [self::ordered(['original' => $orig] + $r), null];
         }
         if ($pending !== null && !isset($resolved['original'])) {
             $pending = array_replace($pending, $resolved);

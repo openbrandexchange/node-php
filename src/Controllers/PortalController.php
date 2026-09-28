@@ -230,6 +230,9 @@ final class PortalController extends Controller
                 }
                 $out[$facet][] = $item;
             }
+            if ($facet === 'brands') {
+                usort($out['brands'], static fn ($a, $b) => strcasecmp((string) $a['label'], (string) $b['label']));
+            }
         }
         $w = $this->where($f, $v, 'color');
         if ($w !== null) {

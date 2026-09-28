@@ -16,7 +16,7 @@ final class Router
     public function add(string $method, string $pattern, callable $handler): void
     {
         $names = [];
-        $regex = preg_replace_callback('/\\\{([a-z_]+)\\\}/', static function (array $m) use (&$names): string {
+        $regex = preg_replace_callback('/\\\{([a-z0-9_]+)\\\}/', static function (array $m) use (&$names): string {
             $names[] = $m[1];
             return '([^/]+)';
         }, preg_quote($pattern, '#'));
