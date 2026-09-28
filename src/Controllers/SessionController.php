@@ -129,7 +129,7 @@ final class SessionController extends Controller
         $brandExt = Str::slug($brandName) ?: 'brand';
 
         $res = new Response(201);
-        $this->app->db->tx(function () use ($company, $website, $contact, $accent, $langs, $default, $admin, $email, $password, $brandName, $brandExt) {
+        $this->app->db->tx(function () use ($req, $company, $website, $contact, $accent, $langs, $default, $admin, $email, $password, $brandName, $brandExt) {
             if ($this->app->settings->setupDone()) {
                 throw new ApiError('setup_completed', 'This portal is already set up.');
             }
@@ -154,7 +154,7 @@ final class SessionController extends Controller
                 'password_hash' => Crypto::hashPassword($password),
                 'created_at' => Clock::iso(),
             ]);
-            $this->app->settings->updateState(['setup_done' => true, 'setup_code_enc' => null, 'setup_at' => Clock::iso()]);
+            $this->app->settings->updateState(['setup_done' => true, 'setup_code_enc' => null, 'setup_at' => Clock::iso(), 'public_url' => $this->app->baseUrl($req)]);
             $this->app->settings->nodeId();
         });
         @unlink($this->app->config->dataDir() . '/SETUP-CODE.txt');

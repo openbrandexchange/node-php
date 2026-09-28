@@ -324,12 +324,20 @@ final class App
         return $req->origin() . $req->basePath;
     }
 
-    /** Public URL for links in e-mails (configured value wins). */
+    /**
+     * Public URL for links in e-mails: the configured value, else the address recorded at
+     * first-run setup. Never the Host header of an arbitrary later request (a forged Host must
+     * not end up in password-reset links).
+     */
     public function publicUrl(): string
     {
         $configured = $this->config->get('public_url');
         if (is_string($configured) && $configured !== '') {
             return rtrim($configured, '/');
+        }
+        $recorded = $this->settings->state()['public_url'] ?? null;
+        if (is_string($recorded) && $recorded !== '') {
+            return $recorded;
         }
         return $this->baseUrl();
     }

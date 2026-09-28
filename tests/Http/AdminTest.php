@@ -303,4 +303,15 @@ final class AdminTest extends NodeTestCase
         $this->assertProblem($this->http('PATCH', '/admin/api/users/' . $users['items'][0]['id'], ['browser' => 'anon', 'json' => ['status' => 'blocked']]), 409, 'conflict');
         $this->assertProblem($this->http('DELETE', '/admin/api/users/' . $users['items'][0]['id'], ['browser' => 'anon']), 409, 'conflict');
     }
+
+    public function testEmailLinksIgnoreAForgedHostHeader(): void
+    {
+        $this->app = $this->makeApp(['public_url' => null]);
+        $this->setupNode();
+        $this->http('GET', '/admin/api/session', ['browser' => 'x', 'host' => 'evil.example']);
+        $this->http('POST', '/admin/api/password/forgot', ['browser' => 'x', 'host' => 'evil.example', 'json' => ['email' => 'admin@kestrel.example']]);
+        $mail = end($this->app->mailer->sent);
+        $this->assertStringContainsString('http://localhost/reset-password/', $mail['text']);
+        $this->assertStringNotContainsString('evil.example', $mail['text']);
+    }
 }
