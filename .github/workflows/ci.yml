@@ -1,29 +1,173 @@
-name: Tests
+name: CI
 on:
   push:
+    branches: [main]
   pull_request:
+  schedule:
+    - cron: "23 5 * * 1" # weekly: new advisories for unchanged dependencies
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Everything runs in Docker through the scripts in scripts/, exactly as on a laptop
+# (see CONTRIBUTING.md), so a green run here means the same commands pass locally.
 jobs:
-  sqlite:
+  lint:
+    name: Lint and static analysis
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: ./scripts/test.sh
-  mysql:
+      - uses: actions/checkout@v7
+      - name: PHP syntax on 8.2, 8.3 and 8.4
+        run: |
+          for v in 8.2 8.3 8.4; do
+            docker run --rm -v "$PWD":/app -w /app "php:$v-cli" sh -c \
+              'find src tests bin public -name "*.php" -not -path "tests/ui/*" -print0 | xargs -0 -n1 php -l >/dev/null' || exit 1
+          done
+      - name: composer validate, PHPStan (level 5)
+        run: |
+          docker build -q -t obx-node-php-test -f docker/test.Dockerfile docker >/dev/null
+          docker run --rm -v "$PWD":/app -w /app obx-node-php-test sh -c \
+            'composer validate --strict && composer install --no-interaction --no-progress --quiet && vendor/bin/phpstan analyse --no-progress --memory-limit=1G'
+      - name: Shell scripts
+        run: shellcheck deploy/*.sh scripts/*.sh docker/entrypoint.sh
+      - name: No TODO or FIXME in shipped code
+        run: "! grep -rnE 'TODO|FIXME|XXX' src public/index.php bin docker deploy scripts"
+
+  test:
+    name: Tests (PHP ${{ matrix.php }}, SQLite)
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
+      matrix:
+        php: ["8.2", "8.3", "8.4"]
+    steps:
+      - uses: actions/checkout@v7
+      - name: PHPUnit (unit, HTTP, 25-language checks)
+        env:
+          PHP: ${{ matrix.php }}
+        run: ./scripts/test.sh
+
+  mysql:
+    name: Tests (${{ matrix.flavour }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
       matrix:
         flavour: [mysql, mariadb]
     steps:
-      - uses: actions/checkout@v4
-      - run: ./scripts/test-mysql.sh ${{ matrix.flavour }} --testsuite http
+      - uses: actions/checkout@v7
+      - run: ./scripts/test-mysql.sh ${{ matrix.flavour }}
+
   sources:
+    name: Scheduled imports against real S3 and SFTP servers
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: ./scripts/test-sources.sh
-  release:
+
+  hosting:
+    name: Shared hosting (release zip + installer, PHP 8.2/8.3/8.4, no cron)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - run: ./scripts/build-release.sh
-      - run: shellcheck deploy/*.sh scripts/*.sh docker/entrypoint.sh
+      - uses: actions/checkout@v7
+      - run: ./scripts/test-hosting.sh 8.2 8.3 8.4
+
+  e2e:
+    name: Browser walk (every main screen with axe, keyboard only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Install Playwright
+        working-directory: tests/ui
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: Walk
+        env:
+          OUT: ${{ runner.temp }}/ui-walk
+        run: mkdir -p "$OUT" && ./scripts/ui-walk.sh
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: ui-walk-screenshots
+          path: ${{ runner.temp }}/ui-walk
+
+  conformance:
+    # The conformance suite (obx-conformance) lives in openbrandexchange/obx-go, a private
+    # repository until the project is published. The owner adds a repository secret
+    # OBX_READ_TOKEN: a fine-grained token with read access to the contents of obx-go.
+    name: OBX conformance (server and client-made image versions)
+    runs-on: ubuntu-latest
+    env:
+      OBX_READ_TOKEN: ${{ secrets.OBX_READ_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        renditions: [auto, client]
+    steps:
+      - name: Skip without access to obx-go
+        if: env.OBX_READ_TOKEN == ''
+        run: echo "::notice::OBX_READ_TOKEN is not set; the conformance suite is skipped (see CONTRIBUTING.md)."
+      - uses: actions/checkout@v7
+        if: env.OBX_READ_TOKEN != ''
+        with:
+          path: node-php
+      - uses: actions/checkout@v7
+        if: env.OBX_READ_TOKEN != ''
+        with:
+          repository: openbrandexchange/obx-go
+          token: ${{ secrets.OBX_READ_TOKEN }}
+          path: obx-go
+      - name: obx-conformance all against the Docker image
+        if: env.OBX_READ_TOKEN != ''
+        env:
+          RENDITIONS: ${{ matrix.renditions }}
+        run: ./node-php/scripts/conformance.sh "$PWD/obx-go" --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
+
+  security:
+    name: Dependency audit and licences
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: composer audit (production and development packages)
+        run: docker run --rm -v "$PWD":/app -w /app composer:2 composer audit --no-interaction --locked
+      - name: Licences of production dependencies
+        run: ./scripts/check-licenses.sh
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: npm audit (browser walk only; nothing of it ships)
+        working-directory: tests/ui
+        run: npm ci && npm audit --omit=dev && npm audit --audit-level=high
+
+  release-build:
+    name: Release zip and Docker image build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Release zip
+        run: ./scripts/build-release.sh
+      - name: The zip holds vendor/, the web interface and no development files
+        run: |
+          zip=$(find build -name 'obx-portal-php-*.zip' | head -1)
+          unzip -l "$zip" > list.txt
+          for must in obx-portal/vendor/autoload.php obx-portal/public/ui/index.html obx-portal/public/index.php obx-portal/resources/installer/de.json obx-portal/LICENSE obx-portal/NOTICE; do
+            grep -q " $must$" list.txt || { echo "missing $must" >&2; exit 1; }
+          done
+          if grep -E ' obx-portal/(tests|docker|\.github|vendor/phpunit|vendor/phpstan)/' list.txt; then echo "development files in the zip" >&2; exit 1; fi
+      - name: Docker image
+        run: docker build -t obx-portal-php:ci . && docker run --rm obx-portal-php:ci php bin/obx version
+
+  load:
+    name: Load test (10 000 products)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: ./scripts/load-test.sh 10000 | tee -a "$GITHUB_STEP_SUMMARY"

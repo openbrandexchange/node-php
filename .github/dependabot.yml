@@ -1,0 +1,33 @@
+# Weekly update pull requests. Composer security fixes arrive as soon as they are published.
+version: 2
+updates:
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      development:
+        dependency-type: development
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /tests/ui
+    schedule:
+      interval: weekly
+    groups:
+      browser-walk:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: weekly
