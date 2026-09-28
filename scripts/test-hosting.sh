@@ -59,6 +59,9 @@ for v in "${versions[@]}"; do
 
     page=$(curl -fsS "$base/install")
     grep -q 'Install your brand portal' <<<"$page" || fail "installer page not shown"
+    curl -fsS -H 'Accept-Language: de-DE,de;q=0.9' "$base/install" | grep -q 'Installieren Sie Ihr Händlerportal' || fail "installer does not follow the browser language"
+    curl -fsS "$base/install?lang=fr" | grep -q 'Installez votre espace revendeurs' || fail "installer language switch"
+
     grep -q 'class="bad"' <<<"$page" && fail "a required server check failed: $(grep -o '<li class="bad">[^<]*' <<<"$page")"
     for check in 'GD with JPEG' 'zip (zip uploads' 'curl (scheduled'; do
       grep -q "<li class=\"ok\">$check" <<<"$page" || fail "server check '$check' not ok"
