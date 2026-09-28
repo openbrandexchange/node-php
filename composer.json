@@ -1,0 +1,38 @@
+{
+    "name": "openbrandexchange/node-php",
+    "description": "Open Brand Exchange brand node for PHP: retailer portal, OBX Protocol and OBX Ingest API on ordinary shared hosting.",
+    "type": "project",
+    "license": "AGPL-3.0-only",
+    "homepage": "https://openbrandexchange.com",
+    "require": {
+        "php": ">=8.2",
+        "ext-json": "*",
+        "ext-pdo": "*",
+        "ext-openssl": "*",
+        "phpseclib/phpseclib": "^3.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^11.5"
+    },
+    "suggest": {
+        "ext-gd": "Server-side renditions (web, square, thumb). Without it the admin UI and obx CLI make them.",
+        "ext-zip": "Zip imports and downloads.",
+        "ext-curl": "Scheduled imports, webhooks, S3 storage.",
+        "ext-pdo_sqlite": "Default database.",
+        "ext-pdo_mysql": "MySQL / MariaDB database."
+    },
+    "autoload": {
+        "psr-4": {"Obx\\Node\\": "src/"}
+    },
+    "autoload-dev": {
+        "psr-4": {"Obx\\Node\\Tests\\": "tests/"}
+    },
+    "config": {
+        "platform": {"php": "8.2.0"},
+        "sort-packages": true,
+        "optimize-autoloader": true
+    },
+    "scripts": {
+        "test": "phpunit"
+    }
+}

@@ -1,0 +1,12 @@
+/vendor/
+/data/*
+!/data/.htaccess
+!/data/.gitkeep
+/config/config.php
+/config/*.tmp
+/build/
+/.phpunit.cache/
+/.phpunit.result.cache
+/public/ui/*
+!/public/ui/README.md
+.DS_Store
