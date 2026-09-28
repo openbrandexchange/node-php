@@ -13,6 +13,15 @@ All notable changes to the PHP edition of the Open Brand Exchange portal ("Porta
 
 - A missing file under `/assets/` or `/locales/` is a 404, also when the browser accepts HTML, so a tab left open during an upgrade reloads once instead of reading the start page as code.
 - `LICENSE` and `NOTICE` of the web interface are served as plain text.
+- Hosts where PHP runs as the web server's user (Apache with mod_php): the FTP account can now open `data/SETUP-CODE.txt` and `config/config.php`, the installer offers only the cron web address (a command-line cron job could not write the database there), and `bin/obx` explains an unreadable `config.php` instead of printing a PHP warning.
+- The installer no longer claims to have written a setup code while `data/` is not writable, and says how to fix the folder permissions (775, else 777).
+- Without Apache's mod_rewrite, the portal answers with a one-line explanation instead of a bare 403.
+- "Test connection" of a scheduled import no longer adds an English-only "N file(s) found." next to the web interface's own message.
+
+### Added
+
+- The installer's *Open the setup wizard* link fills in the setup code (as `#code=`, never sent to the server).
+- Web interface: the cron address under Settings, web version as the first download choice, download texts without an e-mail promise (admin-ui main after v0.1.1).
 
 ## [0.1.0] - 2026-09-28
 

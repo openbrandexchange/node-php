@@ -167,6 +167,16 @@ extensions. Each is the simplest reading; the spec repository is the source of t
 44. **Installer languages:** `resources/installer/<lang>.json` for all 25 languages, chosen from
     Accept-Language or `?lang=`, with the glossary's portal word and setup-code term; the badge
     text comes from the vendored web interface.
+45. **PHP as another user than the FTP account** (Apache with mod_php; found in a fresh-eyes
+    install on stock `php:8.2-apache`): files the portal writes belong to the web server's user.
+    The installer detects it (`posix_geteuid()` differs from the owner of `src/`) and then writes
+    `data/SETUP-CODE.txt` 0644 (else 0600) and `config/config.php` 0644 (else 0640), so the owner
+    can open them over FTP; `data/` and `config/` are never served. A cron job runs as the FTP
+    account there and could not write the database, so the installer shows only the cron web
+    address, the admin repeats it under Settings (`settings.node.cron`), and `bin/obx` explains an
+    unreadable `config.php` instead of printing a PHP warning. The installer's link to the wizard
+    carries the code as `#code=` (a fragment never reaches the server) and the wizard fills it in.
+    Without mod_rewrite every address answers the root `.htaccess`'s one-line explanation.
 
 ## Known limitations (tracked)
 
