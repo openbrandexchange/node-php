@@ -100,6 +100,8 @@ final class Worker
         }
         try {
             $this->recoverStale();
+            // Scheduled imports that are due become queued jobs first, so they run in this pass.
+            $done['sources'] = $this->app->sources->runDue();
             // Queued jobs, oldest first.
             while (time() - $start < $budget) {
                 $id = $this->app->db->value("SELECT id FROM obx_jobs WHERE status = 'queued' ORDER BY created_ts LIMIT 1");
@@ -108,9 +110,6 @@ final class Worker
                 }
                 $this->runJob((string) $id);
                 $done['jobs']++;
-            }
-            if (time() - $start < $budget) {
-                $done['sources'] = $this->app->sources->runDue();
             }
             $done['expired'] = $this->app->writer->expireAssets();
             $this->app->webhooks->notifyChanges();
