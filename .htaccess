@@ -12,5 +12,7 @@ Options -Indexes
     RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
 <IfModule !mod_rewrite.c>
+    # Without mod_rewrite the portal cannot route its pages: say so instead of a bare 403.
     Require all denied
+    ErrorDocument 403 "This portal needs the Apache module mod_rewrite. Ask your hosting provider to switch it on; most hosting packages have it."
 </IfModule>
