@@ -19,6 +19,21 @@ final class Blobs
     {
     }
 
+    /** Puts a file from a backup back into the store (metadata is restored separately). */
+    public function restoreFile(string $sha, string $path): void
+    {
+        $row = $this->get($sha);
+        $this->store->put($sha, $path, (string) ($row['content_type'] ?? 'application/octet-stream'));
+        if (is_file($path)) {
+            @unlink($path);
+        }
+    }
+
+    public function ping(): void
+    {
+        $this->store->ping();
+    }
+
     public function tmpDir(): string
     {
         if (!is_dir($this->tmpDir)) {

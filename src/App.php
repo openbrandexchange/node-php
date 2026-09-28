@@ -12,7 +12,9 @@ use Obx\Node\Controllers\AdminController;
 use Obx\Node\Controllers\CatalogAdminController;
 use Obx\Node\Controllers\DiscoveryController;
 use Obx\Node\Controllers\IngestController;
+use Obx\Node\Controllers\OpsController;
 use Obx\Node\Controllers\PortalController;
+use Obx\Node\Controllers\PrivacyController;
 use Obx\Node\Controllers\ProtocolController;
 use Obx\Node\Controllers\SessionController;
 use Obx\Node\Controllers\UiController;
@@ -34,10 +36,12 @@ use Obx\Node\Security\Crypto;
 use Obx\Node\Security\RateLimiter;
 use Obx\Node\Security\SafeHttp;
 use Obx\Node\Services\AccessRequests;
+use Obx\Node\Services\Audit;
 use Obx\Node\Services\Blobs;
 use Obx\Node\Services\Downloads;
 use Obx\Node\Services\Exports;
 use Obx\Node\Services\Grants;
+use Obx\Node\Services\Retention;
 use Obx\Node\Services\Settings;
 use Obx\Node\Services\Stats;
 use Obx\Node\Services\Users;
@@ -78,6 +82,8 @@ final class App
     public readonly Users $users;
     public readonly Sources $sources;
     public readonly Log $log;
+    public readonly Audit $audit;
+    public readonly Retention $retention;
     private Router $router;
     /** @var list<callable(): void> */
     private array $deferred = [];
@@ -87,7 +93,11 @@ final class App
     public function __construct(public readonly Config $config)
     {
         $dataDir = $config->dataDir();
-        $this->log = new Log($config->get('log_file'));
+        $this->log = new Log($config->get('log_file'), (string) $config->get('log_format', 'text'));
+        $problems = $config->validate();
+        if ($problems !== []) {
+            throw new ConfigInvalid($problems);
+        }
         $this->crypto = new Crypto(Crypto::resolveKey($config->get('secret_key'), $dataDir));
         $this->db = new Db((string) $config->get('db_dsn'), $config->get('db_user'), $config->get('db_password'));
         Schema::migrate($this->db);
@@ -143,6 +153,8 @@ final class App
         $this->accessRequests = new AccessRequests($this);
         $this->users = new Users($this);
         $this->sources = new Sources($this);
+        $this->audit = new Audit($this);
+        $this->retention = new Retention($this);
         $this->router = new Router();
         $this->routes();
     }
@@ -222,7 +234,10 @@ final class App
 
     public function handle(Request $req): Response
     {
+        $started = microtime(true);
         $this->request = $req;
+        $requestId = self::requestId($req->header('x-request-id'));
+        $this->log->requestId = $requestId;
         $this->reader->baseUrl = $this->baseUrl($req);
         $this->limiter->headers = [];
         try {
@@ -231,8 +246,8 @@ final class App
         } catch (ApiError $e) {
             $res = Response::problem($e, $req->path);
         } catch (\Throwable $e) {
-            $this->log->error('Unhandled error on ' . $req->method . ' ' . $req->path . ': ' . $e->getMessage(), $e);
-            $res = Response::problem(new ApiError('internal_error', 'Something went wrong on the server. The error was logged.'), $req->path);
+            $this->log->error('Unhandled error on ' . $req->method . ' ' . $req->path . ': ' . $e->getMessage(), $e, ['path' => $req->path, 'method' => $req->method]);
+            $res = Response::problem(new ApiError('internal_error', 'Something went wrong on the server. The error was logged with request id ' . $requestId . '.'), $req->path);
         }
         foreach ($this->limiter->headers as $k => $v) {
             if ($res->getHeader($k) === null) {
@@ -241,15 +256,26 @@ final class App
         }
         if (str_starts_with($req->path, '/obx/') || str_starts_with($req->path, '/.well-known/obx')) {
             $res->header('OBX-Version', Config::OBX_VERSION);
+        }
+        if ($req->path === '/.well-known/obx') {
+            // CORS only on the discovery document (public by design, protocol.md §3): the
+            // rest of the API is for servers, and browsers of other sites have no business
+            // reading it with a retailer's token.
             $res->header('Access-Control-Allow-Origin', '*');
-            $res->header('Access-Control-Expose-Headers', 'ETag, OBX-Content-SHA256, OBX-Version, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset, Retry-After, Location, Content-Disposition');
+            $res->header('Access-Control-Expose-Headers', 'ETag, OBX-Version, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset, Retry-After');
         }
-        $res->header('X-Content-Type-Options', 'nosniff');
-        if ($res->getHeader('Cache-Control') === null) {
-            $res->header('Cache-Control', 'no-store');
-        }
-        if ($res->getHeader('Referrer-Policy') === null) {
-            $res->header('Referrer-Policy', 'strict-origin-when-cross-origin');
+        $this->securityHeaders($req, $res);
+        $res->header('X-Request-Id', $requestId);
+        $this->audit->afterRequest($req, $res);
+        if ($this->config->bool('access_log')) {
+            $this->log->info('request', [
+                'method' => $req->method,
+                'path' => $req->path,
+                'status' => $res->status,
+                'duration_ms' => (int) round((microtime(true) - $started) * 1000),
+                'ip' => $req->ip,
+                'route' => $req->attrs['route'] ?? null,
+            ]);
         }
         if ($req->method === 'HEAD') {
             $res->body = '';
@@ -267,20 +293,56 @@ final class App
         return $res;
     }
 
+    /** A caller's X-Request-Id when it looks sane (8–128 of [A-Za-z0-9._-]), else a new one. */
+    public static function requestId(?string $given): string
+    {
+        if ($given !== null && preg_match('/^[A-Za-z0-9._\-]{8,128}$/', $given)) {
+            return $given;
+        }
+        return bin2hex(random_bytes(12));
+    }
+
+    /**
+     * Headers on every response (security.md §4): no MIME sniffing, a strict referrer policy,
+     * no framing (frame-ancestors 'none' + X-Frame-Options), HSTS on HTTPS, and a locked-down
+     * CSP on everything that is not the web interface (which sets its own).
+     */
+    private function securityHeaders(Request $req, Response $res): void
+    {
+        $res->header('X-Content-Type-Options', 'nosniff');
+        if ($res->getHeader('Cache-Control') === null) {
+            $res->header('Cache-Control', 'no-store');
+        }
+        if ($res->getHeader('Referrer-Policy') === null) {
+            $res->header('Referrer-Policy', 'strict-origin-when-cross-origin');
+        }
+        if ($res->getHeader('Content-Security-Policy') === null) {
+            $res->header('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'");
+        }
+        if ($res->getHeader('X-Frame-Options') === null) {
+            $res->header('X-Frame-Options', 'DENY');
+        }
+        if ($req->isHttps()) {
+            // Two years; subdomains are left alone (a brand's other sites may still be on http).
+            $res->header('Strict-Transport-Security', 'max-age=63072000');
+        }
+    }
+
     private function dispatch(Request $req): Response
     {
-        if ($req->method === 'OPTIONS' && (str_starts_with($req->path, '/obx/') || str_starts_with($req->path, '/.well-known/'))) {
+        if ($req->method === 'OPTIONS' && $req->path === '/.well-known/obx') {
             return (new Response(204))
-                ->header('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS')
-                ->header('Access-Control-Allow-Headers', 'Authorization, Content-Type, If-Match, If-None-Match, Idempotency-Key, Prefer, Range, OBX-Content-SHA256')
+                ->header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')
+                ->header('Access-Control-Allow-Headers', 'If-None-Match')
                 ->header('Access-Control-Max-Age', '600');
         }
         $match = $this->router->match($req->method, $req->path);
         if ($match === null) {
             return (new UiController($this))->fallback($req);
         }
-        [$handler, $params] = $match;
+        [$handler, $params, $pattern] = $match;
         $req->params = $params;
+        $req->attrs['route'] = $pattern;
         $this->guardSetup($req);
         return $handler($req);
     }
@@ -291,7 +353,7 @@ final class App
             return;
         }
         $p = $req->path;
-        $open = ['/admin/api/setup', '/admin/api/session', '/admin/api/public/branding'];
+        $open = ['/admin/api/setup', '/admin/api/session', '/admin/api/public/branding', '/healthz', '/readyz', '/metrics'];
         if (in_array($p, $open, true) || str_starts_with($p, '/admin/api/public/') || $p === '/cron') {
             return;
         }
@@ -370,8 +432,14 @@ final class App
         $po = new PortalController($this);
         $ui = new UiController($this);
 
+        $ops = new OpsController($this);
+        $priv = new PrivacyController($this);
+
         $r->add('GET', '/.well-known/obx', [$disc, 'wellKnown']);
         $r->add('GET', '/cron', [$ui, 'cron']);
+        $r->add('GET', '/healthz', [$ops, 'healthz']);
+        $r->add('GET', '/readyz', [$ops, 'readyz']);
+        $r->add('GET', '/metrics', [$ops, 'metrics']);
 
         // OBX Protocol
         $r->add('POST', '/obx/v1/access-requests', [$p, 'createAccessRequest']);
@@ -498,6 +566,10 @@ final class App
         $r->add('GET', '/admin/api/webhooks/{id}/deliveries', [$a, 'webhookDeliveries']);
         $r->add('GET', '/admin/api/stats', [$a, 'statsSummary']);
         $r->add('GET', '/admin/api/stats/events', [$a, 'statEvents']);
+        $r->add('GET', '/admin/api/audit-log', [$priv, 'auditLog']);
+        $r->add('GET', '/admin/api/retailers/{id}/export', [$priv, 'retailerExport']);
+        $r->add('GET', '/admin/api/users/{id}/export', [$priv, 'userExport']);
+        $r->add('GET', '/admin/api/me/export', [$priv, 'meExport']);
 
         // Portal
         $r->add('GET', '/admin/api/portal/viewer', [$po, 'viewerResponse']);

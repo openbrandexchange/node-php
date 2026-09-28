@@ -56,6 +56,43 @@ final class S3Client
      */
     public function request(string $method, string $key, array $query = [], array $headers = [], ?string $bodyFile = null, array $opts = []): array
     {
+        // Transient failures (connection errors, 429, 5xx) are retried twice with backoff
+        // (0.25 s, 1 s, plus jitter); every attempt is signed afresh.
+        $attempts = (int) ($opts['attempts'] ?? 3);
+        unset($opts['attempts']);
+        for ($i = 1; ; $i++) {
+            try {
+                $r = $this->requestOnce($method, $key, $query, $headers, $bodyFile, $opts);
+                if ($i < $attempts && in_array($r['status'], [429, 500, 502, 503, 504], true)) {
+                    self::backoff($i);
+                    continue;
+                }
+                return $r;
+            } catch (\RuntimeException $e) {
+                if ($e instanceof \Obx\Node\Http\ApiError || $i >= $attempts) {
+                    throw $e;
+                }
+                self::backoff($i);
+            }
+        }
+    }
+
+    public static int $backoffMicros = 250000;
+
+    private static function backoff(int $attempt): void
+    {
+        $base = self::$backoffMicros * (4 ** ($attempt - 1));
+        usleep($base + random_int(0, (int) ($base / 4)));
+    }
+
+    /**
+     * @param array<string, string> $query
+     * @param array<string, string> $headers
+     * @param array<string, mixed> $opts
+     * @return array{status: int, headers: array<string, string>, body: string}
+     */
+    private function requestOnce(string $method, string $key, array $query, array $headers, ?string $bodyFile, array $opts): array
+    {
         [$scheme, $host, $prefix] = $this->base();
         $path = $prefix . '/' . ($key === '' ? '' : self::encodeKey($key));
         if ($key === '' && $prefix !== '') {
@@ -201,6 +238,15 @@ final class S3Client
             $token = ((string) $xml->IsTruncated) === 'true' ? (string) $xml->NextContinuationToken : null;
         } while ($token !== null && $token !== '');
         return $out;
+    }
+
+    /** Lists at most one key: proves the bucket answers and the credentials work. */
+    public function ping(string $prefix = ''): void
+    {
+        $r = $this->request('GET', '', ['list-type' => '2', 'prefix' => $prefix, 'max-keys' => '1']);
+        if ($r['status'] !== 200) {
+            throw new \RuntimeException('The bucket did not answer (HTTP ' . $r['status'] . ').');
+        }
     }
 
     public function get(string $key, string $toFile, int $maxBytes = PHP_INT_MAX): void

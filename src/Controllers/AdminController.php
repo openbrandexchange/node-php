@@ -69,6 +69,7 @@ final class AdminController extends Controller
                 'rights' => $this->app->settings->defaultRights(),
                 'ingest_status' => $this->app->settings->defaultStatus(),
             ],
+            'retention' => $this->app->retention->periods(),
             'node' => [
                 'public_url' => $this->app->publicUrl(),
                 'discovery_url' => $base . '/.well-known/obx',
@@ -189,6 +190,12 @@ final class AdminController extends Controller
                 }
                 $s['defaults']['ingest_status'] = $d['ingest_status'];
             }
+        }
+        if (isset($patch['retention'])) {
+            if (!is_array($patch['retention'])) {
+                throw ApiError::validation('/retention', 'An object with numbers of days.');
+            }
+            $s['retention'] = $this->app->retention->merge($patch['retention']);
         }
         $this->app->db->tx(function () use ($s, $before) {
             $this->app->settings->save($s);
@@ -566,8 +573,7 @@ final class AdminController extends Controller
         $u = $this->user((string) $req->params['id']);
         $this->guardLastAdmin($s['user'], $u);
         $this->app->auth->endSessions((string) $u['id']);
-        $this->app->db->delete('obx_selections', ['user_id' => $u['id']]);
-        $this->app->db->run('UPDATE obx_download_events SET actor_name = NULL, actor_id = NULL WHERE actor_id = ?', [$u['id']]);
+        (new \Obx\Node\Services\Privacy($this->app))->forgetUser((string) $u['id']);
         $this->app->db->delete('obx_users', ['id' => $u['id']]);
         return Response::empty(204);
     }

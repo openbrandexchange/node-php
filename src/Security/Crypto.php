@@ -11,13 +11,21 @@ namespace Obx\Node\Security;
 final class Crypto
 {
     private string $master;
+    private string $secret;
 
     public function __construct(string $secretKey)
     {
         if (strlen($secretKey) < 16) {
             throw new \RuntimeException('OBX_SECRET_KEY must be at least 32 characters.');
         }
+        $this->secret = $secretKey;
         $this->master = hash('sha256', $secretKey, true);
+    }
+
+    /** The secret key itself, for `php bin/obx backup` only. */
+    public function keyForBackup(): string
+    {
+        return $this->secret;
     }
 
     /**

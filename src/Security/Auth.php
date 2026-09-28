@@ -151,6 +151,10 @@ final class Auth
 
     public function logout(Request $req, Response $res): void
     {
+        $current = $this->session($req);
+        if ($current !== null) {
+            $req->attrs['_login_user'] = $current['user'];
+        }
         $token = $req->cookies[self::SESSION_COOKIE] ?? null;
         if (is_string($token) && $token !== '') {
             $this->app->db->delete('obx_sessions', ['id_hash' => Crypto::hashToken($token)]);

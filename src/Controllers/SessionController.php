@@ -178,6 +178,7 @@ final class SessionController extends Controller
         $email = is_string($in['email'] ?? null) ? strtolower(trim($in['email'])) : '';
         $password = is_string($in['password'] ?? null) ? $in['password'] : '';
         $this->app->limiter->hit('login-email:' . $email, 10, 900);
+        $req->attrs['_login_email'] = $email !== '' ? $email : null;
         $user = $email !== '' ? $this->app->db->one('SELECT * FROM obx_users WHERE email = ?', [$email]) : null;
         if (!Crypto::verifyPassword($password, $user['password_hash'] ?? null)) {
             throw new ApiError('invalid_credentials', 'The e-mail address or password is not correct.');

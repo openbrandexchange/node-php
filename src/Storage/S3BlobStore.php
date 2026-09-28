@@ -14,6 +14,11 @@ final class S3BlobStore implements BlobStore
     {
     }
 
+    public function ping(): void
+    {
+        $this->s3->ping($this->prefix);
+    }
+
     private function key(string $sha): string
     {
         return $this->prefix . substr($sha, 0, 2) . '/' . $sha;

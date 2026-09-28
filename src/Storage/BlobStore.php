@@ -19,4 +19,7 @@ interface BlobStore
     public function localPath(string $sha256): ?string;
 
     public function delete(string $sha256): void;
+
+    /** Throws when the store cannot be reached or written (readiness check). */
+    public function ping(): void;
 }

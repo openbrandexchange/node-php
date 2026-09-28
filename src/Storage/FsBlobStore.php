@@ -13,6 +13,16 @@ final class FsBlobStore implements BlobStore
     {
     }
 
+    public function ping(): void
+    {
+        if (!is_dir($this->dir)) {
+            @mkdir($this->dir, 0770, true);
+        }
+        if (!is_dir($this->dir) || !is_writable($this->dir)) {
+            throw new \RuntimeException('The blob folder ' . $this->dir . ' is not writable.');
+        }
+    }
+
     private function path(string $sha): string
     {
         if (!preg_match('/^[a-f0-9]{64}$/', $sha)) {

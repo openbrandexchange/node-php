@@ -22,7 +22,10 @@ Usage: php bin/obx <command>
   worker         Keep running background work (Docker, systemd, supervisor).
   setup-code     Show the one-time setup code for the first-run wizard.
   cron-url       Show the web address to call when your host has no cron (e.g. via a cron service).
-  migrate        Create or update the database tables.
+  migrate        Create or update the database tables (forward only).
+  check          Check the configuration, database, data folder and file storage; exit 1 on problems.
+  backup FILE    Write a backup (database, files, secret key) to FILE.zip; --no-files leaves files out.
+  restore FILE   Restore a backup into an empty database (--force replaces an existing portal).
   serve [port]   Start a local development server (default port 8080).
   version        Show the version.
 
@@ -30,6 +33,51 @@ Configuration comes from config/config.php (written by the web installer) or env
 variables: OBX_PUBLIC_URL, OBX_SECRET_KEY, OBX_DB_DSN, OBX_SETUP_CODE, OBX_ALLOW_PRIVATE_URLS, …
 
 TXT;
+
+    /** @param callable(string): void $out */
+    private static function check(string $root, callable $out): int
+    {
+        $config = Config::load($root);
+        $problems = $config->validate();
+        foreach ($problems as $p) {
+            $out('✗ ' . $p);
+        }
+        if (!$config->installed()) {
+            $out('✗ Not installed yet: open /install in your browser or set OBX_DB_DSN / OBX_SECRET_KEY.');
+            return 1;
+        }
+        if ($problems !== []) {
+            return 1;
+        }
+        $out('✓ Configuration');
+        try {
+            $app = new App($config);
+        } catch (\Throwable $e) {
+            $out('✗ Database: ' . Support\Log::scrub($e->getMessage()));
+            return 1;
+        }
+        $out('✓ Database at schema version ' . Schema::currentVersionOf($app->db) . ' (' . ($app->db->isSqlite() ? 'SQLite' : 'MySQL') . ')');
+        $failed = false;
+        $dir = $config->dataDir();
+        if (is_dir($dir) && is_writable($dir)) {
+            $out('✓ Data folder ' . $dir . ' is writable');
+        } else {
+            $out('✗ Data folder ' . $dir . ' is not writable');
+            $failed = true;
+        }
+        try {
+            $app->blobs->ping();
+            $out('✓ File storage (' . $config->get('blob_store') . ')');
+        } catch (\Throwable $e) {
+            $out('✗ File storage: ' . Support\Log::scrub($e->getMessage()));
+            $failed = true;
+        }
+        foreach (['gd' => 'image versions on the server', 'zip' => 'zip uploads and downloads', 'curl' => 'scheduled imports and webhooks'] as $ext => $what) {
+            $out((extension_loaded($ext) ? '✓ ' : '! ') . 'PHP extension ' . $ext . ' (' . $what . ')' . (extension_loaded($ext) ? '' : ': missing'));
+        }
+        $out('  Setup: ' . ($app->settings->setupDone() ? 'done' : 'not done yet'));
+        return $failed ? 1 : 0;
+    }
 
     /** @param list<string> $args */
     public static function main(string $root, array $args): int
@@ -63,9 +111,36 @@ TXT;
                     return (int) $code;
                 case 'migrate':
                     $config = Config::load($root);
+                    $problems = $config->validate();
+                    if ($problems !== []) {
+                        throw new ConfigInvalid($problems);
+                    }
                     $db = new Db((string) $config->get('db_dsn'), $config->get('db_user'), $config->get('db_password'));
+                    $before = Schema::currentVersionOf($db);
                     Schema::migrate($db);
-                    $out('Database is at schema version ' . Schema::latestVersion() . '.');
+                    $out($before === Schema::latestVersion()
+                        ? 'Database is at schema version ' . Schema::latestVersion() . ' (nothing to do).'
+                        : 'Database updated from schema version ' . $before . ' to ' . Schema::latestVersion() . '.');
+                    return 0;
+                case 'check':
+                    return self::check($root, $out);
+                case 'restore':
+                    $file = $args[1] ?? '';
+                    if ($file === '' || !is_file($file)) {
+                        fwrite(STDERR, "Usage: php bin/obx restore FILE.zip [--force]\n");
+                        return 1;
+                    }
+                    $config = Config::load($root);
+                    $problems = $config->validate();
+                    if ($problems !== []) {
+                        throw new ConfigInvalid($problems);
+                    }
+                    $m = Ops\Backup::restore($config, $file, in_array('--force', $args, true));
+                    $out('Restored the backup of ' . $m['created_at'] . ' (' . $m['software'] . ' ' . $m['version'] . ', schema ' . $m['schema_version'] . '): '
+                        . array_sum($m['rows']) . ' rows, ' . $m['files_restored'] . ' files.');
+                    if (empty($m['files_included'])) {
+                        $out('The backup has no files (made with --no-files): the files must still be in the configured storage.');
+                    }
                     return 0;
             }
             $config = Config::load($root);
@@ -85,7 +160,26 @@ TXT;
                     return 0;
                 case 'worker':
                     $out('Worker started.');
-                    $app->worker()->loop();
+                    $max = null;
+                    foreach ($args as $a) {
+                        if (str_starts_with($a, '--max-seconds=')) {
+                            $max = max(1, (int) substr($a, 14));
+                        }
+                    }
+                    $app->worker()->loop($max);
+                    return 0;
+                case 'backup':
+                    $file = $args[1] ?? '';
+                    if ($file === '' || str_starts_with($file, '--')) {
+                        fwrite(STDERR, "Usage: php bin/obx backup FILE.zip [--no-files]\n");
+                        return 1;
+                    }
+                    $m = (new Ops\Backup($app))->create($file, !in_array('--no-files', $args, true));
+                    $out('Backup written to ' . $file . ': ' . array_sum($m['rows']) . ' rows, ' . $m['files'] . ' files, schema version ' . $m['schema_version'] . '.');
+                    if ($m['files_missing'] !== []) {
+                        $out('Warning: ' . count($m['files_missing']) . ' files were not found in the storage and are missing from the backup.');
+                    }
+                    $out('The file holds personal data and the secret key: keep it somewhere safe.');
                     return 0;
                 case 'setup-code':
                     if ($app->settings->setupDone()) {

@@ -99,11 +99,14 @@ final class Worker
             return $done;
         }
         try {
+            if ((int) ($this->app->settings->state()['worker_ts'] ?? 0) < Clock::time() - 30) {
+                $this->app->settings->updateState(['worker_ts' => Clock::time()]);
+            }
             $this->recoverStale();
             // Scheduled imports that are due become queued jobs first, so they run in this pass.
             $done['sources'] = $this->app->sources->runDue();
             // Queued jobs, oldest first.
-            while (time() - $start < $budget) {
+            while (time() - $start < $budget && !self::$stopping) {
                 $id = $this->app->db->value("SELECT id FROM obx_jobs WHERE status = 'queued' ORDER BY created_ts LIMIT 1");
                 if ($id === null) {
                     break;
@@ -146,6 +149,7 @@ final class Worker
             $db->delete('obx_jobs', ['id' => $jid]);
         }
         $this->app->blobs->collectGarbage($now - 86400);
+        $this->app->retention->sweep();
         foreach (glob($this->app->config->dataDir() . '/tmp/*') ?: [] as $f) {
             if (is_file($f) && filemtime($f) < $now - 86400) {
                 @unlink($f);
@@ -189,14 +193,40 @@ final class Worker
         $this->app->db->delete('obx_locks', ['name' => $name]);
     }
 
-    /** Long-running loop for Docker / a process manager. */
-    public function loop(): void
+    private static bool $stopping = false;
+
+    /**
+     * Long-running loop for Docker / a process manager. With the pcntl extension, SIGTERM and
+     * SIGINT stop it gracefully: the running job finishes, then the loop exits. Without pcntl
+     * (or on SIGKILL) an interrupted job keeps its lease and is picked up again by the next
+     * worker after at most 10 minutes (recoverStale); every job kind is safe to run again.
+     *
+     * @param int|null $maxSeconds stop after this long (null = run until stopped)
+     */
+    public function loop(?int $maxSeconds = null): void
     {
-        while (true) {
+        if (function_exists('pcntl_async_signals') && function_exists('pcntl_signal')) {
+            pcntl_async_signals(true);
+            $stop = static function (): void {
+                self::$stopping = true;
+            };
+            pcntl_signal(SIGTERM, $stop);
+            pcntl_signal(SIGINT, $stop);
+        }
+        $until = $maxSeconds !== null ? time() + $maxSeconds : null;
+        while (!self::$stopping && ($until === null || time() < $until)) {
             $done = $this->tick(50);
             if (array_sum($done) === 0) {
-                sleep(2);
+                for ($i = 0; $i < 20 && !self::$stopping; $i++) {
+                    usleep(100000);
+                }
             }
         }
+        $this->app->log->notice('Worker stopped.');
+    }
+
+    public static function stopping(): bool
+    {
+        return self::$stopping;
     }
 }

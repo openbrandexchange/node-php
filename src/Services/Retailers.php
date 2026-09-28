@@ -187,12 +187,15 @@ final class Retailers
                 $this->app->db->run("DELETE FROM obx_webhooks WHERE owner_type = 'client' AND owner_id = ?", [$cid]);
             }
             $this->app->db->delete('obx_api_clients', ['retailer_id' => $id]);
+            $privacy = new Privacy($this->app);
             foreach ($this->app->db->column('SELECT id FROM obx_users WHERE retailer_id = ?', [$id]) as $uid) {
-                $this->app->db->delete('obx_selections', ['user_id' => $uid]);
+                $privacy->forgetUser((string) $uid);
             }
             $this->app->db->delete('obx_users', ['retailer_id' => $id]);
             // Statistics keep the retailer name only (no accounts, no personal data).
             $this->app->db->run("UPDATE obx_download_events SET actor_name = NULL, actor_id = NULL WHERE retailer_id = ?", [$id]);
+            // Access requests hold the contact person's name and e-mail address.
+            $this->app->db->delete('obx_access_requests', ['retailer_id' => $id]);
             $this->app->db->delete('obx_retailers', ['id' => $id]);
         });
     }

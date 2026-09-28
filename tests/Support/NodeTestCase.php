@@ -254,7 +254,7 @@ abstract class NodeTestCase extends TestCase
             post: (array) ($o['post'] ?? []),
             files: (array) ($o['files'] ?? []),
             ip: (string) ($o['ip'] ?? $this->ip),
-            scheme: 'http',
+            scheme: (string) ($o['scheme'] ?? 'http'),
             host: (string) ($o['host'] ?? 'localhost'),
             basePath: '',
             rawQuery: $rawQuery,
