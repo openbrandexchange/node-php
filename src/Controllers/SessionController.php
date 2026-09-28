@@ -32,7 +32,7 @@ final class SessionController extends Controller
             'logo_url' => (new DiscoveryController($this->app))->logoUrl(),
             'accent_color' => $s['branding']['accent_color'],
             'welcome_text' => $s['branding']['welcome_text'],
-            'portal_word' => $s['branding']['portal_word'] ?? null,
+            'portal_name' => $s['branding']['portal_name'] ?? null,
             'languages' => $this->app->settings->languages(),
             'default_language' => $this->app->settings->defaultLanguage(),
             'access_requests_enabled' => (bool) $s['portal']['access_requests_enabled'],

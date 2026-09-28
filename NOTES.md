@@ -63,9 +63,9 @@ extensions. Each is the simplest reading; the spec repository is the source of t
 ## Admin and portal
 
 20. **Extensions of the non-normative admin API** (admin-ui may use them):
-    - `Settings.branding.portal_word` and `PublicBranding.portal_word` (LocalizedText or null): the
-      brand's own word for the portal ("<Brand> · <word>"); default per language (nl Beeldbank,
-      de Händlerportal, fr Espace revendeurs, en Brand portal, … in `src/Support/Lang.php`).
+    - `Settings.branding.portal_name` and `PublicBranding.portal_name` (LocalizedText or null, as
+      the admin-ui uses it): the brand's own word for the portal ("<Brand> · <word>"); default per
+      language from the glossary (nl Beeldbank, de Händlerportal, fr Espace revendeurs, en Brand portal).
     - `Settings.node.cron` = `{url, command, last_run_at}` for hosts without a cron job.
     - `GET /admin/api/portal/products?sort=newest` (default: style number).
 21. **Facets are disjunctive**: each facet's counts apply all *other* filters, so choosing one brand
@@ -79,23 +79,17 @@ extensions. Each is the simplest reading; the spec repository is the source of t
 
 ## E-mails and languages
 
-25. E-mails are rendered from the admin-ui locale files vendored in `public/ui/locales/<lang>.json`
-    (nested or flat keys; `{{name}}` or `{name}` placeholders) with built-in English fallbacks. The
-    node uses these keys:
-
-    | Key | Placeholders |
-    |---|---|
-    | `email.common.greeting`, `email.common.greeting_anonymous`, `email.common.ignore`, `email.common.footer`, `email.common.link_hint` | `name` |
-    | `email.invite.subject`, `.body`, `.button`, `.expires` | `portal`, `brand`, `days` |
-    | `email.access_request.subject`, `.body`, `.button` (to the brand's admins) | `retailer`, `contact`, `portal` |
-    | `email.access_approved.subject`, `.body`, `.portal`, `.api`, `.button` | `retailer`, `brand`, `portal` |
-    | `email.access_rejected.subject`, `.body`, `.reason` | `retailer`, `brand`, `reason` |
-    | `email.zip_ready.subject`, `.body`, `.button`, `.expires` | `files`, `days`, `portal` |
-    | `email.password_reset.subject`, `.body`, `.button`, `.expires` | `hours`, `portal` |
-    | `portal.word` (optional) | the local word for the portal |
-
-    The recipient's language is the account language, or for access requests `contact.language`,
-    else the browser language (Accept-Language) at the time of the request; English is the fallback.
+25. E-mails use the admin-ui's strings: keys `email.*` and `glossary.portal` in the locale files
+    vendored with the web interface (`public/ui/locales/<lang>.json`, i18next style `{{name}}`),
+    with built-in English copies (`src/Mail/Emails.php`) as the fallback per key. Templates:
+    `invite`, `accessRequestReceived` (to the requester), `accessRequestNew` (to the brand's admins),
+    `accessApproved` (+ `apiNote` when an API key was created), `accessRejected` (+ `reason`,
+    `contact`), `zipReady`, `passwordReset`; shared `greeting`, `greetingNoName`, `signoff`,
+    `footer`, `linkFallback`. `{{expires}}` is formatted in the recipient's language (intl) or as
+    `YYYY-MM-DD HH:MM UTC`. The portal word comes from `branding.portal_name` (the brand's
+    override, LocalizedText), else `glossary.portal`, else `resources/glossary.json` (a copy of
+    admin-ui's glossary). The recipient's language is the account language, or for access requests
+    `contact.language`, else the browser language (Accept-Language) at the time of the request.
 26. LocalizedText fallback everywhere in the node: the requested language, its base language, then
     `en`, then the first available (`src/Support/Lang.php`).
 

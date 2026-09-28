@@ -55,7 +55,7 @@ final class AdminController extends Controller
                 'logo_url' => (new DiscoveryController($this->app))->logoUrl(),
                 'accent_color' => $s['branding']['accent_color'],
                 'welcome_text' => $s['branding']['welcome_text'],
-                'portal_word' => $s['branding']['portal_word'] ?? null,
+                'portal_name' => $s['branding']['portal_name'] ?? null,
             ],
             'portal' => [
                 'access_requests_enabled' => (bool) $s['portal']['access_requests_enabled'],
@@ -140,7 +140,7 @@ final class AdminController extends Controller
                 }
                 $s['branding']['accent_color'] = $b['accent_color'];
             }
-            foreach (['welcome_text', 'portal_word'] as $k) {
+            foreach (['welcome_text', 'portal_name'] as $k) {
                 if (array_key_exists($k, $b)) {
                     $s['branding'][$k] = $b[$k] === null ? null : $v->localized(Validator::mergePatch($s['branding'][$k] ?? [], $b[$k]), '/branding/' . $k);
                 }

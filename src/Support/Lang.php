@@ -31,7 +31,7 @@ final class Lang
         'hr' => 'Portal za trgovce',
         'hu' => 'Viszonteladói portál',
         'it' => 'Area rivenditori',
-        'lt' => 'Pardavėjų portalas',
+        'lt' => 'Prekybininkų portalas',
         'lv' => 'Tirgotāju portāls',
         'mt' => 'Portal għall-bejjiegħa',
         'nb' => 'Forhandlerportal',

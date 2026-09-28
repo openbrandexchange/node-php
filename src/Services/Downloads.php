@@ -391,7 +391,8 @@ final class Downloads
         ], ['id' => $id]);
         $user = $this->app->db->one('SELECT * FROM obx_users WHERE id = ?', [$d['user_id']]);
         if ($user !== null) {
-            $mail = $this->app->emails->render('zip_ready', (string) $user['language'], ['files' => $files, 'days' => self::KEEP_DAYS], $this->app->publicUrl() . '/downloads', ['email.zip_ready.expires'], (string) $user['name']);
+            $lang = (string) $user['language'];
+            $mail = $this->app->emails->render('zipReady', $lang, ['files' => $files, 'expires' => \Obx\Node\Mail\Emails::date($expires, $lang)], $this->app->publicUrl() . '/downloads', [], ['expiry'], (string) $user['name']);
             $this->app->mailer->send((string) $user['email'], $mail['subject'], $mail['text'], $mail['html']);
         }
         return ['files' => $files];

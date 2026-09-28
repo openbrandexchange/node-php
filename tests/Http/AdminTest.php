@@ -91,8 +91,9 @@ final class AdminTest extends NodeTestCase
         ], 'headers' => ['Accept-Language' => 'de-DE,de;q=0.9']]), 202);
         $this->assertSame('pending', $req['status']);
         $this->assertStringStartsWith('obxr_', $req['request_token']);
-        $notify = end($this->app->mailer->sent);
-        $this->assertSame('admin@kestrel.example', $notify['to']);
+        $to = array_column($this->app->mailer->sent, 'subject', 'to');
+        $this->assertSame('New access request from Stad & Land Mode', $to['admin@kestrel.example']);
+        $this->assertSame('We received your request for Kestrel Outfitters · Händlerportal', $to['sam@stadland.example']);
         $poll = $this->json($this->http('GET', '/obx/v1/access-requests/' . $req['id'], ['bearer' => $req['request_token']]));
         $this->assertSame('pending', $poll['status']);
         $this->assertProblem($this->http('GET', '/obx/v1/access-requests/' . $req['id'], ['bearer' => 'obxr_wrong']), 404, 'not_found');
@@ -228,7 +229,7 @@ final class AdminTest extends NodeTestCase
         $client = $this->accessToken($id, $secret);
         [, $cursor] = $this->drainSnapshot($client);
         $s = $this->json($this->http('PATCH', '/admin/api/settings', ['browser' => 'admin', 'json' => [
-            'branding' => ['accent_color' => '#123456', 'welcome_text' => ['nl' => 'Welkom', 'en' => 'Welcome'], 'portal_word' => ['en' => 'Media centre']],
+            'branding' => ['accent_color' => '#123456', 'welcome_text' => ['nl' => 'Welkom', 'en' => 'Welcome'], 'portal_name' => ['en' => 'Media centre']],
             'portal' => ['allow_original_download' => false],
         ], 'headers' => ['Content-Type' => 'application/merge-patch+json']]));
         $this->assertSame('#123456', $s['branding']['accent_color']);
@@ -252,5 +253,54 @@ final class AdminTest extends NodeTestCase
         $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $client, 'query' => ['cursor' => $cursor, 'limit' => '500']]));
         $this->assertCount(27, array_filter($page['changes'], static fn ($c) => $c['type'] === 'asset' && $c['op'] === 'upsert'));
         $this->assertSame(['webshop'], $page['changes'][0]['data']['rights']['channels']);
+    }
+
+    public function testEmailsUseTheVendoredLocaleFilesAndTheBrandsOwnPortalName(): void
+    {
+        $this->freshNode();
+        mkdir($this->dir . '/ui/locales', 0777, true);
+        file_put_contents($this->dir . '/ui/locales/nl.json', json_encode([
+            'glossary' => ['portal' => 'Beeldbank'],
+            'email' => [
+                'greeting' => 'Hallo {{name}},',
+                'invite' => ['subject' => '{{brand}} nodigt je uit voor {{portal}}', 'body' => 'Welkom bij {{brand}}.', 'button' => 'Kies je wachtwoord', 'expiry' => 'Geldig tot {{expires}}.'],
+            ],
+        ]));
+        $this->app = $this->makeApp(['locales_dir' => $this->dir . '/ui/locales']);
+        $r = $this->json($this->http('POST', '/admin/api/retailers', ['browser' => 'admin', 'json' => ['name' => 'Winkel']]), 201);
+        $this->json($this->http('POST', '/admin/api/users/invites', ['browser' => 'admin', 'json' => ['email' => 'nl@shop.example', 'name' => 'Noor', 'role' => 'retailer', 'retailer_id' => $r['id'], 'language' => 'nl']]), 201);
+        $mail = end($this->app->mailer->sent);
+        $this->assertSame('Kestrel Outfitters nodigt je uit voor Kestrel Outfitters · Beeldbank', $mail['subject']);
+        $this->assertStringContainsString('Hallo Noor,', $mail['text']);
+        $this->assertStringContainsString('Kies je wachtwoord', $mail['html']);
+        $this->assertStringContainsString('Not expecting this?', $mail['text'], 'missing keys fall back to English');
+        $this->json($this->http('PATCH', '/admin/api/settings', ['browser' => 'admin', 'json' => ['branding' => ['portal_name' => ['nl' => 'Mediatheek']]]]));
+        $this->json($this->http('POST', '/admin/api/users/invites', ['browser' => 'admin', 'json' => ['email' => 'nl2@shop.example', 'role' => 'retailer', 'retailer_id' => $r['id'], 'language' => 'nl']]), 201);
+        $this->assertSame('Kestrel Outfitters nodigt je uit voor Kestrel Outfitters · Mediatheek', end($this->app->mailer->sent)['subject']);
+        $branding = $this->json($this->http('GET', '/admin/api/public/branding'));
+        $this->assertSame(['nl' => 'Mediatheek'], $branding['portal_name']);
+    }
+
+    public function testPasswordResetAndOwnAccount(): void
+    {
+        $this->freshNode();
+        $this->http('GET', '/admin/api/session', ['browser' => 'anon']);
+        $this->assertSame(202, $this->http('POST', '/admin/api/password/forgot', ['browser' => 'anon', 'json' => ['email' => 'nobody@nowhere.example']])->status);
+        $this->assertSame(202, $this->http('POST', '/admin/api/password/forgot', ['browser' => 'anon', 'json' => ['email' => 'admin@kestrel.example']])->status);
+        $mail = end($this->app->mailer->sent);
+        $this->assertSame('admin@kestrel.example', $mail['to']);
+        $this->assertSame(1, preg_match('#/reset-password/(\S+)#', $mail['text'], $m));
+        $token = $m[1];
+        $s = $this->json($this->http('POST', '/admin/api/password/reset', ['browser' => 'anon', 'json' => ['token' => $token, 'password' => 'another good passphrase']]));
+        $this->assertTrue($s['authenticated']);
+        $this->assertProblem($this->http('POST', '/admin/api/password/reset', ['browser' => 'anon', 'json' => ['token' => $token, 'password' => 'another good passphrase']]), 400, 'invite_invalid');
+        $this->assertProblem($this->http('GET', '/admin/api/settings', ['browser' => 'admin']), 401, 'unauthorized');
+        $this->assertProblem($this->http('PATCH', '/admin/api/me', ['browser' => 'anon', 'json' => ['new_password' => 'yet another passphrase', 'current_password' => 'wrong']]), 401, 'invalid_credentials');
+        $me = $this->json($this->http('PATCH', '/admin/api/me', ['browser' => 'anon', 'json' => ['name' => 'Ada Lovelace', 'language' => 'de']]));
+        $this->assertSame('Ada Lovelace', $me['user']['name']);
+        $this->assertSame('de', $me['user']['language']);
+        $users = $this->json($this->http('GET', '/admin/api/users', ['browser' => 'anon', 'query' => ['role' => 'admin']]));
+        $this->assertProblem($this->http('PATCH', '/admin/api/users/' . $users['items'][0]['id'], ['browser' => 'anon', 'json' => ['status' => 'blocked']]), 409, 'conflict');
+        $this->assertProblem($this->http('DELETE', '/admin/api/users/' . $users['items'][0]['id'], ['browser' => 'anon']), 409, 'conflict');
     }
 }

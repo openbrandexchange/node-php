@@ -114,6 +114,8 @@ final class AccessRequests
         ];
         $this->app->db->insert('obx_access_requests', $row);
         $this->notifyBrand($row, $in);
+        $mail = $this->app->emails->render('accessRequestReceived', $lang, [], null, [], [], (string) $in['contact']['name']);
+        $this->app->mailer->send((string) $in['contact']['email'], $mail['subject'], $mail['text'], $mail['html']);
         $out = $this->protocolJson($row);
         $out['request_token'] = $token;
         return $out;
@@ -126,10 +128,10 @@ final class AccessRequests
         $url = $this->app->publicUrl() . '/admin/retailers/requests/' . $row['id'];
         $admins = $this->app->db->all("SELECT * FROM obx_users WHERE role = 'admin' AND status = 'active'");
         foreach ($admins as $admin) {
-            $mail = $this->app->emails->render('access_request', (string) $admin['language'], [
+            $mail = $this->app->emails->render('accessRequestNew', (string) $admin['language'], [
                 'retailer' => $in['retailer']['name'],
                 'contact' => $in['contact']['name'],
-            ], $url, [], (string) $admin['name']);
+            ], $url, [], [], (string) $admin['name']);
             $this->app->mailer->send((string) $admin['email'], $mail['subject'], $mail['text'], $mail['html']);
         }
     }
@@ -279,14 +281,7 @@ final class AccessRequests
             return [$out, $in, $row, $createApi];
         });
         [$out, $in, $row, $createApi] = $result;
-        $paragraphs = [];
-        if (isset($out['invite'])) {
-            $paragraphs[] = 'email.access_approved.portal';
-        }
-        if ($createApi) {
-            $paragraphs[] = 'email.access_approved.api';
-        }
-        $mail = $this->app->emails->render('access_approved', (string) $row['language'], ['retailer' => $in['retailer']['name']], $this->app->publicUrl() . '/login', $paragraphs, (string) $in['contact']['name']);
+        $mail = $this->app->emails->render('accessApproved', (string) $row['language'], ['retailer' => $in['retailer']['name']], $this->app->publicUrl() . '/login', $createApi ? ['apiNote'] : [], [], (string) $in['contact']['name']);
         $this->app->mailer->send((string) $in['contact']['email'], $mail['subject'], $mail['text'], $mail['html']);
         return $out;
     }
@@ -303,7 +298,7 @@ final class AccessRequests
             return $this->get($id);
         });
         $in = Json::decode((string) $row['input'], []);
-        $mail = $this->app->emails->render('access_rejected', (string) $row['language'], ['retailer' => $in['retailer']['name'], 'reason' => (string) $reason], null, $reason !== null && $reason !== '' ? ['email.access_rejected.reason'] : [], (string) $in['contact']['name']);
+        $mail = $this->app->emails->render('accessRejected', (string) $row['language'], ['retailer' => $in['retailer']['name'], 'reason' => (string) $reason], null, $reason !== null && $reason !== '' ? ['reason'] : [], ['contact'], (string) $in['contact']['name']);
         $this->app->mailer->send((string) $in['contact']['email'], $mail['subject'], $mail['text'], $mail['html']);
         return $this->adminJson($row);
     }

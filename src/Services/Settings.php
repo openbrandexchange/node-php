@@ -44,7 +44,7 @@ final class Settings
                 'logo_type' => null,
                 'accent_color' => null,
                 'welcome_text' => null,
-                'portal_word' => null,
+                'portal_name' => null,
             ],
             'portal' => [
                 'access_requests_enabled' => true,

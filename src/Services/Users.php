@@ -113,7 +113,8 @@ final class Users
         $db->update('obx_users', ['invite_hash' => Crypto::hashToken($token), 'invite_expires_at' => $expires], ['id' => $userId]);
         $u = $db->one('SELECT * FROM obx_users WHERE id = ?', [$userId]);
         $url = $this->app->publicUrl() . '/invite/' . $token;
-        $mail = $this->app->emails->render('invite', (string) $u['language'], ['days' => self::INVITE_DAYS], $url, ['email.invite.expires'], (string) $u['name']);
+        $lang = (string) $u['language'];
+        $mail = $this->app->emails->render('invite', $lang, ['expires' => \Obx\Node\Mail\Emails::date((int) Clock::parse($expires), $lang)], $url, [], ['expiry', 'ignore'], (string) $u['name']);
         $sent = $this->app->mailer->send((string) $u['email'], $mail['subject'], $mail['text'], $mail['html']);
         return ['user' => $this->json($u), 'invite_url' => $url, 'expires_at' => $expires, 'email_sent' => $sent];
     }
@@ -163,7 +164,7 @@ final class Users
         $token = Crypto::token('', 24);
         $this->app->db->update('obx_users', ['reset_hash' => Crypto::hashToken($token), 'reset_expires_ts' => Clock::time() + self::RESET_SECONDS], ['id' => $u['id']]);
         $url = $this->app->publicUrl() . '/reset-password/' . $token;
-        $mail = $this->app->emails->render('password_reset', (string) $u['language'], ['hours' => 1], $url, ['email.password_reset.expires'], (string) $u['name']);
+        $mail = $this->app->emails->render('passwordReset', (string) $u['language'], [], $url, [], ['expiry', 'ignore'], (string) $u['name']);
         $this->app->mailer->send((string) $u['email'], $mail['subject'], $mail['text'], $mail['html']);
     }
 

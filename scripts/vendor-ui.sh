@@ -16,4 +16,9 @@ else
 fi
 find "$here/public/ui" -mindepth 1 ! -name README.md -exec rm -rf {} + 2>/dev/null || true
 cp -R "$dist"/. "$here/public/ui/"
+# E-mails need the locale files (dist/locales/<lang>.json); fall back to the sources.
+if [ ! -d "$here/public/ui/locales" ] && [ -d "$src/src/locales" ]; then
+  mkdir -p "$here/public/ui/locales"
+  cp "$src"/src/locales/*.json "$here/public/ui/locales/"
+fi
 echo "Web interface copied from $dist to public/ui ($(find "$here/public/ui" -type f | wc -l | tr -d ' ') files)"
