@@ -1,0 +1,29 @@
+# Open Brand Exchange node: send every request to index.php (Apache with mod_rewrite).
+Options -Indexes -MultiViews
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Keep the Authorization header (needed for API keys) on CGI/FastCGI hosts.
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+    # Hidden files are never served.
+    RewriteRule (^|/)\.(?!well-known/) - [F,L]
+    # Everything that is not an existing file goes to the portal.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [QSA,L]
+    # The UI is served through index.php (it adds security headers and the base path).
+    RewriteRule ^ui/ index.php [QSA,L]
+</IfModule>
+
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+</IfModule>
+
+# Larger uploads (Apache with mod_php; PHP-FPM hosts read .user.ini instead).
+<IfModule mod_php.c>
+    php_value upload_max_filesize 512M
+    php_value post_max_size 520M
+    php_value memory_limit 512M
+    php_value max_execution_time 300
+</IfModule>

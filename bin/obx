@@ -1,0 +1,9 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+$root = dirname(__DIR__);
+require $root . '/vendor/autoload.php';
+
+exit(Obx\Node\Cli::main($root, array_slice($argv, 1)));

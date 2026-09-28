@@ -1,0 +1,16 @@
+# For hosts where the whole release is uploaded into the web root (public_html):
+# forward everything to the public/ folder and keep the rest private.
+# If you can point your domain's document root at public/ directly, that is even better.
+Options -Indexes
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+    RewriteRule ^(config|data|src|vendor|bin|tests|resources|scripts|docker|deploy|docs)(/|$) - [F,L]
+    RewriteRule (^|/)\.(?!well-known/) - [F,L]
+    RewriteCond %{REQUEST_URI} !/public/
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+<IfModule !mod_rewrite.c>
+    Require all denied
+</IfModule>
