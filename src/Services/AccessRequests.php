@@ -125,7 +125,7 @@ final class AccessRequests
     private function notifyBrand(array $row, array $in): void
     {
         $this->app->webhooks->admin('access_request.created', ['access_request_id' => $row['id'], 'retailer_name' => $in['retailer']['name']]);
-        $url = $this->app->publicUrl() . '/admin/retailers/requests/' . $row['id'];
+        $url = $this->app->publicUrl() . '/admin/requests';
         $admins = $this->app->db->all("SELECT * FROM obx_users WHERE role = 'admin' AND status = 'active'");
         foreach ($admins as $admin) {
             $mail = $this->app->emails->render('accessRequestNew', (string) $admin['language'], [
@@ -278,9 +278,14 @@ final class AccessRequests
             if ($client !== null) {
                 $out['api_client'] = $client;
             }
-            return [$out, $in, $row, $createApi];
+            return [$out, $in, $row, $createApi, $invite !== null];
         });
-        [$out, $in, $row, $createApi] = $result;
+        [$out, $in, $row, $createApi, $invited] = $result;
+        // A new portal user already got the invitation (with the link to choose a password); a
+        // second "your access is ready" mail pointing at the login page would only confuse them.
+        if ($invited && !$createApi) {
+            return $out;
+        }
         $mail = $this->app->emails->render('accessApproved', (string) $row['language'], ['retailer' => $in['retailer']['name']], $this->app->publicUrl() . '/login', $createApi ? ['apiNote'] : [], [], (string) $in['contact']['name']);
         $this->app->mailer->send((string) $in['contact']['email'], $mail['subject'], $mail['text'], $mail['html']);
         return $out;

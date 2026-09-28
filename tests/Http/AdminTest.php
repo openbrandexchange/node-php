@@ -132,6 +132,25 @@ final class AdminTest extends NodeTestCase
         $this->assertSame('We only work with shops in the Benelux.', $seen['reason']);
     }
 
+    public function testPortalOnlyApprovalSendsJustTheInvitation(): void
+    {
+        $this->freshNode();
+        $req = $this->json($this->http('POST', '/obx/v1/access-requests', ['json' => [
+            'retailer' => ['name' => 'Harbour Street Shoes'],
+            'contact' => ['name' => 'Sam', 'email' => 'buyer@harbour.example'],
+            'access' => ['portal'],
+        ]]), 202);
+        $toAdmin = array_values(array_filter($this->app->mailer->sent, fn ($m) => $m['to'] === 'admin@kestrel.example'));
+        // The link opens the admin's list of access requests, a page the web interface has.
+        $this->assertStringContainsString('http://localhost/admin/requests', end($toAdmin)['text']);
+        $before = count($this->app->mailer->sent);
+        $this->json($this->http('POST', '/admin/api/access-requests/' . $req['id'] . '/approve', ['browser' => 'admin', 'json' => []]));
+        $after = array_slice($this->app->mailer->sent, $before);
+        $this->assertCount(1, $after, 'one e-mail: the invitation with the link to choose a password');
+        $this->assertSame('buyer@harbour.example', $after[0]['to']);
+        $this->assertStringContainsString('/invite/', $after[0]['text']);
+    }
+
     public function testBlockingARetailerRevokesSessionsAndApiAccess(): void
     {
         $this->kestrelNode();
