@@ -7,6 +7,4 @@
 /build/
 /.phpunit.cache/
 /.phpunit.result.cache
-/public/ui/*
-!/public/ui/README.md
 .DS_Store
