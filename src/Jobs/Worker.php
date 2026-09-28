@@ -151,6 +151,10 @@ final class Worker
             $db->delete('obx_jobs', ['id' => $jid]);
         }
         $this->app->blobs->collectGarbage($now - 86400);
+        if ($db->isSqlite()) {
+            // Keeps the query planner's statistics current (cheap; SQLite's recommendation).
+            $db->pdo->exec('PRAGMA optimize');
+        }
         $this->app->retention->sweep();
         foreach (glob($this->app->config->dataDir() . '/tmp/*') ?: [] as $f) {
             if (is_file($f) && filemtime($f) < $now - 86400) {

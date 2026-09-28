@@ -165,9 +165,10 @@ final class Schema
             ],
             // 0.1.0: indexes found with the seeded load test (scripts/load-test.sh).
             3 => [
-                'CREATE INDEX obx_variants_color ON obx_variants (visible, color_code, product_id)',
-                'CREATE INDEX obx_products_list ON obx_products (visible, style_number)',
-                'CREATE INDEX obx_products_newest ON obx_products (visible, content_updated_at)',
+                // No index starts with "visible": with few distinct values it made SQLite prefer it
+                // over the primary key for "visible = 1 AND id IN (…)" (the live change feed).
+                'CREATE INDEX obx_variants_color ON obx_variants (color_code, visible, product_id)',
+                'CREATE INDEX obx_products_newest ON obx_products (content_updated_at)',
                 'CREATE INDEX obx_download_events_retailer ON obx_download_events (retailer_id)',
                 'CREATE INDEX obx_download_events_actor ON obx_download_events (actor_id)',
                 'CREATE INDEX obx_users_retailer ON obx_users (retailer_id)',
