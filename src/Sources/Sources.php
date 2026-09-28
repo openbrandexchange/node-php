@@ -374,7 +374,9 @@ final class Sources
         $fetcher = new Fetcher($this->app, $row, Json::decode((string) $row['config'], []), $this->credentials($row));
         try {
             $files = $fetcher->listing();
-            return ['ok' => true, 'message' => count($files) . ' file(s) found.', 'host_key_fingerprint' => $fetcher->seenFingerprint, 'files' => array_slice($files, 0, 100)];
+            // No message on success: the web interface says "Connected, N files found" itself,
+            // in the admin's language. A message is only for the reason something failed.
+            return ['ok' => true, 'message' => null, 'host_key_fingerprint' => $fetcher->seenFingerprint, 'files' => array_slice($files, 0, 100)];
         } catch (ApiError $e) {
             if ($e->obxError === 'unsafe_url') {
                 throw $e;

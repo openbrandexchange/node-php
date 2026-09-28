@@ -71,6 +71,7 @@ final class SourcesTest extends NodeTestCase
         $this->assertSame(['Authorization'], $src['credentials_set']['headers']);
         $test = $this->json($this->http('POST', '/admin/api/import-sources/' . $src['id'] . '/test', ['browser' => 'admin']));
         $this->assertTrue($test['ok'], Json::encode($test));
+        $this->assertNull($test['message'], 'no English-only text next to the UI\'s own "Connected" message');
         $this->assertSame('export.zip', $test['files'][0]['name']);
         $this->expectKestrel($this->runSource($src['id']));
         $again = $this->runSource($src['id']);
