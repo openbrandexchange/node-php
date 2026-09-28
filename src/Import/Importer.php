@@ -199,10 +199,18 @@ final class Importer
                 @mkdir($input, 0770, true);
                 $changed = $this->app->sources->fetch((string) $source['id'], $input, (bool) ($source['force'] ?? false));
                 $files = [];
+                // Staged uploads have internal names (images/u0); show the names they came with.
+                $display = [];
+                foreach ((array) Json::decode((string) @file_get_contents($input . '/images.json'), []) as $img) {
+                    if (is_array($img) && isset($img['path'], $img['name'])) {
+                        $display[(string) $img['path']] = (string) $img['name'];
+                    }
+                }
                 $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($input, \FilesystemIterator::SKIP_DOTS));
                 foreach ($it as $f) {
                     if ($f->isFile() && !str_ends_with($f->getFilename(), '.json')) {
-                        $files[] = ['name' => substr($f->getPathname(), strlen($input) + 1), 'bytes' => (int) $f->getSize()];
+                        $rel = str_replace(DIRECTORY_SEPARATOR, '/', substr($f->getPathname(), strlen($input) + 1));
+                        $files[] = ['name' => $display[$rel] ?? $rel, 'bytes' => (int) $f->getSize()];
                     }
                 }
                 $this->app->db->update('obx_import_runs', ['files' => Json::encode(array_slice($files, 0, 1000))], ['id' => $runId]);
