@@ -28,4 +28,8 @@ chmod +x "$stage/bin/obx"
 (cd "$here/build/stage" && zip -qr -X "$out" obx-portal)
 rm -rf "$here/build/stage"
 echo "Built $out ($(du -h "$out" | cut -f1))"
-(cd "$here/build" && { command -v sha256sum >/dev/null && sha256sum "$(basename "$out")" || shasum -a 256 "$(basename "$out")"; })
+if command -v sha256sum >/dev/null; then
+  (cd "$here/build" && sha256sum "$(basename "$out")")
+else
+  (cd "$here/build" && shasum -a 256 "$(basename "$out")")
+fi
