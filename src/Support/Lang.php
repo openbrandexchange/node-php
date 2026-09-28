@@ -70,7 +70,7 @@ final class Lang
             }
         }
         foreach ($text as $v) {
-            if (is_string($v) && $v !== '') {
+            if ($v !== '') {
                 return $v;
             }
         }

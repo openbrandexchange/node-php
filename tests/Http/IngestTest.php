@@ -63,6 +63,7 @@ final class IngestTest extends NodeTestCase
             'publish' => $this->http('PATCH', $path, ['bearer' => $this->ingest, 'json' => ['status' => 'published'], 'headers' => ['Content-Type' => 'application/merge-patch+json']]),
             'unpublish' => $this->http('PATCH', $path, ['bearer' => $this->ingest, 'json' => ['status' => 'unpublished'], 'headers' => ['Content-Type' => 'application/merge-patch+json']]),
             'delete' => $this->http('DELETE', $path, ['bearer' => $this->ingest]),
+            default => throw new \UnexpectedValueException('Unknown operation ' . $op['op']),
         };
         $body = Json::decode($res->content());
         if ($res->status >= 400) {

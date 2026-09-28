@@ -114,6 +114,7 @@ final class Feed
                           WHERE v.visible = 1 AND v.id > ? AND p.brand_id IN (' . $in . ') ORDER BY v.id',
             'asset' => 'SELECT a.*, p.brand_id AS brand_id FROM obx_assets a JOIN obx_products p ON p.id = a.product_id
                         WHERE a.visible = 1 AND a.id > ? AND p.brand_id IN (' . $in . ') AND (a.expires_ts IS NULL OR a.expires_ts > ' . $now . ') ORDER BY a.id',
+            default => throw new \InvalidArgumentException('Unknown object type ' . $type),
         };
         return $this->db->all($sql . ' LIMIT ' . $limit, array_merge([$afterId], $brandIds));
     }
@@ -230,6 +231,7 @@ final class Feed
             'product' => $this->reader->product($row),
             'variant' => $this->reader->variant($row),
             'asset' => $this->reader->asset($row, $v),
+            default => throw new \InvalidArgumentException('Unknown object type ' . $type),
         };
         return [
             'seq' => max(1, $seq),

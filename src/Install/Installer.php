@@ -38,7 +38,8 @@ final class Installer
         $upload = min($ini('upload_max_filesize'), $ini('post_max_size') ?: PHP_INT_MAX);
         $data = $this->config->dataDir();
         return [
-            ['label' => 'PHP 8.2 or newer (you have ' . PHP_VERSION . ')', 'ok' => PHP_VERSION_ID >= 80200, 'required' => true, 'hint' => 'Choose a newer PHP version in your hosting control panel.'],
+            ['label' => 'PHP 8.2 or newer (you have ' . PHP_VERSION . ')', 'ok' => PHP_VERSION_ID >= 80200, // @phpstan-ignore greaterOrEqual.alwaysTrue (checked at run time on the host)
+                'required' => true, 'hint' => 'Choose a newer PHP version in your hosting control panel.'],
             ['label' => 'PDO with SQLite or MySQL', 'ok' => extension_loaded('pdo_sqlite') || extension_loaded('pdo_mysql'), 'required' => true, 'hint' => 'Enable pdo_sqlite or pdo_mysql.'],
             ['label' => 'OpenSSL', 'ok' => extension_loaded('openssl'), 'required' => true, 'hint' => 'Enable the openssl extension.'],
             ['label' => 'mbstring', 'ok' => extension_loaded('mbstring'), 'required' => true, 'hint' => 'Enable the mbstring extension.'],

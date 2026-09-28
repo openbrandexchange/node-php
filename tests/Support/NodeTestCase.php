@@ -346,7 +346,7 @@ abstract class NodeTestCase extends TestCase
         return (string) $this->json($this->http('POST', '/obx/v1/oauth/token', $o))['access_token'];
     }
 
-    /** @return array<string, array{name: string, tmp: string, size: int, type: string}> */
+    /** @return array{name: string, tmp: string, size: int, type: string} */
     protected function upload(string $path, string $name, string $type = 'application/octet-stream'): array
     {
         $tmp = $this->dir . '/up-' . bin2hex(random_bytes(4));
@@ -425,7 +425,7 @@ abstract class NodeTestCase extends TestCase
             match ($ph) {
                 'id' => $this->assertMatchesRegularExpression('/^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$/', (string) $actual, $path),
                 'datetime' => $this->assertNotNull(\Obx\Node\Support\Clock::parse((string) $actual), $path . ' is not a date-time'),
-                'datetime|null' => $actual === null ? $this->assertNull($actual) : $this->assertNotNull(\Obx\Node\Support\Clock::parse((string) $actual), $path),
+                'datetime|null' => $actual === null ? $this->addToAssertionCount(1) : $this->assertNotNull(\Obx\Node\Support\Clock::parse((string) $actual), $path),
                 'url' => $this->assertMatchesRegularExpression('#^https?://#', (string) $actual, $path),
                 'sha256' => $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', (string) $actual, $path),
                 'int' => $this->assertIsInt($actual, $path),

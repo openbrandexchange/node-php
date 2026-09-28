@@ -83,6 +83,7 @@ final class Formats
         $pos = (string) array_pop($parts);
         $color = (string) array_pop($parts);
         $style = implode('_', $parts);
+        // @phpstan-ignore identical.alwaysFalse (defensive: keep refusing "STYLE__1.jpg" if the parsing above changes)
         if (!preg_match('/^[1-9][0-9]{0,2}$/', $pos) || $color === '' || $style === '') {
             return null;
         }

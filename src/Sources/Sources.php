@@ -355,7 +355,7 @@ final class Sources
         $row = $this->get($id);
         $fetcher = new Fetcher($this->app, $row, Json::decode((string) $row['config'], []), $this->credentials($row));
         $fingerprint = $fetcher->fetch($inputDir, $force);
-        if (!$force && $fingerprint !== null && $fingerprint === $row['fingerprint']) {
+        if (!$force && $fingerprint === $row['fingerprint']) {
             return false;
         }
         $this->app->db->update('obx_import_sources', ['fingerprint' => $fingerprint], ['id' => $id]);

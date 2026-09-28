@@ -44,7 +44,7 @@ final class ImageInfo
     public static function dimensions(string $path): ?array
     {
         $info = @getimagesize($path);
-        if (!is_array($info) || ($info[0] ?? 0) < 1 || ($info[1] ?? 0) < 1) {
+        if (!is_array($info) || $info[0] < 1 || $info[1] < 1) {
             return null;
         }
         return [(int) $info[0], (int) $info[1]];

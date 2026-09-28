@@ -39,7 +39,7 @@ final class Fetcher
 
     private bool $force = false;
 
-    public function fetch(string $inputDir, bool $force = false): ?string
+    public function fetch(string $inputDir, bool $force = false): string
     {
         $this->force = $force;
         return match ($this->row['kind']) {
@@ -69,7 +69,7 @@ final class Fetcher
         return (array) ($this->creds['headers'] ?? []);
     }
 
-    private function fetchHttps(string $in): ?string
+    private function fetchHttps(string $in): string
     {
         $tmp = $in . '/download';
         $r = $this->app->http->request('GET', (string) $this->config['url'], ['headers' => $this->headers(), 'to_file' => $tmp, 'follow' => 5, 'max_bytes' => $this->maxBytes()]);
@@ -137,7 +137,7 @@ final class Fetcher
         $user = (string) $this->config['username'];
         $ok = false;
         if (!empty($this->creds['private_key'])) {
-            $k = PublicKeyLoader::load((string) $this->creds['private_key'], $this->creds['password'] ?? false);
+            $k = PublicKeyLoader::loadPrivateKey((string) $this->creds['private_key'], $this->creds['password'] ?? false);
             $ok = $sftp->login($user, $k);
         } elseif (isset($this->creds['password'])) {
             $ok = $sftp->login($user, (string) $this->creds['password']);
@@ -186,7 +186,7 @@ final class Fetcher
         return $out;
     }
 
-    private function fetchSftp(string $in): ?string
+    private function fetchSftp(string $in): string
     {
         $sftp = $this->sftp();
         $files = $this->sftpFiles($sftp);
@@ -251,7 +251,7 @@ final class Fetcher
         }));
     }
 
-    private function fetchS3(string $in): ?string
+    private function fetchS3(string $in): string
     {
         $s3 = $this->s3();
         $objects = $this->s3Objects($s3);

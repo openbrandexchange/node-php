@@ -1,0 +1,22 @@
+# Static analysis (the "typecheck" of this repository): vendor/bin/phpstan
+parameters:
+    level: 5
+    paths:
+        - src
+        - tests
+        - bin/obx
+    excludePaths:
+        - tests/ui/*
+        - tests/fixtures/*
+    phpVersion:
+        min: 80200
+        max: 80499
+    ignoreErrors:
+        # Decoded JSON and CSV input is normalised with array_values() even where the declared
+        # type already says "list": the declaration describes the valid shape, not what arrives.
+        - identifier: arrayValues.list
+        # Variables changed by reference inside closures (streaming zip parts).
+        - identifier: identical.alwaysTrue
+          path: src/Services/Exports.php
+        - identifier: deadCode.unreachable
+          path: src/Services/Exports.php

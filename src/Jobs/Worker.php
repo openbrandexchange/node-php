@@ -106,7 +106,7 @@ final class Worker
             // Scheduled imports that are due become queued jobs first, so they run in this pass.
             $done['sources'] = $this->app->sources->runDue();
             // Queued jobs, oldest first.
-            while (time() - $start < $budget && !self::$stopping) {
+            while (time() - $start < $budget && !self::stopping()) {
                 $id = $this->app->db->value("SELECT id FROM obx_jobs WHERE status = 'queued' ORDER BY created_ts LIMIT 1");
                 if ($id === null) {
                     break;
@@ -214,10 +214,10 @@ final class Worker
             pcntl_signal(SIGINT, $stop);
         }
         $until = $maxSeconds !== null ? time() + $maxSeconds : null;
-        while (!self::$stopping && ($until === null || time() < $until)) {
+        while (!self::stopping() && ($until === null || time() < $until)) {
             $done = $this->tick(50);
             if (array_sum($done) === 0) {
-                for ($i = 0; $i < 20 && !self::$stopping; $i++) {
+                for ($i = 0; $i < 20 && !self::stopping(); $i++) { // @phpstan-ignore booleanNot.alwaysTrue (set by the signal handler)
                     usleep(100000);
                 }
             }

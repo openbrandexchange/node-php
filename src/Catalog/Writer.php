@@ -404,7 +404,7 @@ final class Writer
         return $this->result($ctx, $kind, $ext, $result, $id, $fresh, $warnings, $result === 'created' ? 201 : 200);
     }
 
-    /** @param array<string, list<string>> $sync */
+    /** @param array<string, list<mixed>> $sync */
     private function addDescendants(string $kind, string $id, array &$sync): void
     {
         $productIds = $kind === 'brand' ? $this->db->column('SELECT id FROM obx_products WHERE brand_id = ?', [$id]) : [$id];
@@ -726,7 +726,7 @@ final class Writer
                 $blobMeta[$name] = $this->blobs->get((string) $f['sha256']);
             }
             $rights = array_replace($defaults, (array) ($input['rights'] ?? []));
-            $expiresTs = isset($rights['expires_at']) && $rights['expires_at'] !== null ? (int) floor((float) Clock::parse((string) $rights['expires_at'])) : null;
+            $expiresTs = isset($rights['expires_at']) ? (int) floor((float) Clock::parse((string) $rights['expires_at'])) : null;
             $complete = self::complete($files) && !in_array(null, $blobMeta, true);
             $rep = $complete ? Representation::asset($a, $input, (string) $p['brand_id'], $variantIds, $files, $blobMeta, $rights) : null;
             $vis = $complete && $a['status'] === 'published' && ($productVisible[$a['product_id']] ?? false)

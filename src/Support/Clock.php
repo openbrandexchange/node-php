@@ -49,7 +49,7 @@ final class Clock
             return null;
         }
         $base = gmmktime((int) $m[4], (int) $m[5], (int) $m[6], (int) $m[2], (int) $m[3], (int) $m[1]);
-        $frac = isset($m[7]) && $m[7] !== '' ? (float) ('0' . $m[7]) : 0.0;
+        $frac = $m[7] !== '' ? (float) ('0' . $m[7]) : 0.0;
         $tz = strtoupper($m[8]);
         $offset = 0;
         if ($tz !== 'Z') {

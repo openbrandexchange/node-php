@@ -319,7 +319,7 @@ final class Exports
             $where[] = 'p.id IN (SELECT v.product_id FROM obx_variants v WHERE v.visible = 1 AND v.gtin IN (' . Db::in($g) . '))';
             $params = array_merge($params, $g);
         }
-        if (isset($filter['updated_since']) && $filter['updated_since'] !== null) {
+        if (isset($filter['updated_since'])) {
             $where[] = 'p.content_updated_at >= ?';
             $params[] = Clock::iso((float) Clock::parse((string) $filter['updated_since']));
         }

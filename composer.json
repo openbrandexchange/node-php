@@ -5,13 +5,15 @@
     "license": "AGPL-3.0-only",
     "homepage": "https://openbrandexchange.com",
     "require": {
-        "php": ">=8.2",
+        "php": "^8.2",
         "ext-json": "*",
-        "ext-pdo": "*",
+        "ext-mbstring": "*",
         "ext-openssl": "*",
+        "ext-pdo": "*",
         "phpseclib/phpseclib": "^3.0"
     },
     "require-dev": {
+        "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^11.5"
     },
     "suggest": {
@@ -22,17 +24,31 @@
         "ext-pdo_mysql": "MySQL / MariaDB database."
     },
     "autoload": {
-        "psr-4": {"Obx\\Node\\": "src/"}
+        "psr-4": {
+            "Obx\\Node\\": "src/"
+        }
     },
     "autoload-dev": {
-        "psr-4": {"Obx\\Node\\Tests\\": "tests/"}
+        "psr-4": {
+            "Obx\\Node\\Tests\\": "tests/"
+        }
     },
     "config": {
-        "platform": {"php": "8.2.0"},
+        "platform": {
+            "php": "8.2.0"
+        },
         "sort-packages": true,
         "optimize-autoloader": true
     },
     "scripts": {
-        "test": "phpunit"
+        "test": "phpunit",
+        "analyse": "phpstan analyse --memory-limit=1G",
+        "lint": "find src tests bin public -name '*.php' -not -path 'tests/ui/*' -print0 | xargs -0 -n1 php -l -d display_errors=1 >/dev/null"
+    },
+    "support": {
+        "email": "hello@openbrandexchange.com",
+        "security": "https://github.com/openbrandexchange/node-php/security/policy",
+        "source": "https://github.com/openbrandexchange/node-php",
+        "docs": "https://github.com/openbrandexchange/node-php/tree/main/docs"
     }
 }

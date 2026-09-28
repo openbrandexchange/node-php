@@ -34,7 +34,7 @@ final class OpsController extends Controller
             $v = Schema::currentVersionOf($this->app->db);
             $good = $v === Schema::latestVersion();
             $checks['database'] = $good ? 'ok' : 'schema version ' . $v . ', expected ' . Schema::latestVersion();
-            $ok = $ok && $good;
+            $ok = $good;
         } catch (\Throwable $e) {
             $checks['database'] = 'unreachable';
             $ok = false;
