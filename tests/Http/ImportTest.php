@@ -76,10 +76,7 @@ final class ImportTest extends NodeTestCase
         $this->assertSame($this->expectedCounts(), $this->counts());
 
         // Same data via an images manifest on a second fresh node: blobs first, then the CSVs.
-        $this->rmrf($this->dir);
-        mkdir($this->dir, 0777, true);
-        $this->jars = [];
-        $this->app = $this->makeApp();
+        $this->resetNode();
         $this->setupNode();
         $token = $this->ingestToken();
         $manifest = [];

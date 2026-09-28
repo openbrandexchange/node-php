@@ -23,13 +23,64 @@ abstract class NodeTestCase extends TestCase
     /** @var array<string, array<string, string>> cookie jars per browser name */
     protected array $jars = [];
     protected string $ip = '203.0.113.10';
+    /** MySQL test database name when OBX_TEST_MYSQL_DSN is set (else SQLite). */
+    private ?string $mysqlDb = null;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->dir = sys_get_temp_dir() . '/obx-test-' . bin2hex(random_bytes(6));
         mkdir($this->dir, 0777, true);
+        $this->createMysqlDb();
         $this->app = $this->makeApp();
+    }
+
+    /** Throws the node away and starts an empty one (not set up). */
+    protected function resetNode(): void
+    {
+        if ($this->mysqlDb !== null) {
+            $this->dropMysqlDb();
+        }
+        unset($this->app);
+        $this->rmrf($this->dir);
+        mkdir($this->dir, 0777, true);
+        $this->jars = [];
+        $this->createMysqlDb();
+        $this->app = $this->makeApp();
+    }
+
+    private static function mysqlDsn(): ?string
+    {
+        $dsn = getenv('OBX_TEST_MYSQL_DSN');
+        return $dsn !== false && $dsn !== '' ? $dsn : null;
+    }
+
+    private function mysqlPdo(): \PDO
+    {
+        return new \PDO((string) self::mysqlDsn(), getenv('OBX_TEST_MYSQL_USER') ?: 'root', getenv('OBX_TEST_MYSQL_PASSWORD') ?: '', [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION]);
+    }
+
+    private function dropMysqlDb(): void
+    {
+        $admin = $this->mysqlPdo();
+        if (isset($this->app)) {
+            // The node's connection may still hold locks; end it before dropping the database.
+            $cid = (int) $this->app->db->value('SELECT CONNECTION_ID()');
+            try {
+                $admin->exec('KILL ' . $cid);
+            } catch (\PDOException) {
+            }
+        }
+        $admin->exec('DROP DATABASE IF EXISTS ' . $this->mysqlDb);
+    }
+
+    private function createMysqlDb(): void
+    {
+        if (self::mysqlDsn() === null) {
+            return;
+        }
+        $this->mysqlDb = 'obx_t_' . bin2hex(random_bytes(5));
+        $this->mysqlPdo()->exec('CREATE DATABASE ' . $this->mysqlDb . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_bin');
     }
 
     /** @param array<string, mixed> $overrides */
@@ -41,9 +92,9 @@ abstract class NodeTestCase extends TestCase
             'public_url' => 'http://localhost',
             'secret_key' => 'test-secret-key-0123456789abcdef-0123456789abcdef',
             'setup_code' => self::SETUP_CODE,
-            'db_dsn' => 'sqlite:' . $this->dir . '/obx.sqlite',
-            'db_user' => null,
-            'db_password' => null,
+            'db_dsn' => $this->mysqlDb !== null ? self::mysqlDsn() . ';dbname=' . $this->mysqlDb . ';charset=utf8mb4' : 'sqlite:' . $this->dir . '/obx.sqlite',
+            'db_user' => $this->mysqlDb !== null ? (getenv('OBX_TEST_MYSQL_USER') ?: 'root') : null,
+            'db_password' => $this->mysqlDb !== null ? (getenv('OBX_TEST_MYSQL_PASSWORD') ?: '') : null,
             'data_dir' => $this->dir . '/data',
             'jobs_inline' => true,
             'mail_transport' => 'memory',
@@ -59,6 +110,9 @@ abstract class NodeTestCase extends TestCase
     protected function tearDown(): void
     {
         \Obx\Node\Support\Clock::$offset = 0.0;
+        if ($this->mysqlDb !== null) {
+            $this->dropMysqlDb();
+        }
         $this->rmrf($this->dir);
         parent::tearDown();
     }
@@ -88,6 +142,9 @@ abstract class NodeTestCase extends TestCase
      */
     protected function snapshot(string $name, callable $build): array
     {
+        if ($this->mysqlDb !== null) {
+            return $build();
+        }
         if (!isset(self::$snapshots[$name])) {
             $values = $build();
             $template = sys_get_temp_dir() . '/obx-snap-' . $name . '-' . getmypid() . '-' . bin2hex(random_bytes(3));
@@ -130,7 +187,9 @@ abstract class NodeTestCase extends TestCase
             $job = $this->importKestrel($ingest);
             $this->assertSame('succeeded', $job['status'], Json::encode($job));
             $this->assertSame(0, $job['import_run']['counts']['errors'], Json::encode($job['import_run']));
-            $this->app->db->pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+            if ($this->app->db->isSqlite()) {
+                $this->app->db->pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+            }
             return ['ingest' => $ingest];
         });
     }
@@ -140,7 +199,9 @@ abstract class NodeTestCase extends TestCase
     {
         return $this->snapshot('fresh', function (): array {
             $this->setupNode();
-            $this->app->db->pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+            if ($this->app->db->isSqlite()) {
+                $this->app->db->pdo->exec('PRAGMA wal_checkpoint(TRUNCATE)');
+            }
             return [];
         });
     }
