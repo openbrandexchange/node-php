@@ -149,6 +149,29 @@ final class PortalTest extends NodeTestCase
         $this->assertCount(1, $list['items']);
     }
 
+    public function testFacetCountsEqualTheListWithThatValueChosen(): void
+    {
+        $this->retailerUser('f1', ['name' => 'Facet Shop']);
+        $keys = ['brands' => 'brand_id', 'item_types' => 'item_type', 'colors' => 'color', 'seasons' => 'season', 'collections' => 'collection', 'target_groups' => 'target_group'];
+        $combos = [[], ['item_type' => ['jacket']], ['color' => ['BLK'], 'season' => ['AW26']], ['brand_id' => [$this->kestrelId], 'q' => 'o'], ['color' => ['NVY', 'RST'], 'target_group' => ['men']]];
+        foreach ($combos as $filters) {
+            $facets = $this->json($this->http('GET', '/admin/api/portal/facets', ['browser' => 'f1', 'query' => $filters]));
+            if ($filters === []) {
+                $this->assertCount(2, $facets['brands']);
+                $this->assertNotSame([], $facets['colors']);
+            }
+            foreach ($keys as $facet => $key) {
+                foreach ($facets[$facet] as $item) {
+                    // Disjunctive: the count is the number of articles the list shows when this
+                    // facet is set to just this value and every other filter stays.
+                    $q = array_replace($filters, [$key => [$item['value']]]);
+                    $list = $this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'f1', 'query' => $q + ['limit' => '1']]));
+                    $this->assertSame($list['total'], $item['count'], $facet . '=' . $item['value'] . ' with ' . Json::encode($filters));
+                }
+            }
+        }
+    }
+
     public function testRestrictedRetailerNeverSeesTheOtherBrand(): void
     {
         $this->retailerUser('rr', ['name' => 'Kestrel only', 'brand_ids' => [$this->kestrelId], 'allow_original' => false]);
