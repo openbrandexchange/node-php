@@ -36,6 +36,35 @@ final class FormatsTest extends TestCase
         $this->assertSame($expected, Formats::parseFilename($name));
     }
 
+    /**
+     * The spec's shared test vectors (fixtures/expected/image-filenames.json, synced into
+     * tests/fixtures/spec): what the importer makes of each name.
+     */
+    public function testSpecFilenameVectors(): void
+    {
+        $doc = json_decode((string) file_get_contents(__DIR__ . '/../fixtures/spec/expected/image-filenames.json'), true, 512, JSON_THROW_ON_ERROR);
+        $this->assertGreaterThanOrEqual(20, count($doc['cases']));
+        foreach ($doc['cases'] as $case) {
+            $parsed = Formats::parseFilename($case['name']);
+            if (isset($case['error'])) {
+                $this->assertNull($parsed, $case['name'] . ' is not a valid image name');
+                continue;
+            }
+            $this->assertNotNull($parsed, $case['name']);
+            $color = strcasecmp($parsed['color'], 'ALL') === 0 ? null : $parsed['color'];
+            $got = [
+                'style' => $parsed['style'], 'color' => $color, 'position' => $parsed['position'],
+                'role' => $parsed['role'], 'view' => $parsed['view'],
+                'external_id' => $parsed['style'] . '_' . ($color ?? 'ALL') . '_' . $parsed['position'],
+            ];
+            $want = [
+                'style' => $case['style'], 'color' => $case['color'], 'position' => $case['position'],
+                'role' => $case['role'], 'view' => $case['view'], 'external_id' => $case['external_id'],
+            ];
+            $this->assertSame($want, $got, $case['name']);
+        }
+    }
+
     public function testMaterialsGrammar(): void
     {
         $w = [];

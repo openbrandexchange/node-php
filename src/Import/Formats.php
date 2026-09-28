@@ -32,7 +32,10 @@ final class Formats
     }
 
     /**
-     * Parses {style}_{color}_{position}[_{qualifier}…].{ext} from the right.
+     * Parses {style}_{color}_{position}[_{qualifier}…].{ext} from the right (import-format.md
+     * §2.1): qualifiers are popped while more than three parts remain (a two-part key such as
+     * size_chart first), then applied right to left, each filling only what is still empty, so
+     * the rightmost role or view wins; "other" is the view next to another role.
      *
      * @return array{style: string, color: string, position: int, role: string, view: ?string}|null
      */
@@ -44,38 +47,22 @@ final class Formats
         }
         $stem = substr($filename, 0, -(strlen($ext) + 1));
         $parts = explode('_', $stem);
-        $role = null;
-        $view = null;
-        while (count($parts) > 3) {
-            $last = strtolower((string) end($parts));
-            // Two-part qualifier keys first (size_chart, tilted_left, tilted_right).
-            if (count($parts) > 4) {
-                $two = strtolower($parts[count($parts) - 2] . '_' . $last);
-                if (in_array($two, Validator::ROLES, true) || in_array($two, Validator::VIEWS, true)) {
-                    array_pop($parts);
-                    array_pop($parts);
-                    if (in_array($two, Validator::ROLES, true)) {
-                        $role ??= $two;
-                    } else {
-                        $view ??= $two;
-                    }
+        $qualifiers = []; // left to right
+        while (true) {
+            $n = count($parts);
+            if ($n > 4) {
+                $two = strtolower($parts[$n - 2] . '_' . $parts[$n - 1]);
+                if (self::isQualifier($two)) {
+                    array_splice($parts, -2);
+                    array_unshift($qualifiers, $two);
                     continue;
                 }
             }
-            $isRole = in_array($last, Validator::ROLES, true);
-            $isView = in_array($last, Validator::VIEWS, true);
-            if (!$isRole && !$isView) {
-                break;
+            if ($n > 3 && self::isQualifier(strtolower($parts[$n - 1]))) {
+                array_unshift($qualifiers, strtolower((string) array_pop($parts)));
+                continue;
             }
-            array_pop($parts);
-            if ($last === 'detail') {
-                $role ??= 'detail';
-                $view ??= 'detail';
-            } elseif ($isRole && $role === null) {
-                $role = $last;
-            } elseif ($isView && $view === null) {
-                $view = $last;
-            }
+            break;
         }
         if (count($parts) < 3) {
             return null;
@@ -87,7 +74,46 @@ final class Formats
         if (!preg_match('/^[1-9][0-9]{0,2}$/', $pos) || $color === '' || $style === '') {
             return null;
         }
+        [$role, $view] = self::roleAndView($qualifiers);
         return ['style' => $style, 'color' => $color, 'position' => (int) $pos, 'role' => $role ?? 'packshot', 'view' => $view];
+    }
+
+    private static function isQualifier(string $key): bool
+    {
+        return in_array($key, Validator::ROLES, true) || in_array($key, Validator::VIEWS, true);
+    }
+
+    /**
+     * @param list<string> $qualifiers left to right
+     * @return array{0: ?string, 1: ?string} role and view
+     */
+    private static function roleAndView(array $qualifiers): array
+    {
+        $otherIsView = false;
+        foreach ($qualifiers as $q) {
+            if ($q !== 'other' && in_array($q, Validator::ROLES, true)) {
+                $otherIsView = true;
+            }
+        }
+        $role = null;
+        $view = null;
+        foreach (array_reverse($qualifiers) as $q) {
+            if ($q === 'detail') {
+                $role ??= 'detail';
+                $view ??= 'detail';
+            } elseif ($q === 'other') {
+                if ($otherIsView) {
+                    $view ??= 'other';
+                } else {
+                    $role ??= 'other';
+                }
+            } elseif (in_array($q, Validator::ROLES, true)) {
+                $role ??= $q;
+            } else {
+                $view ??= $q;
+            }
+        }
+        return [$role, $view];
     }
 
     /**
