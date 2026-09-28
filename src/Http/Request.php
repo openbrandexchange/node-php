@@ -48,7 +48,12 @@ final class Request
         $this->headers = $h;
     }
 
-    public static function fromGlobals(): self
+    /**
+     * @param string|null $trustedProxies comma-separated addresses/ranges, "private" or "*":
+     *        when the direct peer is one of them, the client address is taken from
+     *        X-Forwarded-For (the right-most address that is not itself a trusted proxy).
+     */
+    public static function fromGlobals(?string $trustedProxies = null): self
     {
         $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
         $uri = (string) ($_SERVER['REQUEST_URI'] ?? '/');
@@ -108,7 +113,7 @@ final class Request
         if (!preg_match('/^[a-z0-9.\-]+(:\d{1,5})?$|^\[[0-9a-f:.]+\](:\d{1,5})?$/', $host)) {
             $host = 'localhost';
         }
-        $ip = (string) ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1');
+        $ip = self::clientAddress((string) ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'), $headers['x-forwarded-for'] ?? null, $trustedProxies);
         $files = [];
         foreach ($_FILES as $field => $info) {
             if (is_array($info['name'])) {
@@ -168,6 +173,83 @@ final class Request
             bodyFile: $isMultipart ? null : 'php://input',
             rawQuery: $rawQuery,
         );
+    }
+
+    /** Client address behind trusted reverse proxies (see fromGlobals). */
+    public static function clientAddress(string $peer, ?string $forwardedFor, ?string $trustedProxies): string
+    {
+        if ($trustedProxies === null || trim($trustedProxies) === '' || $forwardedFor === null || !self::trusted($peer, $trustedProxies)) {
+            return $peer;
+        }
+        $hops = array_reverse(array_filter(array_map('trim', explode(',', $forwardedFor)), static fn ($h) => $h !== ''));
+        $client = $peer;
+        foreach ($hops as $hop) {
+            $hop = trim($hop, '[]');
+            if (filter_var($hop, FILTER_VALIDATE_IP) === false) {
+                break;
+            }
+            $client = $hop;
+            if (!self::trusted($hop, $trustedProxies)) {
+                break;
+            }
+        }
+        return $client;
+    }
+
+    private static function trusted(string $ip, string $list): bool
+    {
+        foreach (array_map('trim', explode(',', $list)) as $entry) {
+            if ($entry === '*') {
+                return true;
+            }
+            if ($entry === 'private') {
+                if (filter_var($ip, FILTER_VALIDATE_IP) !== false && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+                    return true;
+                }
+                continue;
+            }
+            if (self::inCidr($ip, $entry)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static function validCidr(string $cidr): bool
+    {
+        $parts = explode('/', $cidr, 2);
+        $bin = @inet_pton($parts[0]);
+        if ($bin === false) {
+            return false;
+        }
+        if (!isset($parts[1])) {
+            return true;
+        }
+        return ctype_digit($parts[1]) && (int) $parts[1] <= strlen($bin) * 8;
+    }
+
+    private static function inCidr(string $ip, string $cidr): bool
+    {
+        if (!self::validCidr($cidr)) {
+            return false;
+        }
+        $parts = explode('/', $cidr, 2);
+        $a = @inet_pton($ip);
+        $b = (string) inet_pton($parts[0]);
+        if ($a === false || strlen($a) !== strlen($b)) {
+            return false;
+        }
+        $bits = isset($parts[1]) ? (int) $parts[1] : strlen($b) * 8;
+        $bytes = intdiv($bits, 8);
+        if (substr($a, 0, $bytes) !== substr($b, 0, $bytes)) {
+            return false;
+        }
+        $rest = $bits % 8;
+        if ($rest === 0) {
+            return true;
+        }
+        $mask = (0xFF << (8 - $rest)) & 0xFF;
+        return (ord($a[$bytes]) & $mask) === (ord($b[$bytes]) & $mask);
     }
 
     /**
@@ -352,6 +434,8 @@ final class Request
         if (!\Obx\Node\Support\Json::isObject($v)) {
             throw new ApiError('invalid_request', 'The request body must be a JSON object.');
         }
+        // Field names (never values) for the audit log.
+        $this->attrs['_json_keys'] = array_slice(array_map('strval', array_keys($v)), 0, 50);
         return $v;
     }
 

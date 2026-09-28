@@ -16,6 +16,13 @@ final class Web
     {
         $config = Config::load($root);
         $path = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
+        if (preg_match('#/healthz$#', $path)) {
+            // Liveness: PHP answers. Needs neither the database nor the configuration.
+            header('Content-Type: application/json; charset=utf-8');
+            header('Cache-Control: no-store');
+            echo json_encode(['status' => 'ok', 'software' => Config::SOFTWARE, 'version' => Config::VERSION]);
+            return;
+        }
         if (!$config->installed() || preg_match('#/install/?$#', $path)) {
             (new Installer($root, $config))->serve();
             return;
@@ -23,20 +30,28 @@ final class Web
         try {
             $app = new App($config);
         } catch (\Throwable $e) {
-            error_log('[obx ERROR] Startup failed: ' . \Obx\Node\Support\Log::scrub($e->getMessage()));
+            $log = new \Obx\Node\Support\Log($config->get('log_file'), (string) $config->get('log_format', 'text'));
+            $log->error('Startup failed: ' . $e->getMessage(), null, ['path' => $path]);
             http_response_code(503);
             header('Content-Type: application/problem+json');
+            header('Cache-Control: no-store');
+            header('Retry-After: 30');
+            $detail = $e instanceof ConfigInvalid
+                ? 'The portal is not configured correctly. The server log lists the problems (or run: php bin/obx check).'
+                : ($e instanceof \Obx\Node\Db\SchemaTooNew
+                    ? 'The database belongs to a newer release of this software. See the server log.'
+                    : 'The portal cannot reach its database or storage. Check config/config.php and the server log.');
             echo json_encode([
                 'type' => 'https://openbrandexchange.com/errors/service_unavailable',
                 'title' => 'Service unavailable',
                 'status' => 503,
-                'detail' => 'The portal cannot reach its database or storage. Check config/config.php and the server log.',
+                'detail' => $detail,
                 'obx_error' => 'service_unavailable',
             ]);
             return;
         }
         try {
-            $req = Request::fromGlobals();
+            $req = Request::fromGlobals(is_string($config->get('trusted_proxies')) ? (string) $config->get('trusted_proxies') : null);
             $res = $app->handle($req);
         } catch (\Obx\Node\Http\ApiError $e) {
             $res = \Obx\Node\Http\Response::problem($e);

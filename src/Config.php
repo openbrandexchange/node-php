@@ -74,8 +74,11 @@ final class Config
             'jobs_inline' => false,
             'renditions' => 'auto',
             'rate_limit_factor' => 1.0,
-            'trust_proxy' => true,
+            'trusted_proxies' => null,
             'log_file' => null,
+            'log_format' => 'text',
+            'access_log' => false,
+            'metrics_token' => null,
             'ui_dir' => $root . '/public/ui',
             'locales_dir' => null,
         ];
@@ -114,6 +117,9 @@ final class Config
             'OBX_MAX_UPLOAD_BYTES' => 'max_upload_bytes',
             'OBX_RENDITIONS' => 'renditions',
             'OBX_LOG_FILE' => 'log_file',
+            'OBX_LOG_FORMAT' => 'log_format',
+            'OBX_METRICS_TOKEN' => 'metrics_token',
+            'OBX_TRUSTED_PROXIES' => 'trusted_proxies',
             'OBX_UI_DIR' => 'ui_dir',
         ];
         $out = [];
@@ -127,20 +133,113 @@ final class Config
         if ($flag !== false) {
             $out['allow_private_urls'] = in_array(strtolower($flag), ['1', 'true', 'yes'], true);
         }
+        $flag = getenv('OBX_ACCESS_LOG');
+        if ($flag !== false) {
+            $out['access_log'] = in_array(strtolower($flag), ['1', 'true', 'yes'], true);
+        }
         $flag = getenv('OBX_S3_PATH_STYLE');
         if ($flag !== false) {
             $out['s3_path_style'] = in_array(strtolower($flag), ['1', 'true', 'yes'], true);
         }
         $factor = getenv('OBX_RATE_LIMIT_FACTOR');
-        if ($factor !== false && is_numeric($factor) && (float) $factor > 0) {
-            $out['rate_limit_factor'] = (float) $factor;
+        if ($factor !== false && $factor !== '') {
+            // Kept as given when it is not a positive number, so validate() can name the mistake.
+            $out['rate_limit_factor'] = is_numeric($factor) ? (float) $factor : $factor;
         }
         foreach (['max_upload_bytes', 'smtp_port'] as $int) {
-            if (isset($out[$int])) {
+            if (isset($out[$int]) && is_numeric($out[$int])) {
                 $out[$int] = (int) $out[$int];
             }
         }
         return $out;
+    }
+
+    /**
+     * Checks the configuration and returns every problem as a sentence that names the setting
+     * (environment variable and config.php key). An empty list means the node can start.
+     *
+     * @return list<string>
+     */
+    public function validate(): array
+    {
+        $errors = [];
+        $name = static fn (string $key): string => strtoupper('OBX_' . $key) . ' (' . $key . ')';
+        $url = $this->values['public_url'] ?? null;
+        if ($url !== null && $url !== '') {
+            $p = is_string($url) ? parse_url($url) : false;
+            if (!is_array($p) || !in_array(strtolower((string) ($p['scheme'] ?? '')), ['http', 'https'], true) || empty($p['host'])
+                || isset($p['query']) || isset($p['fragment']) || isset($p['user'])) {
+                $errors[] = $name('public_url') . ' must be a web address such as https://brands.example.com (no query string).';
+            }
+        }
+        $key = $this->values['secret_key'] ?? null;
+        if ($key !== null && $key !== '' && (!is_string($key) || strlen($key) < 32)) {
+            $errors[] = $name('secret_key') . ' must be at least 32 characters (for example: openssl rand -base64 48).';
+        }
+        $dsn = (string) ($this->values['db_dsn'] ?? '');
+        if (!preg_match('/^(sqlite|mysql):/', $dsn)) {
+            $errors[] = $name('db_dsn') . ' must start with sqlite: or mysql: (for example mysql:host=localhost;dbname=obx;charset=utf8mb4).';
+        } elseif (str_starts_with($dsn, 'sqlite:') && !extension_loaded('pdo_sqlite')) {
+            $errors[] = $name('db_dsn') . ' uses SQLite, but the PHP extension pdo_sqlite is not installed.';
+        } elseif (str_starts_with($dsn, 'mysql:') && !extension_loaded('pdo_mysql')) {
+            $errors[] = $name('db_dsn') . ' uses MySQL, but the PHP extension pdo_mysql is not installed.';
+        }
+        $enum = function (string $key, array $allowed) use (&$errors, $name): void {
+            $v = $this->values[$key] ?? null;
+            if ($v !== null && !in_array($v, $allowed, true)) {
+                $errors[] = $name($key) . ' must be one of ' . implode(', ', $allowed) . ' (got "' . (is_scalar($v) ? (string) $v : gettype($v)) . '").';
+            }
+        };
+        $enum('blob_store', ['fs', 's3']);
+        $enum('mail_transport', ['mail', 'smtp', 'none', 'memory']);
+        $enum('smtp_encryption', ['tls', 'ssl', 'none']);
+        $enum('renditions', ['auto', 'server', 'client']);
+        $enum('log_format', ['text', 'json']);
+        if (($this->values['blob_store'] ?? 'fs') === 's3') {
+            foreach (['s3_bucket', 's3_access_key_id', 's3_secret_access_key'] as $k) {
+                if (!is_string($this->values[$k] ?? null) || $this->values[$k] === '') {
+                    $errors[] = $name($k) . ' is required when ' . $name('blob_store') . ' is s3.';
+                }
+            }
+            if (!function_exists('curl_init')) {
+                $errors[] = $name('blob_store') . ' is s3, but the PHP extension curl is not installed.';
+            }
+        }
+        if (($this->values['mail_transport'] ?? 'mail') === 'smtp' && !is_string($this->values['smtp_host'] ?? null)) {
+            $errors[] = $name('smtp_host') . ' is required when ' . $name('mail_transport') . ' is smtp.';
+        }
+        $port = $this->values['smtp_port'] ?? 587;
+        if (!is_int($port) || $port < 1 || $port > 65535) {
+            $errors[] = $name('smtp_port') . ' must be a port number between 1 and 65535.';
+        }
+        $from = $this->values['mail_from'] ?? null;
+        if ($from !== null && $from !== '' && filter_var($from, FILTER_VALIDATE_EMAIL) === false) {
+            $errors[] = $name('mail_from') . ' must be an e-mail address.';
+        }
+        if (($this->values['renditions'] ?? 'auto') === 'server' && !\Obx\Node\Images\Renderer::available()) {
+            $errors[] = $name('renditions') . ' is server, but PHP has no GD with JPEG support. Use auto or client, or install GD.';
+        }
+        $max = $this->values['max_upload_bytes'] ?? 0;
+        if (!is_int($max) || $max < 1048576) {
+            $errors[] = $name('max_upload_bytes') . ' must be a number of bytes, at least 1048576 (1 MB).';
+        }
+        $factor = $this->values['rate_limit_factor'] ?? 1.0;
+        if ((!is_float($factor) && !is_int($factor)) || (float) $factor <= 0) {
+            $errors[] = $name('rate_limit_factor') . ' must be a positive number such as 1 or 0.5.';
+        }
+        $proxies = $this->values['trusted_proxies'] ?? null;
+        if (is_string($proxies) && $proxies !== '') {
+            foreach (array_map('trim', explode(',', $proxies)) as $p) {
+                if ($p !== '*' && $p !== 'private' && !\Obx\Node\Http\Request::validCidr($p)) {
+                    $errors[] = $name('trusted_proxies') . ' must be a comma-separated list of addresses or ranges (10.0.0.0/8), "private" or "*"; "' . $p . '" is none of these.';
+                }
+            }
+        }
+        $token = $this->values['metrics_token'] ?? null;
+        if (is_string($token) && $token !== '' && strlen($token) < 16) {
+            $errors[] = $name('metrics_token') . ' must be at least 16 characters.';
+        }
+        return $errors;
     }
 
     public function get(string $key, mixed $default = null): mixed

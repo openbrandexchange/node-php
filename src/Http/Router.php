@@ -10,7 +10,7 @@ namespace Obx\Node\Http;
  */
 final class Router
 {
-    /** @var list<array{method: string, regex: string, names: list<string>, handler: callable}> */
+    /** @var list<array{method: string, pattern: string, regex: string, names: list<string>, handler: callable}> */
     private array $routes = [];
 
     public function add(string $method, string $pattern, callable $handler): void
@@ -20,11 +20,11 @@ final class Router
             $names[] = $m[1];
             return '([^/]+)';
         }, preg_quote($pattern, '#'));
-        $this->routes[] = ['method' => $method, 'regex' => '#^' . $regex . '$#', 'names' => $names, 'handler' => $handler];
+        $this->routes[] = ['method' => $method, 'pattern' => $pattern, 'regex' => '#^' . $regex . '$#', 'names' => $names, 'handler' => $handler];
     }
 
     /**
-     * @return array{0: callable, 1: array<string, string>}|null  null when no path matched
+     * @return array{0: callable, 1: array<string, string>, 2: string}|null  handler, params, pattern; null when no path matched
      * @throws ApiError method_not_allowed when the path matched with another method
      */
     public function match(string $method, string $path): ?array
@@ -42,7 +42,7 @@ final class Router
             foreach ($r['names'] as $i => $name) {
                 $params[$name] = rawurldecode($m[$i + 1]);
             }
-            return [$r['handler'], $params];
+            return [$r['handler'], $params, $r['pattern']];
         }
         if ($allowed !== []) {
             // Prefer an exact HEAD route registered later (blobs); otherwise 405.
