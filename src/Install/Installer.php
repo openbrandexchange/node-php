@@ -159,7 +159,7 @@ final class Installer
             'smtp_port' => (int) ($in['smtp_port'] ?? 587) ?: 587,
             'smtp_user' => trim((string) ($in['smtp_user'] ?? '')) ?: null,
             'smtp_password' => (string) ($in['smtp_password'] ?? '') ?: null,
-            'smtp_encryption' => in_array($in['smtp_encryption'] ?? 'tls', ['tls', 'ssl', 'none'], true) ? $in['smtp_encryption'] : 'tls',
+            'smtp_encryption' => in_array($in['smtp_encryption'] ?? 'tls', ['tls', 'ssl', 'none'], true) ? (string) ($in['smtp_encryption'] ?? 'tls') : 'tls',
         ];
         $php = "<?php\n// Written by the Open Brand Exchange installer on " . gmdate('Y-m-d H:i') . " UTC.\n// Keep this file private: it holds the database password and the secret key.\n\nreturn " . var_export($values, true) . ";\n";
         $target = $this->config->configFile();
