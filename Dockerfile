@@ -19,9 +19,9 @@ LABEL org.opencontainers.image.title="Open Brand Exchange · Portal for web host
       org.opencontainers.image.vendor="Open Brand Exchange Foundation (in formation)" \
       org.opencontainers.image.version="${VERSION}"
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libpng-dev libjpeg62-turbo-dev libwebp-dev libzip-dev \
+ && apt-get install -y --no-install-recommends libpng-dev libjpeg62-turbo-dev libwebp-dev libzip-dev libicu-dev \
  && docker-php-ext-configure gd --with-jpeg --with-webp \
- && docker-php-ext-install -j"$(nproc)" gd zip pdo_mysql opcache pcntl \
+ && docker-php-ext-install -j"$(nproc)" gd zip pdo_mysql opcache pcntl intl \
  && rm -rf /var/lib/apt/lists/* \
  && a2enmod rewrite headers \
  && a2disconf other-vhosts-access-log \

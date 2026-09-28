@@ -53,7 +53,7 @@ docker compose up -d
 docker compose logs portal | grep "Setup code"
 ```
 
-Open <http://localhost:8080> and enter the setup code. Data lives in the `portal-data` volume. The image runs Apache with PHP 8.3, GD, zip, pcntl and opcache, and a background worker; it logs JSON to stderr, has a health check on `/healthz`, refuses to start with a wrong setting (exit code 78, the problems in the log), stops gracefully on `docker stop`, and is built for linux/amd64 and linux/arm64.
+Open <http://localhost:8080> and enter the setup code. Data lives in the `portal-data` volume. The image runs Apache with PHP 8.3, GD, zip, intl, pcntl and opcache, and a background worker; it logs JSON to stderr, has a health check on `/healthz`, refuses to start with a wrong setting (exit code 78, the problems in the log), stops gracefully on `docker stop`, and is built for linux/amd64 and linux/arm64.
 
 - **MySQL instead of SQLite:** `docker compose --profile mysql up -d` with `OBX_DB_DSN=mysql:host=db;dbname=obx;charset=utf8mb4`, `OBX_DB_USER=obx`, `OBX_DB_PASSWORD=…`.
 - **A public server:** put a reverse proxy with HTTPS in front, for example Caddy:
