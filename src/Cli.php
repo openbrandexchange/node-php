@@ -23,7 +23,8 @@ Usage: php bin/obx <command>
   setup-code     Show the one-time setup code for the first-run wizard.
   cron-url       Show the web address to call when your host has no cron (e.g. via a cron service).
   migrate        Create or update the database tables (forward only).
-  check          Check the configuration, database, data folder and file storage; exit 1 on problems.
+  check          Check the configuration, database, data folder and file storage; exit 1 on problems
+                 (--config-only: only the settings, no connections).
   backup FILE    Write a backup (database, files, secret key) to FILE.zip; --no-files leaves files out.
   restore FILE   Restore a backup into an empty database (--force replaces an existing portal).
   serve [port]   Start a local development server (default port 8080).
@@ -35,12 +36,18 @@ variables: OBX_PUBLIC_URL, OBX_SECRET_KEY, OBX_DB_DSN, OBX_SETUP_CODE, OBX_ALLOW
 TXT;
 
     /** @param callable(string): void $out */
-    private static function check(string $root, callable $out): int
+    private static function check(string $root, callable $out, bool $configOnly = false): int
     {
         $config = Config::load($root);
         $problems = $config->validate();
         foreach ($problems as $p) {
             $out('✗ ' . $p);
+        }
+        if ($configOnly) {
+            if ($problems === []) {
+                $out('✓ Configuration');
+            }
+            return $problems === [] ? 0 : 1;
         }
         if (!$config->installed()) {
             $out('✗ Not installed yet: open /install in your browser or set OBX_DB_DSN / OBX_SECRET_KEY.');
@@ -123,7 +130,7 @@ TXT;
                         : 'Database updated from schema version ' . $before . ' to ' . Schema::latestVersion() . '.');
                     return 0;
                 case 'check':
-                    return self::check($root, $out);
+                    return self::check($root, $out, in_array('--config-only', $args, true));
                 case 'restore':
                     $file = $args[1] ?? '';
                     if ($file === '' || !is_file($file)) {
