@@ -153,6 +153,7 @@ Everything runs in Docker; no local PHP is needed.
 ./scripts/test-mysql.sh mysql          # the same against MySQL 8.4 (or: mariadb)
 ./scripts/test-sources.sh              # scheduled imports against real S3 (SeaweedFS) and SFTP servers
 ./scripts/conformance.sh ../obx-go     # the official obx-conformance suite against the Docker image (47/47 pass)
+./scripts/ui-walk.sh ../spec          # click through the real web interface in a headless browser (brand + retailer flows)
 ./scripts/build-release.sh             # build/obx-portal-php-<version>.zip for FTP upload
 ./scripts/update-ui.sh ../admin-ui     # re-copy admin-ui's committed dist/ into public/ui (the served web interface)
 ./scripts/vendor-ui.sh ../admin-ui     # build admin-ui from its sources first, then copy it

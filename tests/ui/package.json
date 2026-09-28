@@ -1,0 +1,9 @@
+{
+  "name": "obx-node-php-ui-walk",
+  "private": true,
+  "type": "module",
+  "description": "Walks the main brand-admin and retailer flows of the real web interface against a running node (scripts/ui-walk.sh).",
+  "dependencies": {
+    "playwright": "^1.55.0"
+  }
+}

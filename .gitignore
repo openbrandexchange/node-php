@@ -8,3 +8,4 @@
 /.phpunit.cache/
 /.phpunit.result.cache
 .DS_Store
+/tests/ui/node_modules/
