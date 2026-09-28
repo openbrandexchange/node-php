@@ -128,7 +128,7 @@ variable (Docker, Cloud Run), which wins over the file.
 
 | Variable | Meaning | Default |
 |---|---|---|
-| `OBX_PUBLIC_URL` | public address, used in e-mails and API links | the address of the request |
+| `OBX_PUBLIC_URL` | public address, used in e-mails and API links | API links: the address of the request; e-mails: the address the portal was set up at |
 | `OBX_SECRET_KEY` | 32+ characters; encrypts stored credentials, signs links and cursors | generated into `data/secret.key` |
 | `OBX_SETUP_CODE` | preset one-time setup code | generated, printed in the log and `data/SETUP-CODE.txt` |
 | `OBX_DB_DSN`, `OBX_DB_USER`, `OBX_DB_PASSWORD` | database, e.g. `mysql:host=localhost;dbname=obx;charset=utf8mb4` | `sqlite:data/obx.sqlite` |
