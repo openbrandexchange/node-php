@@ -10,9 +10,20 @@ services:
       OBX_PUBLIC_URL: ${OBX_PUBLIC_URL:-http://localhost:8080}
       # OBX_SETUP_CODE: choose-your-own-code
       # E-mail (optional): OBX_MAIL_FROM, OBX_SMTP_HOST, OBX_SMTP_USER, OBX_SMTP_PASSWORD
+      # Behind a reverse proxy (Caddy, nginx, Traefik) on the same host:
+      # OBX_TRUSTED_PROXIES: private
+      # Prometheus: OBX_METRICS_TOKEN: a-long-random-token
     volumes:
       - portal-data:/var/www/html/data
     restart: unless-stopped
+    stop_grace_period: 30s
+    # Sized for a small brand; raise both together (each Apache worker may use up to 512 MB
+    # while it renders images, OBX_APACHE_WORKERS sets how many run at once).
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2g
 
   # Optional MySQL instead of SQLite: `docker compose --profile mysql up -d` and set
   # OBX_DB_DSN=mysql:host=db;dbname=obx;charset=utf8mb4, OBX_DB_USER=obx, OBX_DB_PASSWORD=...
@@ -26,6 +37,11 @@ services:
       MYSQL_RANDOM_ROOT_PASSWORD: "yes"
     volumes:
       - db-data:/var/lib/mysql
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1g
 
 volumes:
   portal-data:
