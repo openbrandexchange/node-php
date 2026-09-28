@@ -143,9 +143,10 @@ final class Feed
         $last = $after;
         $changes = [];
         $brandIds = null;
+        $current = $this->currentRows($rows);
         foreach ($rows as $c) {
             $last = (int) $c['seq'];
-            $entry = $this->liveEntry($c, $v, $retailer, $brandIds);
+            $entry = $this->liveEntry($c, $v, $retailer, $brandIds, $current);
             if ($entry !== null) {
                 $changes[] = $entry;
             }
@@ -159,7 +160,47 @@ final class Feed
      * @param list<string>|null $brandIds
      * @return array<string, mixed>|null
      */
-    private function liveEntry(array $c, Viewer $v, array $retailer, ?array &$brandIds): ?array
+    /**
+     * The current, visible rows of every object an upsert entry on this page refers to, in
+     * four queries per 500 objects instead of one per entry (the page is up to 1000 entries).
+     *
+     * @param list<array<string, mixed>> $entries
+     * @return array<string, array<string, array<string, mixed>>> type => id => row
+     */
+    private function currentRows(array $entries): array
+    {
+        $ids = [];
+        foreach ($entries as $c) {
+            if ($c['type'] !== 'grant' && $c['op'] !== 'delete') {
+                $ids[(string) $c['type']][(string) $c['obj_id']] = true;
+            }
+        }
+        $now = Clock::time();
+        $sql = [
+            'brand' => 'SELECT * FROM obx_brands WHERE visible = 1 AND id IN (%s)',
+            'product' => 'SELECT * FROM obx_products WHERE visible = 1 AND id IN (%s)',
+            'variant' => 'SELECT v.*, p.brand_id AS brand_id FROM obx_variants v JOIN obx_products p ON p.id = v.product_id WHERE v.visible = 1 AND v.id IN (%s)',
+            'asset' => 'SELECT a.*, p.brand_id AS brand_id FROM obx_assets a JOIN obx_products p ON p.id = a.product_id WHERE a.visible = 1 AND (a.expires_ts IS NULL OR a.expires_ts > ?) AND a.id IN (%s)',
+        ];
+        $out = [];
+        foreach ($ids as $type => $set) {
+            if (!isset($sql[$type])) {
+                continue;
+            }
+            foreach (array_chunk(array_map('strval', array_keys($set)), 500) as $chunk) {
+                $params = $type === 'asset' ? array_merge([$now], $chunk) : $chunk;
+                foreach ($this->db->all(sprintf($sql[$type], Db::in($chunk)), $params) as $row) {
+                    $out[$type][(string) $row['id']] = $row;
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * @param array<string, array<string, array<string, mixed>>> $current rows from currentRows()
+     */
+    private function liveEntry(array $c, Viewer $v, array $retailer, ?array &$brandIds, array $current): ?array
     {
         $base = [
             'seq' => (int) $c['seq'],
@@ -180,10 +221,9 @@ final class Feed
             return $base;
         }
         $brandIds ??= $this->reader->brandIds($v);
-        $now = Clock::time();
         switch ($c['type']) {
             case 'brand':
-                $row = $this->db->one('SELECT * FROM obx_brands WHERE id = ? AND visible = 1', [$c['obj_id']]);
+                $row = $current['brand'][(string) $c['obj_id']] ?? null;
                 if ($row === null || !in_array($row['id'], $brandIds, true)) {
                     return null;
                 }
@@ -191,7 +231,7 @@ final class Feed
                 $base['data'] = $this->reader->brand($row);
                 return $base;
             case 'product':
-                $row = $this->db->one('SELECT * FROM obx_products WHERE id = ? AND visible = 1', [$c['obj_id']]);
+                $row = $current['product'][(string) $c['obj_id']] ?? null;
                 if ($row === null || !in_array($row['brand_id'], $brandIds, true)) {
                     return null;
                 }
@@ -200,7 +240,7 @@ final class Feed
                 $base['data'] = $this->reader->product($row);
                 return $base;
             case 'variant':
-                $row = $this->db->one('SELECT v.*, p.brand_id AS brand_id FROM obx_variants v JOIN obx_products p ON p.id = v.product_id WHERE v.id = ? AND v.visible = 1', [$c['obj_id']]);
+                $row = $current['variant'][(string) $c['obj_id']] ?? null;
                 if ($row === null || !in_array($row['brand_id'], $brandIds, true)) {
                     return null;
                 }
@@ -210,7 +250,7 @@ final class Feed
                 $base['data'] = $this->reader->variant($row);
                 return $base;
             case 'asset':
-                $row = $this->db->one('SELECT a.*, p.brand_id AS brand_id FROM obx_assets a JOIN obx_products p ON p.id = a.product_id WHERE a.id = ? AND a.visible = 1 AND (a.expires_ts IS NULL OR a.expires_ts > ?)', [$c['obj_id'], $now]);
+                $row = $current['asset'][(string) $c['obj_id']] ?? null;
                 if ($row === null || !in_array($row['brand_id'], $brandIds, true)) {
                     return null;
                 }
