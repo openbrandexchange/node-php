@@ -184,6 +184,12 @@ final class IngestTest extends NodeTestCase
         $record = $this->json($this->http('GET', '/obx/v1/ingest/assets/P1_X_1', ['bearer' => $this->ingest]));
         $this->assertSame([], $record['missing_files']);
         $this->assertSame($sha, $record['data']['files']['original']['sha256']);
+        // data is the write model with defaults applied: effective rights and provenance.
+        $this->assertSame('retailer-use', $record['data']['rights']['license']);
+        $this->assertSame(['webshop', 'marketplace', 'social'], $record['data']['rights']['channels']);
+        $this->assertSame(['ai_generated' => false, 'ai_edited' => false, 'source' => 'photo', 'c2pa' => 'none', 'c2pa_manifest_url' => null, 'generator' => null], $record['data']['provenance']);
+        $product = $this->json($this->http('GET', '/obx/v1/ingest/products/P1', ['bearer' => $this->ingest]));
+        $this->assertArrayNotHasKey('missing_files', $product);
     }
 
     public function testResumableMultipartUpload(): void

@@ -879,6 +879,10 @@ final class Writer
         if ($kind === 'asset') {
             $files = Json::decode((string) $row['files'], []) ?: [];
             $data['files'] = Json::obj($files);
+            // "The stored write model with defaults applied" (IngestRecord.data):
+            // effective rights and provenance, like the protocol Asset shows them.
+            $data['rights'] = Representation::rights(array_replace($this->settings->defaultRights(), (array) ($data['rights'] ?? [])));
+            $data['provenance'] = Representation::provenance($data);
             $out['data'] = $data;
             $missing = [];
             foreach ($this->requiredFiles() as $n) {

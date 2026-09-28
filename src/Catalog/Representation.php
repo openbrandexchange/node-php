@@ -88,8 +88,6 @@ final class Representation
     public static function asset(array $row, array $in, string $brandId, ?array $variantIds, array $files, array $blobs, array $rights): array
     {
         $orig = $blobs['original'];
-        $prov = (array) ($in['provenance'] ?? []);
-        $ai = (bool) ($prov['ai_generated'] ?? false);
         $renditions = [];
         foreach (['original', 'web', 'square', 'thumb'] as $name) {
             $b = $blobs[$name];
@@ -124,25 +122,49 @@ final class Representation
             'height' => $renditions['original']['height'],
             'bytes' => (int) $orig['bytes'],
             'sha256' => (string) $orig['sha256'],
-            'rights' => [
-                'license' => $rights['license'] ?? 'retailer-use',
-                'license_text' => $rights['license_text'] ?? null,
-                'channels' => array_values((array) ($rights['channels'] ?? [])),
-                'territories' => $rights['territories'] ?? null,
-                'embargo_until' => $rights['embargo_until'] ?? null,
-                'expires_at' => $rights['expires_at'] ?? null,
-                'credit' => $rights['credit'] ?? null,
-                'model_release' => $rights['model_release'] ?? null,
-            ],
-            'provenance' => [
-                'ai_generated' => $ai,
-                'ai_edited' => (bool) ($prov['ai_edited'] ?? false),
-                'source' => $prov['source'] ?? ($ai ? 'generated' : 'photo'),
-                'c2pa' => $prov['c2pa'] ?? 'none',
-                'c2pa_manifest_url' => $prov['c2pa_manifest_url'] ?? null,
-                'generator' => $prov['generator'] ?? null,
-            ],
+            'rights' => self::rights($rights),
+            'provenance' => self::provenance($in),
             'renditions' => $renditions,
+        ];
+    }
+
+    /**
+     * Full Rights object from effective rights (node defaults merged with the asset's own fields).
+     *
+     * @param array<string, mixed> $rights
+     * @return array<string, mixed>
+     */
+    public static function rights(array $rights): array
+    {
+        return [
+            'license' => $rights['license'] ?? 'retailer-use',
+            'license_text' => $rights['license_text'] ?? null,
+            'channels' => array_values((array) ($rights['channels'] ?? [])),
+            'territories' => $rights['territories'] ?? null,
+            'embargo_until' => $rights['embargo_until'] ?? null,
+            'expires_at' => $rights['expires_at'] ?? null,
+            'credit' => $rights['credit'] ?? null,
+            'model_release' => $rights['model_release'] ?? null,
+        ];
+    }
+
+    /**
+     * Provenance with the documented defaults applied (docs/ingest.md).
+     *
+     * @param array<string, mixed> $in AssetInput
+     * @return array<string, mixed>
+     */
+    public static function provenance(array $in): array
+    {
+        $prov = (array) ($in['provenance'] ?? []);
+        $ai = (bool) ($prov['ai_generated'] ?? false);
+        return [
+            'ai_generated' => $ai,
+            'ai_edited' => (bool) ($prov['ai_edited'] ?? false),
+            'source' => $prov['source'] ?? ($ai ? 'generated' : 'photo'),
+            'c2pa' => $prov['c2pa'] ?? 'none',
+            'c2pa_manifest_url' => $prov['c2pa_manifest_url'] ?? null,
+            'generator' => $prov['generator'] ?? null,
         ];
     }
 }
