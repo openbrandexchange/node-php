@@ -17,6 +17,8 @@ All notable changes to the PHP edition of the Open Brand Exchange portal ("Porta
 - The installer no longer claims to have written a setup code while `data/` is not writable, and says how to fix the folder permissions (775, else 777).
 - Without Apache's mod_rewrite, the portal answers with a one-line explanation instead of a bare 403.
 - "Test connection" of a scheduled import no longer adds an English-only "N file(s) found." next to the web interface's own message.
+- An import no longer takes away what it does not state about an image (spec import rule 8): the images alone, or with an assets.csv that has no row for them, keep their embargo, credit, alt text and AI label, also when those were set in the admin. Before, every such import reset them to the defaults, which lifted embargoes.
+- Image names: `_model_other` is role model with view other, as the spec says (it was read as role other).
 
 ### Added
 

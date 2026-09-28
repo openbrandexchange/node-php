@@ -1016,6 +1016,10 @@ final class ImportEngine
             $this->app->db->tx(function () use ($apply, $ctx) {
                 foreach ($apply as $a) {
                     try {
+                        $stored = $this->app->writer->load('asset', $a['ext']);
+                        if ($stored !== null) {
+                            $a['data'] = self::keepImageFacts($a['data'], Json::decode((string) $stored['input'], []));
+                        }
                         $this->count($this->app->writer->upsert('asset', $a['ext'], $a['data'], $ctx + ['skip_position' => true]));
                     } catch (ApiError $e) {
                         $this->issue($a['file'], null, self::column($e), 'error', $e->obxError, $e->getMessage());
@@ -1023,6 +1027,30 @@ final class ImportEngine
                 }
             });
         }
+    }
+
+    /**
+     * Import rule 8 (import-format.md): for an image the node already has, alt text (per
+     * language), rights and provenance fields that the import does not state keep their stored
+     * values. The file name and the assets.csv row still decide the file, product, colour,
+     * position, role and view; a PUT without status keeps the stored status anyway. So a nightly
+     * import of the images alone never lifts an embargo or clears an AI label set in the admin.
+     *
+     * @param array<string, mixed> $data the asset input this import built
+     * @param array<string, mixed> $stored the stored write model
+     * @return array<string, mixed>
+     */
+    private static function keepImageFacts(array $data, array $stored): array
+    {
+        foreach (['alt_text', 'rights', 'provenance'] as $k) {
+            $old = $stored[$k] ?? null;
+            if (!is_array($old) || $old === []) {
+                continue;
+            }
+            $stated = $data[$k] ?? null;
+            $data[$k] = is_array($stated) ? array_replace($old, $stated) : $old;
+        }
+        return $data;
     }
 }
 

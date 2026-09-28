@@ -141,6 +141,30 @@ final class ImportTest extends NodeTestCase
         $this->assertNotNull($this->app->db->one("SELECT id FROM obx_assets WHERE external_id = 'KO-1001_ALL_9' AND color_code IS NULL"));
     }
 
+    /** Import rule 8: an import of the images without their assets.csv row keeps what they have. */
+    public function testAnImportWithoutAssetsCsvKeepsWhatTheImagesHave(): void
+    {
+        ['ingest' => $token] = $this->kestrelNode();
+        // A credit set through the Ingest API, as the admin would set it.
+        $this->json($this->http('PATCH', '/obx/v1/ingest/assets/KO-1001_NVY_1', ['bearer' => $token, 'json' => ['rights' => ['credit' => 'Photo: Test Studio']]]));
+        $images = [];
+        foreach (glob(self::fixtures('kestrel/images/*.png')) as $img) {
+            $images[] = $this->upload($img, basename($img), 'image/png');
+        }
+        $job = $this->import($token, ['csv' => [$this->upload(self::fixtures('kestrel/products.csv'), 'products.csv', 'text/csv')], 'images' => $images]);
+        $this->assertSame('succeeded', $job['status'], Json::encode($job));
+        $counts = $job['import_run']['counts'];
+        $this->assertSame([0, 0, 0], [$counts['created'], $counts['updated'], $counts['errors']], Json::encode($counts));
+        $data = fn (string $ext): array => $this->json($this->http('GET', '/obx/v1/ingest/assets/' . $ext, ['bearer' => $token]))['data'];
+        $blk = $data('KO-1002_BLK_2');
+        $this->assertStringStartsWith('2030-01-01', (string) $blk['rights']['embargo_until'], 'the embargo stays');
+        $this->assertSame('Photo: Kestrel Studio', $blk['rights']['credit']);
+        $rst = $data('KO-1003_RST_3');
+        $this->assertTrue($rst['provenance']['ai_generated'], 'the AI label stays');
+        $this->assertNotEmpty($rst['alt_text']['nl'] ?? null);
+        $this->assertSame('Photo: Test Studio', $data('KO-1001_NVY_1')['rights']['credit'], 'a credit set in the admin stays');
+    }
+
     public function testZipSlipIsRefusedAndNothingIsWritten(): void
     {
         $this->freshNode();
