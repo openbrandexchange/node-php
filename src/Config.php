@@ -133,6 +133,12 @@ final class Config
         if ($flag !== false) {
             $out['allow_private_urls'] = in_array(strtolower($flag), ['1', 'true', 'yes'], true);
         }
+        // OBX_TRUST_PROXY=true (the other OBX portals' switch) trusts any direct peer; a list in
+        // OBX_TRUSTED_PROXIES is stricter and wins.
+        $flag = getenv('OBX_TRUST_PROXY');
+        if ($flag !== false && in_array(strtolower($flag), ['1', 'true', 'yes'], true) && !isset($out['trusted_proxies'])) {
+            $out['trusted_proxies'] = '*';
+        }
         $flag = getenv('OBX_ACCESS_LOG');
         if ($flag !== false) {
             $out['access_log'] = in_array(strtolower($flag), ['1', 'true', 'yes'], true);

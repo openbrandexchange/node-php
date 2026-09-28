@@ -267,13 +267,12 @@ final class App
         $this->securityHeaders($req, $res);
         $res->header('X-Request-Id', $requestId);
         $this->audit->afterRequest($req, $res);
-        if ($this->config->bool('access_log')) {
+        if ($this->config->bool('access_log') && !in_array($req->path, ['/healthz', '/readyz', '/metrics'], true)) {
             $this->log->info('request', [
                 'method' => $req->method,
                 'path' => $req->path,
                 'status' => $res->status,
                 'duration_ms' => (int) round((microtime(true) - $started) * 1000),
-                'ip' => $req->ip,
                 'route' => $req->attrs['route'] ?? null,
             ]);
         }

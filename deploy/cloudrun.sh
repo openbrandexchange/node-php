@@ -41,7 +41,7 @@ if ! gc secrets describe obx-secret-key >/dev/null 2>&1; then
 fi
 SECRET_KEY=$(gc secrets versions access latest --secret=obx-secret-key)
 
-ENV_VARS="OBX_PUBLIC_URL=${PUBLIC_URL:-},OBX_WORKER=0"
+ENV_VARS="OBX_PUBLIC_URL=${PUBLIC_URL:-},OBX_WORKER=0,OBX_TRUST_PROXY=true"
 FLAGS=(--region "$REGION" --source "$HERE" --allow-unauthenticated --port 8080 --memory 1Gi --cpu 1 --timeout 600
   --set-secrets "OBX_SECRET_KEY=obx-secret-key:latest")
 

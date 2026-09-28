@@ -11,12 +11,13 @@ use Obx\Node\Support\Clock;
 /**
  * Data retention: how long download statistics, the audit log, IP addresses and decided access
  * requests are kept (the same settings in every OBX portal). A person's name leaves the
- * download statistics after at most 400 days, even when the statistics are kept longer. Brand admins change the periods under Settings (`retention`); the
- * background worker applies them once an hour.
+ * download statistics after at most 400 days, even when the statistics are kept longer.
+ * Brand admins change the periods under Settings (`retention`); the background worker applies
+ * them once an hour.
  *
  * Fixed rules (not configurable): sessions end after 30 days of inactivity, rate-limit
- * counters (which hold IP addresses) live for at most one hour, webhook delivery logs 30 days,
- * finished jobs 14 days, change-feed tombstones 90 days (protocol.md §6.4).
+ * counters (which hold IP addresses) are removed an hour after their window, webhook delivery
+ * logs 7 days, finished jobs 14 days, change-feed tombstones 90 days (protocol.md §6.4).
  */
 final class Retention
 {
