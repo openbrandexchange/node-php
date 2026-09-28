@@ -665,7 +665,13 @@ final class ImportEngine
                 $styleSpelling ??= $productExt;
             }
             // Colour.
-            $colorRaw = array_key_exists('color_code', $ov) && $o !== null && ($parsed === null || $ov['color_code'] !== '') ? $ov['color_code'] : ($parsed['color'] ?? '');
+            $fromCsv = array_key_exists('color_code', $ov) && $o !== null && ($parsed === null || $ov['color_code'] !== '');
+            $colorRaw = $fromCsv ? $ov['color_code'] : ($parsed['color'] ?? '');
+            // "ALL" in a file name (any case) is an image for every colour (import-format.md);
+            // only assets.csv can address a colour whose code really is ALL.
+            if (!$fromCsv && strcasecmp($colorRaw, 'ALL') === 0) {
+                $colorRaw = '';
+            }
             $color = null;
             if ($colorRaw !== '') {
                 $color = $colors[$productExt][mb_strtolower($colorRaw, 'UTF-8')] ?? null;

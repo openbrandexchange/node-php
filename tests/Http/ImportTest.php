@@ -123,6 +123,24 @@ final class ImportTest extends NodeTestCase
         $this->assertProblem($res, 403, 'insufficient_scope');
     }
 
+    public function testAnImageNamedAllBelongsToEveryColour(): void
+    {
+        $this->kestrelNode();
+        $token = $this->ingestToken();
+        $png = self::fixtures('kestrel/images/KO-1005_COG_1_front.png');
+        $job = $this->import($token, ['images' => [
+            $this->upload($png, 'KO-1005_ALL_4_size_chart.png', 'image/png'),
+            $this->upload($png, 'ko-1001_all_9.png', 'image/png'),
+        ]]);
+        $this->assertSame(0, $job['import_run']['counts']['errors'], Json::encode($job['import_run']));
+        $a = $this->app->db->one("SELECT * FROM obx_assets WHERE external_id = 'KO-1005_ALL_4'");
+        $this->assertNotNull($a, 'the asset id is {style}_ALL_{position}');
+        $this->assertNull($a['color_code']);
+        $rep = Json::decode((string) $a['input']);
+        $this->assertSame('size_chart', $rep['role']);
+        $this->assertNotNull($this->app->db->one("SELECT id FROM obx_assets WHERE external_id = 'KO-1001_ALL_9' AND color_code IS NULL"));
+    }
+
     public function testZipSlipIsRefusedAndNothingIsWritten(): void
     {
         $this->freshNode();
