@@ -570,6 +570,7 @@ final class App
         $r->add('GET', '/admin/api/retailers/{id}/export', [$priv, 'retailerExport']);
         $r->add('GET', '/admin/api/users/{id}/export', [$priv, 'userExport']);
         $r->add('GET', '/admin/api/me/export', [$priv, 'meExport']);
+        $r->add('DELETE', '/admin/api/me', [$priv, 'deleteMe']);
 
         // Portal
         $r->add('GET', '/admin/api/portal/viewer', [$po, 'viewerResponse']);

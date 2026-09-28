@@ -10,7 +10,8 @@ use Obx\Node\Support\Clock;
 
 /**
  * Data retention: how long download statistics, the audit log, IP addresses and decided access
- * requests are kept. Brand admins change the periods under Settings (`retention`); the
+ * requests are kept (the same settings in every OBX portal). A person's name leaves the
+ * download statistics after at most 400 days, even when the statistics are kept longer. Brand admins change the periods under Settings (`retention`); the
  * background worker applies them once an hour.
  *
  * Fixed rules (not configurable): sessions end after 30 days of inactivity, rate-limit
@@ -20,7 +21,7 @@ use Obx\Node\Support\Clock;
 final class Retention
 {
     public const DEFAULTS = [
-        'download_stats_days' => 730,
+        'download_events_days' => 730,
         'audit_log_days' => 365,
         'ip_days' => 30,
         'access_requests_days' => 365,
@@ -28,11 +29,14 @@ final class Retention
 
     /** Allowed ranges [min, max] in days. IP addresses: at most 30 days (security.md §9). */
     public const LIMITS = [
-        'download_stats_days' => [30, 3650],
+        'download_events_days' => [30, 3650],
         'audit_log_days' => [30, 3650],
         'ip_days' => [1, 30],
         'access_requests_days' => [30, 3650],
     ];
+
+    /** Days after which a person's name is removed from the download statistics. */
+    public const NAME_DAYS = 400;
 
     public function __construct(private App $app)
     {
@@ -83,7 +87,9 @@ final class Retention
         $db = $this->app->db;
         $now = Clock::time();
         $done = [];
-        $done['download_events'] = $db->run('DELETE FROM obx_download_events WHERE at_ts < ?', [$now - $p['download_stats_days'] * 86400])->rowCount();
+        $done['download_events'] = $db->run('DELETE FROM obx_download_events WHERE at_ts < ?', [$now - $p['download_events_days'] * 86400])->rowCount();
+        $nameCut = $now - min($p['download_events_days'], self::NAME_DAYS) * 86400;
+        $done['download_names'] = $db->run('UPDATE obx_download_events SET actor_name = NULL, actor_id = NULL WHERE actor_id IS NOT NULL AND at_ts < ?', [$nameCut])->rowCount();
         $done['audit_log'] = $db->run('DELETE FROM obx_audit_log WHERE at_ts < ?', [$now - $p['audit_log_days'] * 86400])->rowCount();
         $done['audit_ips'] = $db->run('UPDATE obx_audit_log SET ip = NULL WHERE ip IS NOT NULL AND at_ts < ?', [$now - $p['ip_days'] * 86400])->rowCount();
         // Decided access requests hold the requester's contact details; open ones stay until decided.

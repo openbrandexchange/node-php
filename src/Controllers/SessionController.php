@@ -178,28 +178,33 @@ final class SessionController extends Controller
         $email = is_string($in['email'] ?? null) ? strtolower(trim($in['email'])) : '';
         $password = is_string($in['password'] ?? null) ? $in['password'] : '';
         $this->app->limiter->hit('login-email:' . $email, 10, 900);
-        $req->attrs['_login_email'] = $email !== '' ? $email : null;
         $user = $email !== '' ? $this->app->db->one('SELECT * FROM obx_users WHERE email = ?', [$email]) : null;
-        if (!Crypto::verifyPassword($password, $user['password_hash'] ?? null)) {
-            throw new ApiError('invalid_credentials', 'The e-mail address or password is not correct.');
-        }
-        if ($user['status'] === 'blocked') {
-            throw new ApiError('account_blocked', 'This account is blocked. Contact the brand.');
-        }
-        if ($user['status'] !== 'active') {
-            throw new ApiError('invalid_credentials', 'The e-mail address or password is not correct.');
-        }
-        if ($user['role'] === 'retailer') {
-            $r = $this->app->db->one('SELECT status FROM obx_retailers WHERE id = ?', [$user['retailer_id']]);
-            if ($r === null || $r['status'] !== 'active') {
-                throw new ApiError('account_blocked', 'Access for your company is blocked. Contact the brand.');
+        try {
+            if (!Crypto::verifyPassword($password, $user['password_hash'] ?? null)) {
+                throw new ApiError('invalid_credentials', 'The e-mail address or password is not correct.');
             }
+            if ($user['status'] === 'blocked') {
+                throw new ApiError('account_blocked', 'This account is blocked. Contact the brand.');
+            }
+            if ($user['status'] !== 'active') {
+                throw new ApiError('invalid_credentials', 'The e-mail address or password is not correct.');
+            }
+            if ($user['role'] === 'retailer') {
+                $r = $this->app->db->one('SELECT status FROM obx_retailers WHERE id = ?', [$user['retailer_id']]);
+                if ($r === null || $r['status'] !== 'active') {
+                    throw new ApiError('account_blocked', 'Access for your company is blocked. Contact the brand.');
+                }
+            }
+        } catch (ApiError $e) {
+            $this->app->audit->login($req, $user, $e->status, $e->obxError);
+            throw $e;
         }
         if (password_needs_rehash((string) $user['password_hash'], defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_BCRYPT)) {
             $this->app->db->update('obx_users', ['password_hash' => Crypto::hashPassword($password)], ['id' => $user['id']]);
         }
         $res = new Response(200);
         $csrf = $this->app->auth->login($req, $res, $user);
+        $this->app->audit->login($req, $user, 200);
         return $this->sessionResponse($req, $res, $csrf);
     }
 

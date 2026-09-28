@@ -40,12 +40,11 @@ final class Privacy
         $requests = $db->all('SELECT id, status, input, language, created_at, decided_at, reason FROM obx_access_requests WHERE retailer_id = ? ORDER BY created_at', [$retailerId]);
         $userIds = array_map(static fn ($u) => (string) $u['id'], $users);
         return [
+            'format' => 'obx-personal-data-export/1',
             'exported_at' => Clock::iso(),
             'node' => ['software' => Config::SOFTWARE, 'version' => Config::VERSION, 'public_url' => $this->app->publicUrl()],
-            'controller' => [
-                'name' => $this->app->settings->all()['company']['name'] ?? null,
-                'contact_email' => $this->app->settings->all()['company']['contact_email'] ?? null,
-            ],
+            'controller' => $this->controller(),
+            'retention' => $this->app->retention->periods(),
             'retailer' => $retailer,
             'accounts' => array_map(fn (array $u): array => $this->account($u), $users),
             'api_clients' => array_map(static fn (array $c): array => [
@@ -82,12 +81,11 @@ final class Privacy
             throw new \Obx\Node\Http\ApiError('not_found', 'No such account.');
         }
         return [
+            'format' => 'obx-personal-data-export/1',
             'exported_at' => Clock::iso(),
             'node' => ['software' => Config::SOFTWARE, 'version' => Config::VERSION, 'public_url' => $this->app->publicUrl()],
-            'controller' => [
-                'name' => $this->app->settings->all()['company']['name'] ?? null,
-                'contact_email' => $this->app->settings->all()['company']['contact_email'] ?? null,
-            ],
+            'controller' => $this->controller(),
+            'retention' => $this->app->retention->periods(),
             'account' => $this->account($u),
             'retailer' => $u['retailer_id'] !== null ? $db->one('SELECT id, name, reference, website, country, created_at FROM obx_retailers WHERE id = ?', [$u['retailer_id']]) : null,
             'downloads' => $this->downloads('actor_id = ?', [$userId]),
@@ -104,8 +102,15 @@ final class Privacy
     {
         $db = $this->app->db;
         $db->run('UPDATE obx_download_events SET actor_name = NULL, actor_id = NULL WHERE actor_id = ?', [$userId]);
-        $db->run('UPDATE obx_audit_log SET actor_name = NULL, ip = NULL WHERE actor_id = ?', [$userId]);
+        $db->run('UPDATE obx_audit_log SET actor_name = NULL, actor_email = NULL, ip = NULL WHERE actor_id = ?', [$userId]);
         $db->delete('obx_selections', ['user_id' => $userId]);
+    }
+
+    /** The brand as the controller of the data (GDPR art. 4(7)). @return array<string, mixed> */
+    private function controller(): array
+    {
+        $company = $this->app->settings->all()['company'];
+        return ['name' => $company['name'] ?? null, 'website' => $company['website'] ?? null, 'contact_email' => $company['contact_email'] ?? null];
     }
 
     /** @param array<string, mixed> $u @return array<string, mixed> */
@@ -150,8 +155,8 @@ final class Privacy
     {
         $out = [];
         foreach ($userIds as $uid) {
-            foreach ($this->app->db->all('SELECT at, action, target_type, target_id, status, ip FROM obx_audit_log WHERE actor_id = ? ORDER BY id', [$uid]) as $r) {
-                $out[] = $r;
+            foreach ($this->app->db->all('SELECT * FROM obx_audit_log WHERE actor_id = ? ORDER BY id', [$uid]) as $r) {
+                $out[] = Audit::json($r);
             }
         }
         return $out;

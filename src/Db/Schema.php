@@ -156,10 +156,12 @@ final class Schema
             2 => [
                 'CREATE TABLE obx_audit_log (
                     id {pk}, at {id} NOT NULL, at_ts {int} NOT NULL, actor_type {id} NOT NULL, actor_id {id},
-                    actor_name {str}, action {str} NOT NULL, target_type {id}, target_id {key}, status {int},
+                    actor_name {str}, actor_email {str}, actor_role {id}, action {str} NOT NULL, method {id} NOT NULL,
+                    route {str} NOT NULL, target_type {id}, target_id {key}, status {int} NOT NULL,
                     detail {text}, ip {id}, request_id {id})',
                 'CREATE INDEX obx_audit_log_at ON obx_audit_log (at_ts)',
                 'CREATE INDEX obx_audit_log_actor ON obx_audit_log (actor_id)',
+                'CREATE INDEX obx_audit_log_target ON obx_audit_log (target_id)',
             ],
             // 0.1.0: indexes found with the seeded load test (scripts/load-test.sh).
             3 => [

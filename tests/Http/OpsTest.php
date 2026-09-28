@@ -119,44 +119,70 @@ final class OpsTest extends NodeTestCase
         // A failed login, a successful one, a settings change, a key created, a retailer deleted.
         $this->http('GET', '/admin/api/session', ['browser' => 'other']);
         $this->http('POST', '/admin/api/session/login', ['browser' => 'other', 'json' => ['email' => 'admin@kestrel.example', 'password' => 'wrong password here']]);
+        $this->http('POST', '/admin/api/session/login', ['browser' => 'other', 'json' => ['email' => 'admin@kestrel.example', 'password' => 'correct horse battery']]);
         $this->json($this->http('PATCH', '/admin/api/settings', ['browser' => 'admin', 'json' => ['company' => ['website' => 'https://kestrel.example']]]));
         $secret = $this->ingestToken();
         $r = $this->json($this->http('POST', '/admin/api/retailers', ['browser' => 'admin', 'json' => ['name' => 'Gone Shop']]), 201);
         $this->assertSame(204, $this->http('DELETE', '/admin/api/retailers/' . $r['id'], ['browser' => 'admin'])->status);
-        // Reads and portal browsing are not actions.
+        // Reads and a retailer's working state are not actions; exports of personal data are.
         $this->http('GET', '/admin/api/retailers', ['browser' => 'admin']);
+        $uid = (string) $this->app->db->value("SELECT id FROM obx_users WHERE email = 'admin@kestrel.example'");
+        $this->assertSame(200, $this->http('GET', '/admin/api/users/' . $uid . '/export', ['browser' => 'admin'])->status);
 
         $log = $this->json($this->http('GET', '/admin/api/audit-log', ['browser' => 'admin']));
-        $actions = array_column($log['items'], 'action');
         $this->assertSame([
-            'DELETE /admin/api/retailers/{id}',
-            'POST /admin/api/retailers',
-            'POST /admin/api/ingest-tokens',
-            'PATCH /admin/api/settings',
-            'POST /admin/api/session/login',
-        ], $actions);
-        $failed = $log['items'][4];
+            'users.export', 'retailers.delete', 'retailers.create', 'ingest-tokens.create', 'settings.update', 'session.login', 'session.login',
+        ], array_column($log['items'], 'action'));
+        $failed = $log['items'][6];
         $this->assertSame(401, $failed['status']);
-        $this->assertSame('anonymous', $failed['actor']['type']);
-        $this->assertSame('admin@kestrel.example', $failed['actor']['name']);
-        $this->assertSame('invalid_credentials', $failed['detail']['error']);
+        $this->assertFalse($failed['succeeded']);
+        $this->assertSame(['type' => 'anonymous', 'id' => null, 'name' => null, 'role' => null, 'email' => null], $failed['actor']);
+        $this->assertSame(['user', $uid], [$failed['target_type'], $failed['target_id']], 'the account id, not the e-mail address');
+        $this->assertSame('invalid_credentials', $failed['details']['reason']);
         $this->assertSame($this->ip, $failed['ip']);
-        $settings = $log['items'][3];
-        $this->assertSame('admin', $settings['actor']['type']);
-        $this->assertSame(['company'], $settings['detail']['fields']);
-        $this->assertSame(['type' => 'retailers', 'id' => $r['id']], $log['items'][0]['target']);
+        $ok = $log['items'][5];
+        $this->assertTrue($ok['succeeded']);
+        $this->assertSame(['type' => 'user', 'id' => $uid, 'name' => 'Ada Admin', 'role' => 'admin', 'email' => 'admin@kestrel.example'], $ok['actor']);
+        $settings = $log['items'][4];
+        $this->assertSame(['PATCH', '/admin/api/settings'], [$settings['method'], $settings['route']]);
+        $this->assertSame(['company'], $settings['details']['fields']);
+        $this->assertSame(['retailer', $r['id']], [$log['items'][1]['target_type'], $log['items'][1]['target_id']]);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{24}$/', (string) $ok['request_id']);
         $raw = Json::encode($this->app->db->all('SELECT * FROM obx_audit_log'));
         $this->assertStringNotContainsString($secret, $raw);
         $this->assertStringNotContainsString('wrong password', $raw);
+        $this->assertStringNotContainsString('correct horse', $raw);
         $this->assertStringNotContainsString('kestrel.example"', str_replace('admin@kestrel.example', '', $raw), 'values are never logged');
 
-        // Paging and the admin-only rule.
+        // Filters, paging and the admin-only rule.
+        $failedOnly = $this->json($this->http('GET', '/admin/api/audit-log', ['browser' => 'admin', 'query' => ['outcome' => 'failed']]));
+        $this->assertSame(['session.login'], array_column($failedOnly['items'], 'action'));
+        $byTarget = $this->json($this->http('GET', '/admin/api/audit-log', ['browser' => 'admin', 'query' => ['target_id' => $r['id']]]));
+        $this->assertSame(['retailers.delete'], array_column($byTarget['items'], 'action'));
         $page = $this->json($this->http('GET', '/admin/api/audit-log', ['browser' => 'admin', 'query' => ['limit' => '2']]));
         $this->assertCount(2, $page['items']);
         $next = $this->json($this->http('GET', '/admin/api/audit-log', ['browser' => 'admin', 'query' => ['limit' => '2', 'cursor' => $page['next_cursor']]]));
-        $this->assertSame('POST /admin/api/ingest-tokens', $next['items'][0]['action']);
+        $this->assertSame('retailers.create', $next['items'][0]['action']);
+        $this->assertProblem($this->http('GET', '/admin/api/audit-log', ['browser' => 'admin', 'query' => ['cursor' => 'forged']]), 400, 'cursor_invalid');
         $this->retailerUser('shop', ['name' => 'Curious Shop']);
         $this->assertProblem($this->http('GET', '/admin/api/audit-log', ['browser' => 'shop']), 403, 'forbidden');
+    }
+
+    public function testAuditActionNamesAreTheSharedOnes(): void
+    {
+        $cases = [
+            ['PATCH', '/admin/api/retailers/{id}', 'retailers.update', 'retailer'],
+            ['POST', '/admin/api/access-requests/{id}/approve', 'access-requests.approve', 'access-request'],
+            ['GET', '/admin/api/retailers/{id}/export', 'retailers.export', 'retailer'],
+            ['POST', '/admin/api/setup', 'setup.complete', 'user'],
+            ['POST', '/admin/api/session/logout', 'session.logout', 'user'],
+            ['PUT', '/admin/api/catalog/products/{external_id}', 'catalog.products.update', 'product'],
+            ['POST', '/admin/api/users/invites', 'users.invites.create', 'user'],
+            ['DELETE', '/admin/api/me', 'me.delete', 'me'],
+        ];
+        foreach ($cases as [$method, $route, $action, $type]) {
+            $this->assertSame([$action, $type], \Obx\Node\Services\Audit::action($method, $route), $method . ' ' . $route);
+        }
     }
 
     public function testGdprExportAndDeletion(): void
@@ -179,6 +205,8 @@ final class OpsTest extends NodeTestCase
         $this->assertStringNotContainsString('password_hash', $res->content());
         $this->assertSame('image', $export['downloads'][0]['kind']);
         $this->assertSame('Kestrel Outfitters', $export['controller']['name']);
+        $this->assertSame('obx-personal-data-export/1', $export['format']);
+        $this->assertSame(730, $export['retention']['download_events_days']);
 
         // The retailer's own copy of its account data.
         $mine = Json::decode($this->http('GET', '/admin/api/me/export', ['browser' => 'buyer'])->content());
@@ -201,29 +229,51 @@ final class OpsTest extends NodeTestCase
         $this->assertNull($this->app->db->value('SELECT ip FROM obx_audit_log WHERE actor_id = ? AND ip IS NOT NULL', [$uid]));
     }
 
+    public function testAPersonDeletesTheirOwnAccount(): void
+    {
+        $this->kestrelNode();
+        $this->retailerUser('leaver', ['name' => 'Leaving Shop']);
+        $uid = (string) $this->app->db->value("SELECT id FROM obx_users WHERE email = 'leaver@shop.example'");
+        $this->assertSame(204, $this->http('DELETE', '/admin/api/me', ['browser' => 'leaver'])->status);
+        $this->assertNull($this->app->db->value('SELECT id FROM obx_users WHERE id = ?', [$uid]));
+        $this->assertProblem($this->http('GET', '/admin/api/me/export', ['browser' => 'leaver']), 401, 'unauthorized');
+        $raw = Json::encode($this->app->db->all('SELECT * FROM obx_audit_log WHERE actor_id = ?', [$uid]));
+        $this->assertStringNotContainsString('leaver@shop.example', $raw);
+        $this->assertStringContainsString('me.delete', $raw);
+        // The last administrator cannot leave the portal without one.
+        $this->assertProblem($this->http('DELETE', '/admin/api/me', ['browser' => 'admin']), 409, 'conflict');
+    }
+
     public function testRetentionSettingsAndSweep(): void
     {
         $this->freshNode();
         $s = $this->json($this->http('GET', '/admin/api/settings', ['browser' => 'admin']));
-        $this->assertSame(['download_stats_days' => 730, 'audit_log_days' => 365, 'ip_days' => 30, 'access_requests_days' => 365], $s['retention']);
+        $this->assertSame(['download_events_days' => 730, 'audit_log_days' => 365, 'ip_days' => 30, 'access_requests_days' => 365], $s['retention']);
         $this->assertProblem($this->http('PATCH', '/admin/api/settings', ['browser' => 'admin', 'json' => ['retention' => ['ip_days' => 90]]]), 422, 'validation_failed');
         $this->assertProblem($this->http('PATCH', '/admin/api/settings', ['browser' => 'admin', 'json' => ['retention' => ['forever' => 1]]]), 422, 'validation_failed');
-        $s = $this->json($this->http('PATCH', '/admin/api/settings', ['browser' => 'admin', 'json' => ['retention' => ['download_stats_days' => 30, 'ip_days' => 7]]]));
-        $this->assertSame(30, $s['retention']['download_stats_days']);
+        $s = $this->json($this->http('PATCH', '/admin/api/settings', ['browser' => 'admin', 'json' => ['retention' => ['download_events_days' => 30, 'ip_days' => 7]]]));
+        $this->assertSame(30, $s['retention']['download_events_days']);
         $this->assertSame(365, $s['retention']['audit_log_days']);
 
         $now = Clock::time();
         $event = static fn (string $id, int $ts) => ['id' => $id, 'at' => Clock::iso((float) $ts), 'at_ts' => $ts, 'kind' => 'image', 'actor_type' => 'user', 'files' => 1];
         $this->app->db->insert('obx_download_events', $event('ev_old', $now - 31 * 86400));
         $this->app->db->insert('obx_download_events', $event('ev_new', $now - 29 * 86400));
-        $this->app->audit->record('admin', 'u1', 'a@b.example', 'TEST old', null, null, 200, [], '198.51.100.7');
+        $who = ['id' => 'u1', 'name' => 'A', 'email' => 'a@b.example', 'role' => 'admin'];
+        $this->app->audit->record(['user' => $who, 'action' => 'TEST old', 'method' => 'POST', 'route' => '/x', 'ip' => '198.51.100.7']);
         $this->app->db->run("UPDATE obx_audit_log SET at_ts = ? WHERE action = 'TEST old'", [$now - 8 * 86400]);
-        $this->app->audit->record('admin', 'u1', 'a@b.example', 'TEST new', null, null, 200, [], '198.51.100.8');
+        $this->app->audit->record(['user' => $who, 'action' => 'TEST new', 'method' => 'POST', 'route' => '/x', 'ip' => '198.51.100.8']);
         $this->app->db->insert('obx_access_requests', ['id' => 'ar_old', 'token_hash' => 'h1', 'status' => 'rejected', 'input' => '{}', 'created_at' => Clock::iso((float) ($now - 400 * 86400)), 'decided_at' => Clock::iso((float) ($now - 400 * 86400)), 'claimed' => 0, 'portal_invited' => 0]);
         $this->app->db->insert('obx_access_requests', ['id' => 'ar_open', 'token_hash' => 'h2', 'status' => 'pending', 'input' => '{}', 'created_at' => Clock::iso((float) ($now - 400 * 86400)), 'claimed' => 0, 'portal_invited' => 0]);
 
+        $this->app->db->insert('obx_download_events', $event('ev_named', $now - 29 * 86400) + ['actor_id' => 'u9', 'actor_name' => 'Old Name']);
+        $this->json($this->http('PATCH', '/admin/api/settings', ['browser' => 'admin', 'json' => ['retention' => ['download_events_days' => 3650]]]));
+        $this->app->db->run("UPDATE obx_download_events SET at_ts = ? WHERE id = 'ev_named'", [$now - 401 * 86400]);
+        $this->app->db->run("UPDATE obx_download_events SET at_ts = ? WHERE id = 'ev_old'", [$now - 3651 * 86400]);
         $done = $this->app->retention->sweep();
         $this->assertSame(1, $done['download_events']);
+        $this->assertNull($this->app->db->value("SELECT actor_name FROM obx_download_events WHERE id = 'ev_named'"), 'names leave the statistics after 400 days');
+        $this->app->db->run("DELETE FROM obx_download_events WHERE id = 'ev_named'");
         $this->assertSame(['ev_new'], $this->app->db->column('SELECT id FROM obx_download_events'));
         $this->assertNull($this->app->db->value("SELECT ip FROM obx_audit_log WHERE action = 'TEST old'"));
         $this->assertSame('198.51.100.8', $this->app->db->value("SELECT ip FROM obx_audit_log WHERE action = 'TEST new'"));
