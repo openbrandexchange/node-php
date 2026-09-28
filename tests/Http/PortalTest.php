@@ -219,7 +219,8 @@ final class PortalTest extends NodeTestCase
         $asset = (string) $this->app->db->value("SELECT id FROM obx_assets WHERE external_id = 'KO-1001_NVY_1'");
         $this->assertSame(200, $this->http('GET', '/admin/api/portal/assets/' . $asset . '/download', ['browser' => 'r1', 'query' => ['variant' => 'web']])->status);
         $this->assertSame(200, $this->http('GET', '/admin/api/portal/assets/' . $asset . '/download', ['browser' => 'admin', 'query' => ['variant' => 'web']])->status);
-        [, $id, $secret] = $this->retailerClient(['name' => 'API Shop']);
+        // Reporting usage needs a key that asked for usage:write (new keys do not get it by default).
+        [, $id, $secret] = $this->retailerClient(['name' => 'API Shop'], ['catalog:read', 'media:read', 'usage:write']);
         $token = $this->accessToken($id, $secret);
         $this->assertSame(200, $this->http('GET', '/obx/v1/assets/' . $asset . '/renditions/thumb', ['bearer' => $token])->status);
         $usage = $this->json($this->http('POST', '/obx/v1/usage', ['bearer' => $token, 'json' => ['events' => [

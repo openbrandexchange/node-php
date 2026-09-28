@@ -230,7 +230,9 @@ final class Retailers
         }
         $allowed = $this->app->grants->scopes($retailer);
         if ($scopes === null) {
-            $scopes = $allowed;
+            // node-admin.yaml ApiClientCreate: catalog:read and media:read, plus media:original when
+            // the retailer may download originals; usage:write only when asked for explicitly.
+            $scopes = array_values(array_intersect($allowed, ['catalog:read', 'media:read', 'media:original']));
         } else {
             $scopes = array_values(array_unique($scopes));
             if ($scopes === [] || array_diff($scopes, Grants::ALL_SCOPES) !== []) {
@@ -278,6 +280,10 @@ final class Retailers
         $secret = Crypto::token('obxs_', 32);
         $this->app->db->update('obx_api_clients', ['secret_hash' => Crypto::hashToken($secret)], ['id' => $id]);
         $this->app->db->delete('obx_access_tokens', ['client_id' => $id]);
+        // A key made on approval waits for the requester's software. Once it is renewed (the brand
+        // hands it over itself, e.g. when the retailer asked on the web form), that waiting secret
+        // no longer works, so a later poll of the access request must not hand it out.
+        $this->app->db->run('UPDATE obx_access_requests SET claimed = 1, secret_enc = NULL WHERE api_client_id = ? AND secret_enc IS NOT NULL', [$id]);
         return ['row' => $this->client($id, $retailerId), 'secret' => $secret];
     }
 

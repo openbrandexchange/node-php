@@ -20,9 +20,10 @@ extensions. Each is the simplest reading; the spec repository is the source of t
    the client or account is still allowed (blocking takes effect immediately).
 5. **Product `ETag`** is computed over the ProductDetail without rendition URLs, so it only changes
    when content changes.
-6. **Default scopes of a new API client** are all scopes the retailer's grant allows, including
-   `usage:write` (node-admin.yaml mentions catalog:read, media:read and media:original). Token
-   scopes are intersected with the grant on every call, so switching originals off applies at once.
+6. **Default scopes of a new API client** are `catalog:read` and `media:read`, plus
+   `media:original` when the retailer may download originals (node-admin.yaml); `usage:write` only
+   when asked for. Token scopes are intersected with the grant on every call, so switching
+   originals off applies at once.
 7. **Access-request status polls** are limited to 10 per minute per request token (the spec asks
    clients to poll at most once a minute).
 8. **Brand `logo_url`** from the Ingest API is published as given (not fetched and mirrored).
@@ -187,9 +188,6 @@ Each is a deliberate choice for 0.1.0 with its reason; none is reachable as a br
 - **TIFF originals are refused** (GD cannot read TIFF); the installer and import errors say so.
 - **Brand `logo_url` from the Ingest API is published as given**, not fetched and mirrored (a
   fetch would be one more SSRF surface for little gain; the admin upload path stores logos).
-- **New API clients get every scope their grant allows**, including `usage:write`
-  (node-admin.yaml names catalog:read, media:read and media:original as defaults); token scopes
-  are intersected with the grant on every call.
 - **Request metrics** (rates, latencies) are not kept by PHP between requests; `/metrics` has
   gauges from the database, and request metrics come from the web server or proxy.
 - **Hosts that ignore `.user.ini` and `.htaccess`** keep PHP's own upload parsing: several files

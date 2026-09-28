@@ -19,6 +19,8 @@ All notable changes to the PHP edition of the Open Brand Exchange portal ("Porta
 - "Test connection" of a scheduled import no longer adds an English-only "N file(s) found." next to the web interface's own message.
 - An import no longer takes away what it does not state about an image (spec import rule 8): the images alone, or with an assets.csv that has no row for them, keep their embargo, credit, alt text and AI label, also when those were set in the admin. Before, every such import reset them to the defaults, which lifted embargoes.
 - Image names: `_model_other` is role model with view other, as the spec says (it was read as role other).
+- A new API key without chosen scopes gets `catalog:read` and `media:read`, plus `media:original` when the retailer may download originals, as the spec says; it got every scope its grant allowed, `usage:write` included.
+- Renewing an API key that was made when approving an access request retires the secret still waiting for the requester's software, so the status address no longer hands out a secret that stopped working ("Show the key" in the admin renews it).
 
 ### Added
 

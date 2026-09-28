@@ -132,6 +132,36 @@ final class AdminTest extends NodeTestCase
         $this->assertSame('We only work with shops in the Benelux.', $seen['reason']);
     }
 
+    public function testRenewingAnApprovedKeyRetiresTheSecretWaitingForSoftware(): void
+    {
+        $this->freshNode();
+        $req = $this->json($this->http('POST', '/obx/v1/access-requests', ['json' => [
+            'retailer' => ['name' => 'Web Form Shop', 'country' => 'DE'],
+            'contact' => ['name' => 'Wim', 'email' => 'wim@webform.example'],
+            'access' => ['api'],
+        ]]), 202);
+        $approved = $this->json($this->http('POST', '/admin/api/access-requests/' . $req['id'] . '/approve', ['browser' => 'admin', 'json' => []]));
+        // The brand shows the key itself ("Show the key" in the admin): a renewed secret.
+        $renewed = $this->json($this->http('POST', '/admin/api/api-clients/' . $approved['api_client']['id'] . '/rotate', ['browser' => 'admin']));
+        $this->assertStringStartsWith('obxs_', $renewed['client_secret']);
+        $poll = $this->json($this->http('GET', '/obx/v1/access-requests/' . $req['id'], ['bearer' => $req['request_token']]));
+        $this->assertNull($poll['credentials']['client_secret'], 'the waiting secret stopped working and is not handed out');
+        $this->assertTrue($poll['credentials']['claimed']);
+    }
+
+    public function testNewKeysGetCatalogAndMediaScopesAndUsageOnlyWhenAsked(): void
+    {
+        $this->kestrelNode();
+        $r = $this->json($this->http('POST', '/admin/api/retailers', ['browser' => 'admin', 'json' => ['name' => 'Scope Shop']]), 201);
+        $default = $this->json($this->http('POST', '/admin/api/api-clients', ['browser' => 'admin', 'json' => ['retailer_id' => $r['id'], 'name' => 'PIM']]), 201);
+        $this->assertSame(['catalog:read', 'media:read', 'media:original'], $default['client']['scopes']);
+        $asked = $this->json($this->http('POST', '/admin/api/api-clients', ['browser' => 'admin', 'json' => ['retailer_id' => $r['id'], 'name' => 'Stats', 'scopes' => ['catalog:read', 'usage:write']]]), 201);
+        $this->assertSame(['catalog:read', 'usage:write'], $asked['client']['scopes']);
+        $noOriginals = $this->json($this->http('POST', '/admin/api/retailers', ['browser' => 'admin', 'json' => ['name' => 'No Originals', 'allow_original' => false]]), 201);
+        $plain = $this->json($this->http('POST', '/admin/api/api-clients', ['browser' => 'admin', 'json' => ['retailer_id' => $noOriginals['id'], 'name' => 'PIM']]), 201);
+        $this->assertSame(['catalog:read', 'media:read'], $plain['client']['scopes']);
+    }
+
     public function testPortalOnlyApprovalSendsJustTheInvitation(): void
     {
         $this->freshNode();
