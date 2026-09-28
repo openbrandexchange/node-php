@@ -152,23 +152,79 @@ final class Schema
                     k {str} NOT NULL PRIMARY KEY, status {int} NOT NULL, response {text} NOT NULL, created_ts {int} NOT NULL)',
                 'CREATE TABLE obx_locks (name {id} NOT NULL PRIMARY KEY, until_ts {int} NOT NULL, holder {id} NOT NULL)',
             ],
+            // 0.1.0: audit log of admin actions.
+            2 => [
+                'CREATE TABLE obx_audit_log (
+                    id {pk}, at {id} NOT NULL, at_ts {int} NOT NULL, actor_type {id} NOT NULL, actor_id {id},
+                    actor_name {str}, action {str} NOT NULL, target_type {id}, target_id {key}, status {int},
+                    detail {text}, ip {id}, request_id {id})',
+                'CREATE INDEX obx_audit_log_at ON obx_audit_log (at_ts)',
+                'CREATE INDEX obx_audit_log_actor ON obx_audit_log (actor_id)',
+            ],
         ];
     }
 
-    /** Brings the database to the latest version. Safe to call on every request (cheap check). */
-    public static function migrate(Db $db): void
+    /**
+     * Brings the database to the latest version. Safe to call on every request (cheap check).
+     * Migrations only move forward. A database written by a newer release is refused with a
+     * clear message instead of being used by older code.
+     *
+     * @throws SchemaTooNew when the database is newer than this software
+     */
+    public static function migrate(Db $db, ?int $upTo = null): void
     {
         $version = self::currentVersion($db);
-        $migrations = self::migrations();
-        $latest = max(array_keys($migrations));
-        if ($version >= $latest) {
+        $latest = $upTo ?? self::latestVersion();
+        if ($upTo !== null && $version >= $upTo) {
             return;
         }
-        foreach ($migrations as $v => $statements) {
-            if ($v <= $version) {
-                continue;
+        if ($version === $latest) {
+            return;
+        }
+        self::refuseNewer($version);
+        self::locked($db, function () use ($db, $latest): void {
+            // Another process may have migrated while we waited for the lock.
+            $version = self::currentVersion($db);
+            self::refuseNewer($version);
+            foreach (self::migrations() as $v => $statements) {
+                if ($v <= $version || $v > $latest) {
+                    continue;
+                }
+                self::apply($db, $v, $statements);
             }
+        });
+    }
+
+    private static function refuseNewer(int $version): void
+    {
+        if ($version > self::latestVersion()) {
+            throw new SchemaTooNew(sprintf(
+                'The database is at schema version %d, but this software (%s %s) only knows up to version %d. '
+                . 'It was used by a newer release. Install that release again; going back to an older release '
+                . 'needs the backup you made before upgrading (see docs/operations.md).',
+                $version,
+                \Obx\Node\Config::SOFTWARE,
+                \Obx\Node\Config::VERSION,
+                self::latestVersion(),
+            ));
+        }
+    }
+
+    /** @param list<string> $statements */
+    private static function apply(Db $db, int $v, array $statements): void
+    {
+        // SQLite runs DDL inside a transaction, so a failed migration leaves nothing behind.
+        // MySQL commits every DDL statement by itself; statements are written so that
+        // re-running a half-applied version after fixing the cause is the recovery path
+        // (docs/operations.md).
+        if ($db->isSqlite()) {
+            $db->pdo->exec('SAVEPOINT obx_migrate_' . $v);
+        }
+        try {
             foreach ($statements as $sql) {
+                if (!$db->isSqlite() && self::alreadyApplied($db, $sql)) {
+                    continue;
+                }
                 $db->pdo->exec(self::translate($db, $sql));
             }
             if ($v === 1) {
@@ -177,7 +233,58 @@ final class Schema
             } else {
                 $db->run("UPDATE obx_settings SET v = ? WHERE k = 'schema_version'", [(string) $v]);
             }
+            if ($db->isSqlite()) {
+                $db->pdo->exec('RELEASE obx_migrate_' . $v);
+            }
+        } catch (\Throwable $e) {
+            if ($db->isSqlite()) {
+                $db->pdo->exec('ROLLBACK TO obx_migrate_' . $v);
+                $db->pdo->exec('RELEASE obx_migrate_' . $v);
+            }
+            throw new \RuntimeException('Updating the database to schema version ' . $v . ' failed: ' . $e->getMessage(), 0, $e);
         }
+    }
+
+    /** MySQL: skips CREATE TABLE / CREATE INDEX statements whose object already exists. */
+    private static function alreadyApplied(Db $db, string $sql): bool
+    {
+        if (preg_match('/^CREATE TABLE (\w+)/', $sql, $m)) {
+            return $db->value('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?', [$m[1]]) > 0;
+        }
+        if (preg_match('/^CREATE (?:UNIQUE )?INDEX (\w+) ON (\w+)/', $sql, $m)) {
+            return $db->value('SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?', [$m[2], $m[1]]) > 0;
+        }
+        return false;
+    }
+
+    /** Runs $fn while holding a database-wide migration lock (one process migrates at a time). */
+    private static function locked(Db $db, callable $fn): void
+    {
+        if ($db->isSqlite()) {
+            $db->pdo->exec('BEGIN IMMEDIATE');
+            try {
+                $fn();
+                $db->pdo->exec('COMMIT');
+            } catch (\Throwable $e) {
+                $db->pdo->exec('ROLLBACK');
+                throw $e;
+            }
+            return;
+        }
+        $got = (int) $db->value("SELECT GET_LOCK('obx_migrate', 120)");
+        if ($got !== 1) {
+            throw new \RuntimeException('Another process is updating the database; try again in a minute.');
+        }
+        try {
+            $fn();
+        } finally {
+            $db->value("SELECT RELEASE_LOCK('obx_migrate')");
+        }
+    }
+
+    public static function currentVersionOf(Db $db): int
+    {
+        return self::currentVersion($db);
     }
 
     public static function latestVersion(): int
