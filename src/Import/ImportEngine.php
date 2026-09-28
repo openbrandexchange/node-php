@@ -208,6 +208,7 @@ final class ImportEngine
         if (!in_array('style_number', $csv['headers'], true)) {
             throw new ApiError('import_invalid', 'products.csv needs a style_number column.');
         }
+        $this->recordPresentColumns($csv['headers']);
         $this->loadBrands();
         $groups = [];
         foreach ($csv['rows'] as $r) {
@@ -852,6 +853,106 @@ final class ImportEngine
     /** @var list<string> */
     private array $mirrorUnpublish = [];
 
+    /**
+     * Which columns products.csv has (import rule 9): plain columns, the languages of each text
+     * column (the plain one is the import's default language) and the attr:<key> columns.
+     *
+     * @var array{plain: array<string, true>, langs: array<string, array<string, true>>, attrs: array<string, true>}
+     */
+    private array $present = ['plain' => [], 'langs' => [], 'attrs' => []];
+
+    /** Fields of the stored product and variant model, by the products.csv column they come from. */
+    private const PRODUCT_FIELDS = [
+        ['name', 'name', 'text'], ['description', 'description', 'text'], ['item_type', 'item_type', 'plain'],
+        ['target_group', 'target_group', 'plain'], ['season', 'season', 'plain'], ['collection', 'collection', 'plain'],
+        ['gpc_brick', 'gpc_brick', 'plain'], ['materials', 'materials', 'plain'], ['care', 'care', 'plain'],
+        ['country_of_origin', 'country_of_origin', 'plain'], ['dpp_url', 'dpp_url', 'plain'], ['attributes', 'attr', 'attrs'],
+    ];
+    private const VARIANT_FIELDS = [
+        ['gtin', 'gtin', 'plain'], ['sku', 'sku', 'plain'], ['size', 'size', 'plain'], ['size_system', 'size_system', 'plain'],
+        ['color.name', 'color_name', 'text'], ['color.supplier_color', 'supplier_color', 'plain'],
+    ];
+
+    /** @param list<string> $headers normalised products.csv header */
+    private function recordPresentColumns(array $headers): void
+    {
+        $p = ['plain' => [], 'langs' => ['name' => [], 'description' => [], 'color_name' => []], 'attrs' => []];
+        foreach ($headers as $h) {
+            if ($h === '') {
+                continue;
+            }
+            if (str_contains($h, ':')) {
+                [$base, $tag] = explode(':', $h, 2);
+                if ($base === 'attr') {
+                    $p['attrs'][$tag] = true;
+                } elseif (isset($p['langs'][$base])) {
+                    $p['langs'][$base][$tag] = true;
+                }
+                continue;
+            }
+            $p['plain'][$h] = true;
+            if (isset($p['langs'][$h])) {
+                $p['langs'][$h][$this->lang] = true;
+            }
+        }
+        $this->present = $p;
+    }
+
+    /**
+     * Import rule 9 (import-format.md): for a product or variant the node already has, a field
+     * whose column the file does not have keeps its stored value (texts per language, attributes
+     * per key); an empty cell in a column the file has still removes the value.
+     *
+     * @param array<string, mixed> $data what this import built
+     * @param array<string, mixed> $stored the stored write model
+     * @param list<array{0: string, 1: string, 2: string}> $fields
+     * @return array<string, mixed>
+     */
+    private function keepAbsentColumns(array $data, array $stored, array $fields): array
+    {
+        foreach ($fields as [$path, $column, $kind]) {
+            $parts = explode('.', $path);
+            $key = (string) array_pop($parts);
+            $was = $stored;
+            foreach ($parts as $seg) {
+                $was = is_array($was[$seg] ?? null) ? $was[$seg] : null;
+            }
+            if (!is_array($was) || !array_key_exists($key, $was) || $was[$key] === null) {
+                continue;
+            }
+            $old = $was[$key];
+            $parent = &$data;
+            foreach ($parts as $seg) {
+                if (!isset($parent[$seg]) || !is_array($parent[$seg])) {
+                    unset($parent);
+                    continue 2;
+                }
+                $parent = &$parent[$seg];
+            }
+            if ($kind === 'plain') {
+                if (!array_key_exists($key, $parent) && !isset($this->present['plain'][$column])) {
+                    $parent[$key] = $old;
+                }
+            } elseif (is_array($old)) {
+                $now = is_array($parent[$key] ?? null) ? $parent[$key] : [];
+                foreach ($old as $k => $v) {
+                    $absent = $kind === 'attrs' ? !isset($this->present['attrs'][$k]) : !isset($this->present['langs'][$column][$k]);
+                    if (!array_key_exists($k, $now) && $absent) {
+                        $now[$k] = $v;
+                    }
+                }
+                if ($now !== []) {
+                    if ($kind === 'text') {
+                        ksort($now, SORT_STRING);
+                    }
+                    $parent[$key] = $now;
+                }
+            }
+            unset($parent);
+        }
+        return $data;
+    }
+
     // ================================================================ apply
 
     /**
@@ -882,6 +983,10 @@ final class ImportEngine
                 }
             }
             try {
+                $stored = $w->load('product', $p['ext']);
+                if ($stored !== null) {
+                    $p['data'] = $this->keepAbsentColumns($p['data'], Json::decode((string) $stored['input'], []), self::PRODUCT_FIELDS);
+                }
                 $this->count($w->upsert('product', $p['ext'], $p['data'], $ctx));
             } catch (ApiError $e) {
                 $this->issue($file, $p['row'], self::column($e), 'error', $e->obxError, $e->getMessage());
@@ -890,6 +995,10 @@ final class ImportEngine
             }
             foreach ($p['variants'] as $v) {
                 try {
+                    $stored = $w->load('variant', $v['ext']);
+                    if ($stored !== null) {
+                        $v['data'] = $this->keepAbsentColumns($v['data'], Json::decode((string) $stored['input'], []), self::VARIANT_FIELDS);
+                    }
                     $this->count($w->upsert('variant', $v['ext'], $v['data'], $ctx));
                 } catch (ApiError $e) {
                     $this->issue($file, $v['row'], self::column($e), 'error', $e->obxError, $e->getMessage(), $e->obxError === 'invalid_gtin' || $e->obxError === 'gtin_conflict' ? (string) ($v['data']['gtin'] ?? '') : null);

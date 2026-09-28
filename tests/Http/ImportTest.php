@@ -165,6 +165,32 @@ final class ImportTest extends NodeTestCase
         $this->assertSame('Photo: Test Studio', $data('KO-1001_NVY_1')['rights']['credit'], 'a credit set in the admin stays');
     }
 
+    /** Import rule 9: a column the file does not have keeps the field; an empty cell removes it. */
+    public function testAMissingColumnKeepsTheFieldAndAnEmptyCellRemovesIt(): void
+    {
+        ['ingest' => $token] = $this->kestrelNode();
+        $csv = function (string $text): array {
+            $path = $this->dir . '/products-' . bin2hex(random_bytes(3)) . '.csv';
+            file_put_contents($path, $text);
+            return ['csv' => [$this->upload($path, 'products.csv', 'text/csv')]];
+        };
+        $job = $this->import($token, $csv("brand,style_number,name:en\nKestrel,KO-1001,Merino Crew Sweater\nKestrel,KO-1002,Waxed Field Jacket\n"));
+        $this->assertSame('succeeded', $job['status'], Json::encode($job));
+        $c = $job['import_run']['counts'];
+        $this->assertSame([0, 0], [$c['created'], $c['updated']], Json::encode($c));
+        $data = fn (): array => $this->json($this->http('GET', '/obx/v1/ingest/products/KO-1001', ['bearer' => $token]))['data'];
+        $p = $data();
+        $this->assertSame('Merino trui met ronde hals', $p['name']['nl'] ?? null, 'a language without its column keeps its text');
+        $this->assertNotEmpty($p['description']['en'] ?? null);
+        $this->assertNotEmpty($p['materials'] ?? null);
+        $this->assertNotEmpty($p['care'] ?? null);
+        $job = $this->import($token, $csv("brand,style_number,name:en,season\nKestrel,KO-1001,Merino Crew Sweater,\n"));
+        $this->assertSame(1, $job['import_run']['counts']['updated'], Json::encode($job['import_run']['counts']));
+        $p = $data();
+        $this->assertArrayNotHasKey('season', array_filter($p, static fn ($v) => $v !== null), 'an empty cell removes the season');
+        $this->assertNotEmpty($p['collection'] ?? null);
+    }
+
     public function testZipSlipIsRefusedAndNothingIsWritten(): void
     {
         $this->freshNode();
