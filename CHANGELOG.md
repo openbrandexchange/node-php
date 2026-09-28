@@ -2,33 +2,6 @@
 
 All notable changes to the PHP edition of the Open Brand Exchange portal ("Portal for web hosting"). The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [semantic versioning](https://semver.org/): while it is 0.x, a minor version may change behaviour, and the upgrade notes say what to do.
 
-## [Unreleased]
-
-### Changed
-
-- The web interface is served under admin-ui's strict Content-Security-Policy: no inline styles.
-- The public logo no longer sends a CORS header; CORS is only on the discovery document, as in every edition.
-
-### Fixed
-
-- A missing file under `/assets/` or `/locales/` is a 404, also when the browser accepts HTML, so a tab left open during an upgrade reloads once instead of reading the start page as code.
-- `LICENSE` and `NOTICE` of the web interface are served as plain text.
-- Hosts where PHP runs as the web server's user (Apache with mod_php): the FTP account can now open `data/SETUP-CODE.txt` and `config/config.php`, the installer offers only the cron web address (a command-line cron job could not write the database there), and `bin/obx` explains an unreadable `config.php` instead of printing a PHP warning.
-- The installer no longer claims to have written a setup code while `data/` is not writable, and says how to fix the folder permissions (775, else 777).
-- Without Apache's mod_rewrite, the portal answers with a one-line explanation instead of a bare 403.
-- "Test connection" of a scheduled import no longer adds an English-only "N file(s) found." next to the web interface's own message.
-- An import no longer takes away what it does not state about an image (spec import rule 8): the images alone, or with an assets.csv that has no row for them, keep their embargo, credit, alt text and AI label, also when those were set in the admin. Before, every such import reset them to the defaults, which lifted embargoes.
-- Every zip a retailer downloads (one product, the selection, a background download) holds an `assets.csv` with one row per image: its usage rights, embargo and AI provenance in the import format's columns (spec import-format.md §2.3). Before, a zip held only the files, so a shop could publish an embargoed image without seeing the embargo.
-- A column that a products.csv does not have leaves that field of an existing product or variant as it is (spec import rule 9, per language for texts): a file with only `style_number` and `name:nl` changes only the Dutch names. Before, it removed the descriptions, materials, care codes and the other languages. An empty cell in a column the file has still removes the value.
-- Image names: `_model_other` is role model with view other, as the spec says (it was read as role other).
-- A new API key without chosen scopes gets `catalog:read` and `media:read`, plus `media:original` when the retailer may download originals, as the spec says; it got every scope its grant allowed, `usage:write` included.
-- Renewing an API key that was made when approving an access request retires the secret still waiting for the requester's software, so the status address no longer hands out a secret that stopped working ("Show the key" in the admin renews it).
-
-### Added
-
-- The installer's *Open the setup wizard* link fills in the setup code (as `#code=`, never sent to the server).
-- Web interface admin-ui 0.1.1 (commit dabdcd0): the cron address under Settings, web version as the first download choice, download texts without an e-mail promise, a "Get started" step to set up e-mail while none is configured.
-
 ## [0.1.0] - 2026-09-28
 
 The first release. It implements Open Brand Exchange specification 0.1.0 (OBX Protocol 0.1) and passes the official conformance suite: protocol, ingest, portal and security profiles, with server-made and with client-made image versions.
@@ -55,5 +28,31 @@ The first release. It implements Open Brand Exchange specification 0.1.0 (OBX Pr
 
 - Passwords with argon2id, tokens stored as SHA-256 hashes, import credentials and webhook secrets encrypted with AES-256-GCM; session cookies with CSRF tokens; signed, expiring content links; outbound requests only to public addresses (link-local and cloud metadata addresses always refused, the checked address pinned for the connection); zip imports checked for unsafe paths and sizes; formula-safe CSV; strict Content-Security-Policy, `frame-ancestors 'none'`, HSTS over HTTPS; CORS only on the discovery document; rate limits on sign-in, setup, password reset, access requests and the token endpoint.
 
-[Unreleased]: https://github.com/openbrandexchange/node-php/compare/v0.1.0...HEAD
+### Also in this release
+
+#### Changed
+
+- The web interface is served under admin-ui's strict Content-Security-Policy: no inline styles.
+- The public logo no longer sends a CORS header; CORS is only on the discovery document, as in every edition.
+
+#### Fixed
+
+- A missing file under `/assets/` or `/locales/` is a 404, also when the browser accepts HTML, so a tab left open during an upgrade reloads once instead of reading the start page as code.
+- `LICENSE` and `NOTICE` of the web interface are served as plain text.
+- Hosts where PHP runs as the web server's user (Apache with mod_php): the FTP account can now open `data/SETUP-CODE.txt` and `config/config.php`, the installer offers only the cron web address (a command-line cron job could not write the database there), and `bin/obx` explains an unreadable `config.php` instead of printing a PHP warning.
+- The installer no longer claims to have written a setup code while `data/` is not writable, and says how to fix the folder permissions (775, else 777).
+- Without Apache's mod_rewrite, the portal answers with a one-line explanation instead of a bare 403.
+- "Test connection" of a scheduled import no longer adds an English-only "N file(s) found." next to the web interface's own message.
+- An import no longer takes away what it does not state about an image (spec import rule 8): the images alone, or with an assets.csv that has no row for them, keep their embargo, credit, alt text and AI label, also when those were set in the admin. Before, every such import reset them to the defaults, which lifted embargoes.
+- Every zip a retailer downloads (one product, the selection, a background download) holds an `assets.csv` with one row per image: its usage rights, embargo and AI provenance in the import format's columns (spec import-format.md §2.3). Before, a zip held only the files, so a shop could publish an embargoed image without seeing the embargo.
+- A column that a products.csv does not have leaves that field of an existing product or variant as it is (spec import rule 9, per language for texts): a file with only `style_number` and `name:nl` changes only the Dutch names. Before, it removed the descriptions, materials, care codes and the other languages. An empty cell in a column the file has still removes the value.
+- Image names: `_model_other` is role model with view other, as the spec says (it was read as role other).
+- A new API key without chosen scopes gets `catalog:read` and `media:read`, plus `media:original` when the retailer may download originals, as the spec says; it got every scope its grant allowed, `usage:write` included.
+- Renewing an API key that was made when approving an access request retires the secret still waiting for the requester's software, so the status address no longer hands out a secret that stopped working ("Show the key" in the admin renews it).
+
+#### Added
+
+- The installer's *Open the setup wizard* link fills in the setup code (as `#code=`, never sent to the server).
+- Web interface admin-ui 0.1.1 (commit dabdcd0): the cron address under Settings, web version as the first download choice, download texts without an e-mail promise, a "Get started" step to set up e-mail while none is configured.
+
 [0.1.0]: https://github.com/openbrandexchange/node-php/releases/tag/v0.1.0
