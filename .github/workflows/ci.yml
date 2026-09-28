@@ -115,21 +115,25 @@ jobs:
           - renditions: client
             args: ""
     steps:
-      - name: Skip without access to obx-go
-        if: env.OBX_READ_TOKEN == ''
-        run: echo "::notice::OBX_READ_TOKEN is not set; the conformance suite is skipped (see CONTRIBUTING.md)."
+      - name: Access to obx-go (the OBX_READ_TOKEN secret while it is private; none once it is public)
+        run: |
+          if [ -n "$OBX_READ_TOKEN" ] || GIT_TERMINAL_PROMPT=0 git ls-remote --heads https://github.com/openbrandexchange/obx-go >/dev/null 2>&1; then
+            echo "OBX_ACCESS=yes" >> "$GITHUB_ENV"
+          else
+            echo "::notice::openbrandexchange/obx-go is private and OBX_READ_TOKEN is not set; the conformance suite is skipped."
+          fi
       - uses: actions/checkout@v7
-        if: env.OBX_READ_TOKEN != ''
+        if: env.OBX_ACCESS == 'yes'
         with:
           path: node-php
       - uses: actions/checkout@v7
-        if: env.OBX_READ_TOKEN != ''
+        if: env.OBX_ACCESS == 'yes'
         with:
           repository: openbrandexchange/obx-go
-          token: ${{ secrets.OBX_READ_TOKEN }}
+          token: ${{ secrets.OBX_READ_TOKEN || github.token }}
           path: obx-go
       - name: obx-conformance all against the Docker image
-        if: env.OBX_READ_TOKEN != ''
+        if: env.OBX_ACCESS == 'yes'
         env:
           RENDITIONS: ${{ matrix.renditions }}
         run: ./node-php/scripts/conformance.sh "$PWD/obx-go" ${{ matrix.args }} --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
