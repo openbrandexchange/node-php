@@ -197,10 +197,10 @@ final class IngestController extends Controller
             throw ApiError::validation('/sha256', 'A lowercase hex sha256.');
         }
         $existing = $this->app->blobs->get($sha);
-        if ($existing !== null) {
-            // Already present: drain nothing, answer 200 (dedupe).
+        if ($existing !== null && ($req->contentLength() ?? 1) === 0) {
             return Response::json(\Obx\Node\Services\Blobs::describe($existing, false), 200);
         }
+        // Even when the node has these bytes, a sent body must match the hash in the URL.
         $blob = $this->storeBody($req, $sha);
         return Response::json($blob, $blob['created'] ? 201 : 200);
     }
@@ -317,7 +317,7 @@ final class IngestController extends Controller
             $sql .= ' AND status = ?';
             $params[] = $status;
         }
-        $rows = $this->app->db->all($sql . ' ORDER BY created_ts DESC, id DESC LIMIT ' . $limit . ' OFFSET ' . $offset, $params);
+        $rows = $this->app->db->all($sql . ' ORDER BY created_at DESC, id DESC LIMIT ' . $limit . ' OFFSET ' . $offset, $params);
         return Response::json([
             'items' => array_map(fn ($r) => $this->app->jobs->ingestJson($r), $rows),
             'next_cursor' => $this->nextCursor('jobs', $offset, count($rows), $limit),

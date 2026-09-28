@@ -60,6 +60,14 @@ final class SecurityTest extends TestCase
         }
         $dev = new SafeHttp(true);
         $this->assertSame('127.0.0.1', $dev->check('http://127.0.0.1:8080/x')[2]);
+        foreach (['https://169.254.169.254/latest/meta-data', 'https://[fe80::1]/hook', 'https://0.0.0.0/'] as $url) {
+            try {
+                $dev->check($url);
+                $this->fail($url . ' must stay blocked in development mode');
+            } catch (ApiError $e) {
+                $this->assertSame('unsafe_url', $e->obxError);
+            }
+        }
     }
 
     public function testEncryptionSealingAndTokens(): void

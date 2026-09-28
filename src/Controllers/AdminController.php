@@ -241,7 +241,7 @@ final class AdminController extends Controller
         $limit = $this->limit($req, 50, 200);
         $offset = $this->offset($req, 'imports');
         $source = $req->q('source_id');
-        $sql = 'SELECT * FROM obx_import_runs' . ($source !== null ? ' WHERE source_id = ?' : '') . ' ORDER BY created_ts DESC, id DESC LIMIT ' . $limit . ' OFFSET ' . $offset;
+        $sql = 'SELECT * FROM obx_import_runs' . ($source !== null ? ' WHERE source_id = ?' : '') . ' ORDER BY created_at DESC, id DESC LIMIT ' . $limit . ' OFFSET ' . $offset;
         $rows = $this->app->db->all($sql, $source !== null ? [$source] : []);
         return Response::json([
             'items' => array_map(fn ($r) => $this->app->importer->runJson($r), $rows),
@@ -755,7 +755,7 @@ final class AdminController extends Controller
         $this->app->webhooks->get('admin', 'brand', (string) $req->params['id']);
         $limit = $this->limit($req, 50, 200);
         $offset = $this->offset($req, 'deliveries');
-        $rows = $this->app->db->all('SELECT * FROM obx_webhook_deliveries WHERE webhook_id = ? ORDER BY at_ts DESC, id DESC LIMIT ' . $limit . ' OFFSET ' . $offset, [$req->params['id']]);
+        $rows = $this->app->db->all('SELECT * FROM obx_webhook_deliveries WHERE webhook_id = ? ORDER BY at DESC, id DESC LIMIT ' . $limit . ' OFFSET ' . $offset, [$req->params['id']]);
         return Response::json([
             'items' => array_map([Webhooks::class, 'deliveryJson'], $rows),
             'next_cursor' => $this->nextCursor('deliveries', $offset, count($rows), $limit),
@@ -789,7 +789,7 @@ final class AdminController extends Controller
             $where[] = 'kind = ?';
             $params[] = $kind;
         }
-        $rows = $this->app->db->all('SELECT * FROM obx_download_events' . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY at_ts DESC, id DESC LIMIT ' . $limit . ' OFFSET ' . $offset, $params);
+        $rows = $this->app->db->all('SELECT * FROM obx_download_events' . ($where ? ' WHERE ' . implode(' AND ', $where) : '') . ' ORDER BY at DESC, id DESC LIMIT ' . $limit . ' OFFSET ' . $offset, $params);
         return Response::json([
             'items' => array_map([Stats::class, 'event'], $rows),
             'next_cursor' => $this->nextCursor('events', $offset, count($rows), $limit),

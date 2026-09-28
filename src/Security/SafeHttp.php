@@ -77,11 +77,37 @@ final class SafeHttp
             throw new ApiError('unsafe_url', 'The host name could not be resolved.');
         }
         foreach ($ips as $ip) {
-            if (!$this->allowPrivate && self::isPrivate($ip)) {
+            // Link-local (cloud metadata), multicast and unspecified addresses are refused even
+            // with the development switch; the switch only opens loopback and private networks.
+            if (self::isAlwaysBlocked($ip) || (!$this->allowPrivate && self::isPrivate($ip))) {
                 throw new ApiError('unsafe_url', 'The address points to a private, loopback or link-local network.');
             }
         }
         return $ips[0];
+    }
+
+    /** Link-local, multicast, unspecified or reserved: never a legitimate target. */
+    public static function isAlwaysBlocked(string $ip): bool
+    {
+        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+            return true;
+        }
+        if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+            $n = ip2long($ip);
+            foreach ([['0.0.0.0', 8], ['169.254.0.0', 16], ['224.0.0.0', 4], ['240.0.0.0', 4]] as [$net, $bits]) {
+                $mask = -1 << (32 - $bits);
+                if (($n & $mask) === (ip2long($net) & $mask)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        $bin = (string) inet_pton($ip);
+        if (substr($bin, 0, 12) === str_repeat("\0", 10) . "\xff\xff") {
+            return self::isAlwaysBlocked((string) inet_ntop(substr($bin, 12)));
+        }
+        $first = ord($bin[0]);
+        return $bin === str_repeat("\0", 16) || $first === 0xFF || ($first === 0xFE && (ord($bin[1]) & 0xC0) === 0x80);
     }
 
     public static function isPrivate(string $ip): bool

@@ -443,7 +443,7 @@ final class PortalController extends Controller
     public function downloadJobs(Request $req): Response
     {
         [$s] = $this->viewer($req);
-        $rows = $this->app->db->all('SELECT * FROM obx_download_jobs WHERE user_id = ? AND created_ts > ? ORDER BY created_ts DESC', [$s['user']['id'], Clock::time() - 7 * 86400]);
+        $rows = $this->app->db->all('SELECT * FROM obx_download_jobs WHERE user_id = ? AND created_ts > ? ORDER BY created_at DESC', [$s['user']['id'], Clock::time() - 7 * 86400]);
         return Response::json(['items' => array_map(fn ($d) => $this->app->downloads->json($d), $rows)]);
     }
 
