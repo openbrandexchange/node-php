@@ -17,7 +17,8 @@ DirectoryIndex index.php
 </IfModule>
 
 <IfModule mod_headers.c>
-    Header always set X-Content-Type-Options "nosniff"
+    # Static files served by Apache itself; the portal sets its own headers.
+    Header setifempty X-Content-Type-Options "nosniff"
 </IfModule>
 
 # Larger uploads (Apache with mod_php; PHP-FPM hosts read .user.ini instead).
@@ -27,5 +28,7 @@ DirectoryIndex index.php
     php_value memory_limit 512M
     php_value max_execution_time 300
     php_flag enable_post_data_reading Off
+    php_flag display_errors Off
+    php_flag log_errors On
 </IfModule>
 

@@ -9,6 +9,10 @@ declare(strict_types=1);
 
 $root = dirname(__DIR__);
 
+// Never show PHP warnings to visitors (some hosts ship display_errors=On); they go to the log.
+ini_set('display_errors', '0');
+ini_set('log_errors', '1');
+
 if (PHP_SAPI === 'cli-server') {
     // php -S: let the built-in server serve real files in public/ (not index.php itself).
     $file = __DIR__ . (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
