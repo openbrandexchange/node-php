@@ -23,7 +23,7 @@ All notable changes to the PHP edition of the Open Brand Exchange portal ("Porta
 ### Added
 
 - The installer's *Open the setup wizard* link fills in the setup code (as `#code=`, never sent to the server).
-- Web interface: the cron address under Settings, web version as the first download choice, download texts without an e-mail promise (admin-ui main after v0.1.1).
+- Web interface admin-ui 0.1.1 (commit dabdcd0): the cron address under Settings, web version as the first download choice, download texts without an e-mail promise, a "Get started" step to set up e-mail while none is configured.
 
 ## [0.1.0] - 2026-09-28
 
