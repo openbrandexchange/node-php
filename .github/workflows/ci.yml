@@ -1,0 +1,29 @@
+name: Tests
+on:
+  push:
+  pull_request:
+jobs:
+  sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/test.sh
+  mysql:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        flavour: [mysql, mariadb]
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/test-mysql.sh ${{ matrix.flavour }} --testsuite http
+  sources:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/test-sources.sh
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./scripts/build-release.sh
+      - run: shellcheck deploy/*.sh scripts/*.sh docker/entrypoint.sh
