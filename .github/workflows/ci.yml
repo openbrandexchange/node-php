@@ -109,7 +109,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        renditions: [auto, client]
+        include:
+          - renditions: auto
+            args: --rate-limit-test
+          - renditions: client
+            args: ""
     steps:
       - name: Skip without access to obx-go
         if: env.OBX_READ_TOKEN == ''
@@ -128,7 +132,7 @@ jobs:
         if: env.OBX_READ_TOKEN != ''
         env:
           RENDITIONS: ${{ matrix.renditions }}
-        run: ./node-php/scripts/conformance.sh "$PWD/obx-go" --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
+        run: ./node-php/scripts/conformance.sh "$PWD/obx-go" ${{ matrix.args }} --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
 
   security:
     name: Dependency audit and licences
