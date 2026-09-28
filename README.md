@@ -143,6 +143,7 @@ Everything runs in Docker; no local PHP is needed.
 ./scripts/test.sh                      # PHPUnit: unit + HTTP tests on SQLite (PHP 8.3)
 ./scripts/test-mysql.sh mysql          # the same against MySQL 8.4 (or: mariadb)
 ./scripts/test-sources.sh              # scheduled imports against real S3 (SeaweedFS) and SFTP servers
+./scripts/conformance.sh ../obx-go     # the official obx-conformance suite against the Docker image (47/47 pass)
 ./scripts/build-release.sh             # build/obx-portal-php-<version>.zip for FTP upload
 ./scripts/vendor-ui.sh ../admin-ui     # put the shared web interface into public/ui
 ./scripts/sync-spec.sh ../spec         # refresh tests/fixtures/spec from the spec repository
