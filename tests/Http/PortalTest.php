@@ -279,4 +279,69 @@ final class PortalTest extends NodeTestCase
         $this->assertSame([['asset', 'delete', 'KO-1001_NVY_2']], array_map(static fn ($c) => [$c['type'], $c['op'], $c['external_id']], $page['changes']));
         $this->assertProblem($this->http('GET', '/obx/v1/assets/' . $rec['id'], ['bearer' => $token]), 404, 'not_found');
     }
+
+    public function testLargeExportsAreSplitIntoIndependentParts(): void
+    {
+        $this->app = $this->makeApp(['export_part_bytes' => 1]);
+        [, $id, $secret] = $this->retailerClient(['name' => 'Parts Shop']);
+        $token = $this->accessToken($id, $secret);
+        $export = $this->json($this->http('POST', '/obx/v1/exports', ['bearer' => $token, 'json' => ['renditions' => ['original', 'web', 'square'], 'include_data' => false]]), 202);
+        $done = $this->json($this->http('GET', '/obx/v1/exports/' . $export['id'], ['bearer' => $token]));
+        $this->assertGreaterThan(1, count($done['parts']));
+        $manifest = array_map([Json::class, 'decode'], array_filter(explode("\n", $this->http('GET', substr($done['manifest_url'], strlen('http://localhost')))->content())));
+        $this->assertSame(81, $manifest[0]['counts']['files']);
+        $this->assertSame(['header', 'file'], array_values(array_unique(array_column($manifest, 'type'))), 'include_data=false leaves out data lines');
+        $zips = [];
+        foreach ($done['parts'] as $p) {
+            $f = $this->dir . '/part' . $p['number'] . '.zip';
+            file_put_contents($f, $this->http('GET', '/obx/v1/exports/' . $export['id'] . '/parts/' . $p['number'], ['bearer' => $token])->content());
+            $this->assertSame($p['sha256'], hash_file('sha256', $f));
+            $zips[$p['number']] = new \ZipArchive();
+            $zips[$p['number']]->open($f);
+        }
+        foreach ($manifest as $l) {
+            if ($l['type'] === 'file') {
+                $this->assertSame($l['sha256'], hash('sha256', (string) $zips[$l['part']]->getFromName($l['path'])));
+            }
+        }
+        // Another concurrent export is refused while one runs; an expired one answers 410.
+        $this->app->db->run("UPDATE obx_exports SET expires_ts = 1 WHERE id = ?", [$export['id']]);
+        $this->assertProblem($this->http('GET', '/obx/v1/exports/' . $export['id'] . '/parts/1', ['bearer' => $token]), 410, 'export_expired');
+    }
+
+    public function testOldCursorsExpireAfterRetention(): void
+    {
+        [, $id, $secret] = $this->retailerClient(['name' => 'Cursor Shop']);
+        $token = $this->accessToken($id, $secret);
+        [, $cursor] = $this->drainSnapshot($token);
+        $this->app->writer->setStatus('product', 'KO-1006', false);
+        $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $token, 'query' => ['cursor' => $cursor]]));
+        $this->assertNotEmpty($page['changes']);
+        $this->app->db->run('UPDATE obx_changes SET created_ts = 1');
+        $this->app->feed->prune();
+        $this->assertProblem($this->http('GET', '/obx/v1/changes', ['bearer' => $token, 'query' => ['cursor' => $cursor]]), 410, 'cursor_expired');
+        // A new snapshot still works after pruning, and so does the newest cursor.
+        [$entries, $fresh] = $this->drainSnapshot($token);
+        $this->assertNotEmpty($entries);
+        $this->assertSame(200, $this->http('GET', '/obx/v1/changes', ['bearer' => $token, 'query' => ['cursor' => $page['next_cursor']]])->status);
+    }
+
+    public function testAccessRequestsCanBeSwitchedOffAndAreRateLimited(): void
+    {
+        $body = ['retailer' => ['name' => 'Flood BV'], 'contact' => ['name' => 'F', 'email' => 'f@flood.example']];
+        $strict = $this->makeApp(['rate_limit_factor' => 1.0]);
+        $this->app = $strict;
+        for ($i = 0; $i < 5; $i++) {
+            $this->assertSame(202, $this->http('POST', '/obx/v1/access-requests', ['json' => $body, 'ip' => '198.51.100.7'])->status);
+        }
+        $res = $this->http('POST', '/obx/v1/access-requests', ['json' => $body, 'ip' => '198.51.100.7']);
+        $this->assertProblem($res, 429, 'rate_limited');
+        $this->assertNotNull($res->getHeader('Retry-After'));
+        $this->assertSame('0', $res->getHeader('RateLimit-Remaining'));
+        $this->json($this->http('PATCH', '/admin/api/settings', ['browser' => 'admin', 'json' => ['portal' => ['access_requests_enabled' => false]]]));
+        $this->assertProblem($this->http('POST', '/obx/v1/access-requests', ['json' => $body, 'ip' => '198.51.100.8']), 403, 'forbidden');
+        $doc = $this->json($this->http('GET', '/.well-known/obx'));
+        $this->assertNull($doc['access_requests_url']);
+        $this->assertNotContains('access_requests', $doc['capabilities']);
+    }
 }
