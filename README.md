@@ -34,24 +34,33 @@ your automation work with any of them.
 
 ## 60-second quickstart
 
-With Docker:
+With Docker, in a copy of this repository:
 
 ```sh
-docker build -t obx-portal https://github.com/openbrandexchange/node-php.git
-docker run -p 8080:8080 -v obx-data:/var/www/html/data obx-portal
+git clone https://github.com/openbrandexchange/node-php.git obx-portal && cd obx-portal
+docker compose up -d
+docker compose logs portal | grep "Setup code"
 ```
 
-Open <http://localhost:8080>, and enter the setup code that the container printed
-(`docker logs <container> | grep "Setup code"`). Choose your company name, languages and your
-own admin password. There is no default password.
+Open <http://localhost:8080> and enter the setup code from the last command. Choose your
+company name, languages and your own admin password. There is no default password. Your data
+stays in the `portal-data` volume; `docker compose down` keeps it, `docker compose down -v`
+deletes it.
 
-Without Docker, in a checkout (PHP 8.2+ with pdo_sqlite, mbstring, openssl; GD and zip
-recommended):
+Without Compose: `docker build -t obx-portal .` and
+`docker run -d --name obx-portal -p 8080:8080 -v obx-data:/var/www/html/data obx-portal`, then
+`docker logs obx-portal | grep "Setup code"`.
+
+Without Docker, in the same folder (PHP 8.2+ with pdo_sqlite, mbstring and openssl; GD and zip
+recommended; [Composer](https://getcomposer.org)):
 
 ```sh
 composer install
 OBX_PUBLIC_URL=http://localhost:8080 php bin/obx serve 8080
 ```
+
+The setup code is printed in the terminal (and written to `data/SETUP-CODE.txt`). This built-in
+server is for trying the portal out; for real use pick one of the hosting options below.
 
 ## Install on your web hosting (FTP)
 
@@ -145,7 +154,8 @@ Everything runs in Docker; no local PHP is needed.
 ./scripts/test-sources.sh              # scheduled imports against real S3 (SeaweedFS) and SFTP servers
 ./scripts/conformance.sh ../obx-go     # the official obx-conformance suite against the Docker image (47/47 pass)
 ./scripts/build-release.sh             # build/obx-portal-php-<version>.zip for FTP upload
-./scripts/vendor-ui.sh ../admin-ui     # put the shared web interface into public/ui
+./scripts/update-ui.sh ../admin-ui     # re-copy admin-ui's committed dist/ into public/ui (the served web interface)
+./scripts/vendor-ui.sh ../admin-ui     # build admin-ui from its sources first, then copy it
 ./scripts/sync-spec.sh ../spec         # refresh tests/fixtures/spec from the spec repository
 ```
 

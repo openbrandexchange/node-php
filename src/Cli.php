@@ -46,6 +46,19 @@ TXT;
                 case 'serve':
                     $port = (int) ($args[1] ?? getenv('PORT') ?: 8080);
                     $out('Portal on http://localhost:' . $port . '/ (Ctrl+C to stop)');
+                    $config = Config::load($root);
+                    if ($config->installed()) {
+                        $app = new App($config);
+                        if (!$app->settings->setupDone()) {
+                            // A newly made code is already logged by ensureSetupCode(); an
+                            // existing one (after a restart) is not, so print that here.
+                            $existing = ($app->settings->state()['setup_code_enc'] ?? null) !== null;
+                            $code = $app->ensureSetupCode();
+                            if ($existing) {
+                                $out('Setup code for the setup wizard: ' . $code);
+                            }
+                        }
+                    }
                     passthru(escapeshellarg(PHP_BINARY) . ' -d enable_post_data_reading=0 -d upload_max_filesize=512M -d post_max_size=520M -S 0.0.0.0:' . $port . ' -t ' . escapeshellarg($root . '/public') . ' ' . escapeshellarg($root . '/public/index.php'), $code);
                     return (int) $code;
                 case 'migrate':
