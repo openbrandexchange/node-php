@@ -13,8 +13,8 @@
   "chk_pdo": "PDO med SQLite eller MySQL",
   "hint_ext": "Slå på PHP-utvidelsen {ext} i kontrollpanelet til webhotellet.",
   "chk_folder": "Mappen {folder} er skrivbar",
-  "hint_data": "Gi webserveren skrivetilgang til mappen (rettigheter 775).",
-  "hint_config": "Gi webserveren skrivetilgang til mappen under dette trinnet.",
+  "hint_data": "Sett tillatelsene for denne mappen til 775 i FTP-programmet, og last inn siden på nytt. Fortsatt ikke skrivbar? Bruk 777.",
+  "hint_config": "Gjør denne mappen skrivbar på samme måte som data/. Etter installasjonen holder 755 igjen.",
   "chk_gd": "GD med JPEG (bildeversjoner lages på serveren)",
   "hint_gd": "Uten GD lager webgrensesnittet web- og miniatyrversjonene i nettleseren.",
   "chk_zip": "zip (zip-opplasting og import)",
@@ -25,6 +25,7 @@
   "hint_upload": "Øk upload_max_filesize og post_max_size (public/.user.ini gjør det hos de fleste webhotell).",
   "s2": "2. Oppsettskode",
   "s2_text": "Vi har skrevet en kode i {file} på serveren deres. Åpne filen med FTP-programmet eller filbehandleren til webhotellet. Slik viser dere at dere er eieren.",
+  "s2_wait": "Så snart mappen data er skrivbar (trinn 1), skriver vi en kode i {file}. Last inn siden på nytt etter at du har endret tillatelsene.",
   "code_label": "Oppsettskode",
   "s3": "3. Nettadresse",
   "url_label": "Adressen til portalen",
@@ -58,5 +59,6 @@
   "done_bg": "Arbeid i bakgrunnen",
   "done_bg_text": "Importer, zip-nedlastinger og e-post kjører i bakgrunnen. Legg til en av disse jobbene i kontrollpanelet til webhotellet (cron-jobber), hvert minutt eller hvert 5. minutt:",
   "done_bg_or": "eller, hvis webhotellet bare kan kalle en nettadresse:",
+  "done_bg_url_only": "Bruk nettadressen på dette webhotellet: en cron-jobb kjører som FTP-kontoen din, som ikke får åpne filene portalen har skrevet. I de fleste kontrollpaneler legger du den inn som en cron-jobb med URL, eller med curl eller wget.",
   "done_bg_none": "Portalen fungerer også uten cron-jobb: den tar igjen arbeidet så snart noen bruker den."
 }

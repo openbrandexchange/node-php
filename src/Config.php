@@ -28,6 +28,9 @@ final class Config
         $file = [];
         $configFile = getenv('OBX_CONFIG_FILE') ?: $root . '/config/config.php';
         if (is_file($configFile)) {
+            if (!is_readable($configFile)) {
+                throw new \RuntimeException(self::unreadableMessage($configFile));
+            }
             $loaded = require $configFile;
             if (is_array($loaded)) {
                 $file = $loaded;
@@ -39,6 +42,19 @@ final class Config
         $values['config_file'] = $configFile;
         $values['installed'] = is_file($configFile) || self::envConfigured() || !empty($overrides['installed']);
         return new self($values);
+    }
+
+    /**
+     * Shown when config.php exists but this process may not read it. Typical cause: a cron job
+     * that runs as the FTP account on a host where the web server wrote the file as its own user.
+     */
+    public static function unreadableMessage(string $configFile): string
+    {
+        $who = function_exists('posix_geteuid') && function_exists('posix_getpwuid') ? (posix_getpwuid(posix_geteuid())['name'] ?? null) : null;
+        return 'This user' . ($who !== null ? ' (' . $who . ')' : '') . ' may not read ' . $configFile
+            . '. The web server wrote it as its own user, which is normal on this kind of hosting. For background work,'
+            . ' let your cron job call the cron web address instead of running bin/obx: the installer showed it, and the'
+            . ' admin shows it under Settings → About this installation.';
     }
 
     /** @return array<string, mixed> */

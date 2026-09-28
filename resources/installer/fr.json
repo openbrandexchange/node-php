@@ -13,8 +13,8 @@
   "chk_pdo": "PDO avec SQLite ou MySQL",
   "hint_ext": "Activez l'extension PHP {ext} dans le panneau de votre hébergement.",
   "chk_folder": "Le dossier {folder} est accessible en écriture",
-  "hint_data": "Donnez au serveur web le droit d'écrire dans ce dossier (droits 775).",
-  "hint_config": "Donnez au serveur web le droit d'écrire dans ce dossier pour cette étape.",
+  "hint_data": "Dans votre logiciel FTP, réglez les droits de ce dossier sur 775 et rechargez cette page. Toujours pas accessible en écriture ? Utilisez 777.",
+  "hint_config": "Rendez ce dossier accessible en écriture de la même manière que data/. Après l'installation, 755 suffit à nouveau.",
   "chk_gd": "GD avec JPEG (versions d'image créées sur le serveur)",
   "hint_gd": "Sans GD, l'interface web crée les versions web et miniatures dans le navigateur.",
   "chk_zip": "zip (envois et imports de fichiers zip)",
@@ -25,6 +25,7 @@
   "hint_upload": "Augmentez upload_max_filesize et post_max_size (public/.user.ini le fait chez la plupart des hébergeurs).",
   "s2": "2. Code d'installation",
   "s2_text": "Nous avons écrit un code dans {file} sur votre serveur. Ouvrez ce fichier avec votre logiciel FTP ou le gestionnaire de fichiers de votre hébergeur. Cela prouve que vous êtes le propriétaire.",
+  "s2_wait": "Dès que le dossier data est accessible en écriture (étape 1), nous écrivons un code dans {file}. Rechargez cette page après avoir modifié les droits.",
   "code_label": "Code d'installation",
   "s3": "3. Adresse web",
   "url_label": "Adresse de cet espace",
@@ -58,5 +59,6 @@
   "done_bg": "Tâches en arrière-plan",
   "done_bg_text": "Les imports, les téléchargements zip et les e-mails s'exécutent en arrière-plan. Ajoutez l'une de ces tâches dans le panneau de votre hébergement (tâches cron), toutes les minutes ou toutes les 5 minutes :",
   "done_bg_or": "ou, si votre hébergeur ne peut appeler qu'une adresse web :",
+  "done_bg_url_only": "Sur cet hébergement, utilisez l'adresse web : une tâche cron s'exécute avec votre compte FTP, qui ne peut pas ouvrir les fichiers écrits par l'espace. La plupart des panneaux de contrôle permettent de la saisir comme tâche cron avec une URL, ou avec curl ou wget.",
   "done_bg_none": "Sans tâche cron, l'espace fonctionne aussi : il rattrape son travail dès que quelqu'un l'utilise."
 }

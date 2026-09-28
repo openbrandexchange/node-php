@@ -13,8 +13,8 @@
   "chk_pdo": "PDO ar SQLite vai MySQL",
   "hint_ext": "Mitināšanas vadības panelī ieslēdziet PHP paplašinājumu {ext}.",
   "chk_folder": "Mapē {folder} var rakstīt",
-  "hint_data": "Piešķiriet tīmekļa serverim rakstīšanas tiesības šajā mapē (atļaujas 775).",
-  "hint_config": "Šim solim piešķiriet tīmekļa serverim rakstīšanas tiesības šajā mapē.",
+  "hint_data": "FTP programmā iestatiet šīs mapes atļaujas uz 775 un atkārtoti ielādējiet lapu. Joprojām nevar rakstīt? Izmantojiet 777.",
+  "hint_config": "Padariet šo mapi rakstāmu tāpat kā data/. Pēc instalēšanas atkal pietiek ar 755.",
   "chk_gd": "GD ar JPEG (attēlu versijas veido serverī)",
   "hint_gd": "Bez GD tīmekļa saskarne tīmekļa un sīktēlu versijas izveido pārlūkā.",
   "chk_zip": "zip (zip augšupielāde un imports)",
@@ -25,6 +25,7 @@
   "hint_upload": "Palieliniet upload_max_filesize un post_max_size (lielākajā daļā mitināšanu to izdara public/.user.ini).",
   "s2": "2. Instalēšanas kods",
   "s2_text": "Jūsu serverī failā {file} ierakstījām kodu. Atveriet to ar FTP programmu vai mitināšanas failu pārvaldnieku. Tā pierādīsiet, ka esat īpašnieks.",
+  "s2_wait": "Tiklīdz mapē data varēs rakstīt (1. solis), mēs ierakstīsim kodu failā {file}. Pēc atļauju maiņas atkārtoti ielādējiet lapu.",
   "code_label": "Instalēšanas kods",
   "s3": "3. Tīmekļa adrese",
   "url_label": "Šī portāla adrese",
@@ -58,5 +59,6 @@
   "done_bg": "Darbs fonā",
   "done_bg_text": "Importi, zip lejupielādes un e-pasti darbojas fonā. Mitināšanas vadības panelī (cron uzdevumi) pievienojiet vienu no šiem uzdevumiem, katru minūti vai ik pēc 5 minūtēm:",
   "done_bg_or": "vai, ja mitināšana var izsaukt tikai tīmekļa adresi:",
+  "done_bg_url_only": "Šajā hostingā izmantojiet tīmekļa adresi: cron uzdevums darbojas ar jūsu FTP kontu, kas nedrīkst atvērt portāla ierakstītos failus. Lielākajā daļā vadības paneļu to ievada kā cron uzdevumu ar URL vai ar curl vai wget.",
   "done_bg_none": "Portāls darbojas arī bez cron uzdevuma: tas paveic darbu, tiklīdz kāds to izmanto."
 }

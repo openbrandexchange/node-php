@@ -13,8 +13,8 @@
   "chk_pdo": "PDO s SQLite ali MySQL",
   "hint_ext": "V nadzorni plošči gostovanja vklopite razširitev PHP {ext}.",
   "chk_folder": "V mapo {folder} je mogoče pisati",
-  "hint_data": "Spletnemu strežniku dajte pravico pisanja v to mapo (dovoljenja 775).",
-  "hint_config": "Za ta korak dajte spletnemu strežniku pravico pisanja v to mapo.",
+  "hint_data": "V programu FTP nastavite dovoljenja te mape na 775 in znova naložite stran. Še vedno ni mogoče pisati? Uporabite 777.",
+  "hint_config": "Omogočite pisanje v to mapo na enak način kot v data/. Po namestitvi spet zadošča 755.",
   "chk_gd": "GD z JPEG (različice slik, narejene na strežniku)",
   "hint_gd": "Brez GD spletni vmesnik naredi spletne različice in sličice v brskalniku.",
   "chk_zip": "zip (nalaganje in uvoz datotek zip)",
@@ -25,6 +25,7 @@
   "hint_upload": "Povečajte upload_max_filesize in post_max_size (pri večini gostovanj to naredi public/.user.ini).",
   "s2": "2. Namestitvena koda",
   "s2_text": "Na vaš strežnik smo v datoteko {file} zapisali kodo. Odprite jo s programom FTP ali upraviteljem datotek gostovanja. Tako dokažete, da ste lastnik.",
+  "s2_wait": "Takoj ko bo v mapo data mogoče pisati (korak 1), zapišemo kodo v {file}. Po spremembi dovoljenj znova naložite stran.",
   "code_label": "Namestitvena koda",
   "s3": "3. Spletni naslov",
   "url_label": "Naslov tega portala",
@@ -58,5 +59,6 @@
   "done_bg": "Delo v ozadju",
   "done_bg_text": "Uvozi, prenosi zip in e-pošta tečejo v ozadju. V nadzorni plošči gostovanja (opravila cron) dodajte eno od teh opravil, vsako minuto ali vsakih 5 minut:",
   "done_bg_or": "ali, če gostovanje lahko kliče le spletni naslov:",
+  "done_bg_url_only": "Pri tem gostovanju uporabite spletni naslov: opravilo cron teče pod vašim računom FTP, ki ne sme odpreti datotek, ki jih je zapisal portal. V večini nadzornih plošč ga vnesete kot opravilo cron z URL-jem ali s curl oziroma wget.",
   "done_bg_none": "Portal deluje tudi brez opravila cron: delo nadoknadi, takoj ko ga kdo uporabi."
 }

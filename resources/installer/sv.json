@@ -13,8 +13,8 @@
   "chk_pdo": "PDO med SQLite eller MySQL",
   "hint_ext": "Aktivera PHP-tillägget {ext} i webbhotellets kontrollpanel.",
   "chk_folder": "Mappen {folder} är skrivbar",
-  "hint_data": "Ge webbservern skrivrätt till mappen (behörighet 775).",
-  "hint_config": "Ge webbservern skrivrätt till mappen under det här steget.",
+  "hint_data": "Ställ in mappens behörigheter på 775 i ditt FTP-program och ladda om sidan. Fortfarande inte skrivbar? Använd 777.",
+  "hint_config": "Gör mappen skrivbar på samma sätt som data/. Efter installationen räcker 755 igen.",
   "chk_gd": "GD med JPEG (bildversioner skapas på servern)",
   "hint_gd": "Utan GD skapar webbgränssnittet webb- och miniatyrversionerna i webbläsaren.",
   "chk_zip": "zip (zip-uppladdning och import)",
@@ -25,6 +25,7 @@
   "hint_upload": "Höj upload_max_filesize och post_max_size (public/.user.ini gör det hos de flesta webbhotell).",
   "s2": "2. Installationskod",
   "s2_text": "Vi har skrivit en kod i {file} på er server. Öppna filen med ert FTP-program eller webbhotellets filhanterare. Det visar att ni är ägaren.",
+  "s2_wait": "Så snart mappen data är skrivbar (steg 1) skriver vi en kod i {file}. Ladda om sidan när du har ändrat behörigheterna.",
   "code_label": "Installationskod",
   "s3": "3. Webbadress",
   "url_label": "Portalens adress",
@@ -58,5 +59,6 @@
   "done_bg": "Arbete i bakgrunden",
   "done_bg_text": "Importer, zip-nedladdningar och e-post körs i bakgrunden. Lägg till ett av dessa jobb i webbhotellets kontrollpanel (cron-jobb), varje minut eller var 5:e minut:",
   "done_bg_or": "eller, om webbhotellet bara kan anropa en webbadress:",
+  "done_bg_url_only": "Använd webbadressen på det här webbhotellet: ett cron-jobb körs som ditt FTP-konto, som inte får öppna filerna som portalen har skrivit. I de flesta kontrollpaneler anger du den som ett cron-jobb med URL, eller med curl eller wget.",
   "done_bg_none": "Utan cron-jobb fungerar portalen ändå: den tar igen arbetet så fort någon använder den."
 }

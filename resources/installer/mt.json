@@ -13,8 +13,8 @@
   "chk_pdo": "PDO b'SQLite jew MySQL",
   "hint_ext": "Ixgħel l-estensjoni PHP {ext} fil-pannell tal-kontroll tal-hosting tiegħek.",
   "chk_folder": "Il-folder {folder} jista' jinkiteb",
-  "hint_data": "Agħti lis-server tal-web permess li jikteb f'dan il-folder (permessi 775).",
-  "hint_config": "Għal dan il-pass, agħti lis-server tal-web permess li jikteb f'dan il-folder.",
+  "hint_data": "Fil-programm FTP tiegħek, issettja l-permessi ta' dan il-folder għal 775 u erġa' tella' din il-paġna. Għadu ma jistax jinkiteb? Uża 777.",
+  "hint_config": "Agħmel dan il-folder jista' jinkiteb bl-istess mod bħal data/. Wara l-installazzjoni, 755 jerġa' jkun biżżejjed.",
   "chk_gd": "GD b'JPEG (verżjonijiet tal-istampi magħmula fuq is-server)",
   "hint_gd": "Mingħajr GD, l-interfaċċa tal-web tagħmel il-verżjonijiet tal-web u ż-żgħar fil-browser.",
   "chk_zip": "zip (tlugħ u importazzjoni ta' fajls zip)",
@@ -25,6 +25,7 @@
   "hint_upload": "Għolli upload_max_filesize u post_max_size (f'ħafna hostings dan jagħmlu public/.user.ini).",
   "s2": "2. Kodiċi tal-installazzjoni",
   "s2_text": "Ktibna kodiċi fil-fajl {file} fuq is-server tiegħek. Iftħu bil-programm FTP tiegħek jew bil-maniġer tal-fajls tal-hosting. Hekk turi li int is-sid.",
+  "s2_wait": "Hekk kif il-folder data jkun jista' jinkiteb (pass 1), niktbu kodiċi f'{file}. Erġa' tella' din il-paġna wara li tbiddel il-permessi.",
   "code_label": "Kodiċi tal-installazzjoni",
   "s3": "3. Indirizz tal-web",
   "url_label": "Indirizz ta' dan il-portal",
@@ -58,5 +59,6 @@
   "done_bg": "Xogħol fl-isfond",
   "done_bg_text": "L-importazzjonijiet, id-downloads zip u l-emails jaħdmu fl-isfond. Żid wieħed minn dawn fil-pannell tal-kontroll tal-hosting (cron jobs), kull minuta jew kull 5 minuti:",
   "done_bg_or": "jew, jekk il-hosting jista' jsejjaħ biss indirizz tal-web:",
+  "done_bg_url_only": "F'dan il-hosting, uża l-indirizz tal-web: cron job jaħdem bil-kont FTP tiegħek, li ma jistax jiftaħ il-fajls li kiteb il-portal. Fil-biċċa l-kbira tal-pannelli tal-kontroll iddaħħlu bħala cron job b'URL, jew b'curl jew wget.",
   "done_bg_none": "Mingħajr cron job il-portal jaħdem xorta: ilaħħaq max-xogħol hekk kif xi ħadd jużah."
 }

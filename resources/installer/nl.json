@@ -13,8 +13,8 @@
   "chk_pdo": "PDO met SQLite of MySQL",
   "hint_ext": "Zet de PHP-extensie {ext} aan in het beheerpaneel van je hosting.",
   "chk_folder": "De map {folder} is beschrijfbaar",
-  "hint_data": "Geef de webserver schrijfrechten op deze map (rechten 775).",
-  "hint_config": "Geef de webserver voor deze stap schrijfrechten op deze map.",
+  "hint_data": "Zet in je FTP-programma de rechten van deze map op 775 en laad deze pagina opnieuw. Nog steeds niet schrijfbaar? Gebruik 777.",
+  "hint_config": "Maak deze map op dezelfde manier schrijfbaar als data/. Na de installatie is 755 weer genoeg.",
   "chk_gd": "GD met JPEG (beeldversies op de server)",
   "hint_gd": "Zonder GD maakt de webinterface de web- en miniatuurversies in de browser.",
   "chk_zip": "zip (zip-uploads en imports)",
@@ -25,6 +25,7 @@
   "hint_upload": "Verhoog upload_max_filesize en post_max_size (bij de meeste hosts doet public/.user.ini dat).",
   "s2": "2. Installatiecode",
   "s2_text": "We hebben een code in {file} op je server gezet. Open dat bestand met je FTP-programma of het bestandsbeheer van je host. Zo bewijs je dat jij de eigenaar bent.",
+  "s2_wait": "Zodra de map data schrijfbaar is (stap 1), zetten we een code in {file}. Laad deze pagina opnieuw nadat je de rechten hebt aangepast.",
   "code_label": "Installatiecode",
   "s3": "3. Webadres",
   "url_label": "Adres van deze beeldbank",
@@ -58,5 +59,6 @@
   "done_bg": "Achtergrondwerk",
   "done_bg_text": "Imports, zip-downloads en e-mails lopen op de achtergrond. Voeg een van deze taken toe in het beheerpaneel van je hosting (cronjobs), elke minuut of elke 5 minuten:",
   "done_bg_or": "of, als je host alleen een webadres kan aanroepen:",
+  "done_bg_url_only": "Gebruik op deze hosting het webadres: een cronjob draait als je FTP-account, en dat mag de bestanden die de beeldbank schreef niet openen. In de meeste controlepanelen vul je het in als cronjob met een URL, of met curl of wget.",
   "done_bg_none": "Zonder cronjob werkt de beeldbank ook: hij haalt zijn werk in zodra iemand hem gebruikt."
 }

@@ -13,8 +13,8 @@
   "chk_pdo": "PDO mit SQLite oder MySQL",
   "hint_ext": "Aktivieren Sie die PHP-Erweiterung {ext} im Kundenmenü Ihres Hostings.",
   "chk_folder": "Der Ordner {folder} ist beschreibbar",
-  "hint_data": "Geben Sie dem Webserver Schreibrechte für diesen Ordner (Rechte 775).",
-  "hint_config": "Geben Sie dem Webserver für diesen Schritt Schreibrechte für diesen Ordner.",
+  "hint_data": "Setzen Sie in Ihrem FTP-Programm die Rechte dieses Ordners auf 775 und laden Sie diese Seite neu. Immer noch nicht beschreibbar? Verwenden Sie 777.",
+  "hint_config": "Machen Sie diesen Ordner auf dieselbe Weise beschreibbar wie data/. Nach der Installation genügt wieder 755.",
   "chk_gd": "GD mit JPEG (Bildversionen auf dem Server)",
   "hint_gd": "Ohne GD erstellt die Weboberfläche die Web- und Vorschauversionen im Browser.",
   "chk_zip": "zip (Zip-Uploads und Importe)",
@@ -25,6 +25,7 @@
   "hint_upload": "Erhöhen Sie upload_max_filesize und post_max_size (bei den meisten Hostern erledigt das public/.user.ini).",
   "s2": "2. Einrichtungscode",
   "s2_text": "Wir haben einen Code in {file} auf Ihrem Server abgelegt. Öffnen Sie die Datei mit Ihrem FTP-Programm oder dem Dateimanager Ihres Hosters. So weisen Sie nach, dass Sie der Eigentümer sind.",
+  "s2_wait": "Sobald der Ordner data beschreibbar ist (Schritt 1), legen wir einen Code in {file} ab. Laden Sie diese Seite neu, nachdem Sie die Rechte geändert haben.",
   "code_label": "Einrichtungscode",
   "s3": "3. Webadresse",
   "url_label": "Adresse dieses Portals",
@@ -58,5 +59,6 @@
   "done_bg": "Hintergrundarbeiten",
   "done_bg_text": "Importe, Zip-Downloads und E-Mails laufen im Hintergrund. Legen Sie im Kundenmenü Ihres Hostings (Cronjobs) einen dieser Aufträge an, jede Minute oder alle 5 Minuten:",
   "done_bg_or": "oder, wenn Ihr Hoster nur eine Webadresse aufrufen kann:",
+  "done_bg_url_only": "Verwenden Sie bei diesem Hosting die Webadresse: Ein Cronjob läuft unter Ihrem FTP-Konto, und das darf die Dateien, die das Portal geschrieben hat, nicht öffnen. In den meisten Verwaltungsoberflächen tragen Sie sie als Cronjob mit URL ein, oder mit curl oder wget.",
   "done_bg_none": "Auch ohne Cronjob funktioniert das Portal: Es holt die Arbeit nach, sobald jemand es benutzt."
 }

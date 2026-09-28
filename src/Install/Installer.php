@@ -23,9 +23,37 @@ final class Installer
     private array $text = [];
     private string $lang = 'en';
 
-    public function __construct(private string $root, private Config $config)
+    /**
+     * @param ?bool $otherUser whether PHP runs as another user than the owner of the uploaded
+     *                         files; null = detect (see runsAsOtherUser)
+     */
+    public function __construct(private string $root, private Config $config, private ?bool $otherUser = null)
     {
         $this->useLanguage('en');
+    }
+
+    /**
+     * True on hosts where PHP runs as the web server's own user (Apache with mod_php) instead
+     * of as the FTP account that uploaded the files. There, files the portal writes belong to
+     * the web server: the FTP account can only read them when they are world-readable, and a
+     * cron job (which runs as the FTP account) cannot use the command line.
+     */
+    public function runsAsOtherUser(): bool
+    {
+        if ($this->otherUser !== null) {
+            return $this->otherUser;
+        }
+        if (!function_exists('posix_geteuid')) {
+            return false;
+        }
+        $owner = @fileowner($this->root . '/src');
+        return $owner !== false && $owner !== posix_geteuid();
+    }
+
+    private function dataWritable(): bool
+    {
+        $data = $this->config->dataDir();
+        return is_dir($data) ? is_writable($data) : is_dir(dirname($data)) && is_writable(dirname($data));
     }
 
     /** Chooses the installer's language (one of the 25; English for anything else). */
@@ -67,7 +95,6 @@ final class Installer
             };
         };
         $upload = min($ini('upload_max_filesize'), $ini('post_max_size') ?: PHP_INT_MAX);
-        $data = $this->config->dataDir();
         $ext = fn (string $name): string => $this->t('hint_ext', ['ext' => $name]);
         return [
             // @phpstan-ignore greaterOrEqual.alwaysTrue (checked at run time on the host)
@@ -75,7 +102,7 @@ final class Installer
             ['label' => $this->t('chk_pdo'), 'ok' => extension_loaded('pdo_sqlite') || extension_loaded('pdo_mysql'), 'required' => true, 'hint' => $ext('pdo_sqlite')],
             ['label' => $this->t('chk_ext', ['ext' => 'openssl']), 'ok' => extension_loaded('openssl'), 'required' => true, 'hint' => $ext('openssl')],
             ['label' => $this->t('chk_ext', ['ext' => 'mbstring']), 'ok' => extension_loaded('mbstring'), 'required' => true, 'hint' => $ext('mbstring')],
-            ['label' => $this->t('chk_folder', ['folder' => 'data/']), 'ok' => is_dir($data) ? is_writable($data) : is_writable(dirname($data)), 'required' => true, 'hint' => $this->t('hint_data')],
+            ['label' => $this->t('chk_folder', ['folder' => 'data/']), 'ok' => $this->dataWritable(), 'required' => true, 'hint' => $this->t('hint_data')],
             ['label' => $this->t('chk_folder', ['folder' => 'config/']), 'ok' => is_writable(dirname($this->config->configFile())), 'required' => true, 'hint' => $this->t('hint_config')],
             ['label' => $this->t('chk_gd'), 'ok' => \Obx\Node\Images\Renderer::available(), 'required' => false, 'hint' => $this->t('hint_gd')],
             ['label' => $this->t('chk_zip'), 'ok' => class_exists(\ZipArchive::class), 'required' => false, 'hint' => $this->t('hint_zip')],
@@ -98,7 +125,9 @@ final class Installer
         $code = substr($raw, 0, 4) . '-' . substr($raw, 4, 4) . '-' . substr($raw, 8, 4);
         @mkdir($this->config->dataDir(), 0770, true);
         @file_put_contents($file, "Open Brand Exchange setup code: " . $code . "\nEnter it in the installer and in the setup wizard. This file is deleted after setup.\n");
-        @chmod($file, 0600);
+        // Only the owner may read it, unless the owner is the web server and not the FTP account
+        // that has to open it: then it must be readable for others (the folder is never served).
+        @chmod($file, $this->runsAsOtherUser() ? 0644 : 0600);
         error_log('[obx NOTICE] Setup code: ' . $code . ' (also in data/SETUP-CODE.txt)');
         return $code;
     }
@@ -205,16 +234,23 @@ final class Installer
         if (@file_put_contents($target . '.tmp', $php) === false || !@rename($target . '.tmp', $target)) {
             return [[$this->t('err_config', ['file' => '<code>config/config.php</code>'])], null];
         }
-        @chmod($target, 0640);
+        // Private to the web server's user and group, except where that user is not the FTP
+        // account: then the owner could not open (or back up, or edit) their own settings.
+        @chmod($target, $this->runsAsOtherUser() ? 0644 : 0640);
         $cronUrl = $url . '/cron?key=' . (new \Obx\Node\Security\Crypto($values['secret_key']))->derive('cron', 32);
         $html = '<p class="ok">' . $e($this->t('done_ok')) . '</p>'
             . '<h2>' . $e($this->t('done_next')) . '</h2>'
             . '<p>' . $this->t('done_code', ['code' => '<strong class="code">' . $e($code) . '</strong>']) . '</p>'
-            . '<p><a class="button" href="' . $e($url) . '/">' . $e($this->t('done_button')) . '</a></p>'
+            // The code travels in the fragment: the wizard fills it in, and it never reaches a log.
+            . '<p><a class="button" href="' . $e($url) . '/setup#code=' . $e($code) . '">' . $e($this->t('done_button')) . '</a></p>'
             . '<h2>' . $e($this->t('done_bg')) . '</h2>'
             . '<p>' . $e($this->t('done_bg_text')) . '</p>'
-            . '<pre>php ' . $e($this->root) . '/bin/obx cron</pre>'
-            . '<p>' . $e($this->t('done_bg_or')) . '</p><pre>' . $e($cronUrl) . '</pre>'
+            . ($this->runsAsOtherUser()
+                // A cron job runs as the FTP account, which may not read the files the web
+                // server wrote (config.php): only the web address works here.
+                ? '<pre>' . $e($cronUrl) . '</pre><p>' . $e($this->t('done_bg_url_only')) . '</p>'
+                : '<pre>php ' . $e($this->root) . '/bin/obx cron</pre>'
+                    . '<p>' . $e($this->t('done_bg_or')) . '</p><pre>' . $e($cronUrl) . '</pre>')
             . '<p>' . $e($this->t('done_bg_none')) . '</p>';
         return [[], $this->page($this->t('title_installed'), $html)];
     }
@@ -250,7 +286,7 @@ final class Installer
         $html = ($err !== '' ? '<ul class="errors" role="alert">' . $err . '</ul>' : '')
             . '<h2>' . $e($this->t('s1')) . '</h2><ul class="checks">' . $checks . '</ul>'
             . '<form method="post" action="?lang=' . $e($this->lang) . '" autocomplete="off">'
-            . '<h2>' . $e($this->t('s2')) . '</h2><p>' . $this->t('s2_text', ['file' => '<code>data/SETUP-CODE.txt</code>']) . '</p>'
+            . '<h2>' . $e($this->t('s2')) . '</h2><p>' . $this->t($this->dataWritable() ? 's2_text' : 's2_wait', ['file' => '<code>data/SETUP-CODE.txt</code>']) . '</p>'
             . $field($this->t('code_label'), '<input name="setup_code" required value="' . $v('setup_code') . '" placeholder="ABCD-EFGH-JKLM" autocapitalize="characters">')
             . '<h2>' . $e($this->t('s3')) . '</h2>' . $field($this->t('url_label'), '<input name="public_url" type="url" required value="' . $v('public_url', $guess) . '">')
             . '<h2>' . $e($this->t('s4')) . '</h2>'

@@ -13,8 +13,8 @@
   "chk_pdo": "PDO con SQLite o MySQL",
   "hint_ext": "Attiva l'estensione PHP {ext} nel pannello del tuo hosting.",
   "chk_folder": "La cartella {folder} è scrivibile",
-  "hint_data": "Dai al server web i permessi di scrittura su questa cartella (permessi 775).",
-  "hint_config": "Dai al server web i permessi di scrittura su questa cartella per questo passaggio.",
+  "hint_data": "Nel programma FTP imposta i permessi di questa cartella a 775 e ricarica la pagina. Ancora non scrivibile? Usa 777.",
+  "hint_config": "Rendi scrivibile questa cartella nello stesso modo di data/. Dopo l'installazione basta di nuovo 755.",
   "chk_gd": "GD con JPEG (versioni delle immagini create sul server)",
   "hint_gd": "Senza GD l'interfaccia web crea le versioni web e le miniature nel browser.",
   "chk_zip": "zip (caricamenti e importazioni zip)",
@@ -25,6 +25,7 @@
   "hint_upload": "Aumenta upload_max_filesize e post_max_size (con la maggior parte degli hosting lo fa public/.user.ini).",
   "s2": "2. Codice di installazione",
   "s2_text": "Abbiamo scritto un codice in {file} sul tuo server. Aprilo con il tuo programma FTP o con il file manager del tuo hosting. Così dimostri di esserne il proprietario.",
+  "s2_wait": "Appena la cartella data è scrivibile (passo 1), scriviamo un codice in {file}. Ricarica la pagina dopo aver cambiato i permessi.",
   "code_label": "Codice di installazione",
   "s3": "3. Indirizzo web",
   "url_label": "Indirizzo di questa area",
@@ -58,5 +59,6 @@
   "done_bg": "Attività in background",
   "done_bg_text": "Importazioni, download zip ed e-mail vengono eseguiti in background. Aggiungi una di queste attività nel pannello del tuo hosting (cron job), ogni minuto o ogni 5 minuti:",
   "done_bg_or": "oppure, se il tuo hosting può solo richiamare un indirizzo web:",
+  "done_bg_url_only": "Con questo hosting usa l'indirizzo web: un cron job viene eseguito con il tuo account FTP, che non può aprire i file scritti dal portale. Nella maggior parte dei pannelli di controllo lo inserisci come cron job con un URL, oppure con curl o wget.",
   "done_bg_none": "Anche senza cron job l'area funziona: recupera il lavoro appena qualcuno la usa."
 }

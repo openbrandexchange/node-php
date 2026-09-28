@@ -13,8 +13,8 @@
   "chk_pdo": "PDO with SQLite or MySQL",
   "hint_ext": "Switch on the PHP extension {ext} in your hosting control panel.",
   "chk_folder": "The folder {folder} is writable",
-  "hint_data": "Give the web server write access to this folder (permission 775).",
-  "hint_config": "Give the web server write access to this folder for this step.",
+  "hint_data": "In your FTP program, set this folder's permissions to 775 and reload this page. Still not writable? Use 777.",
+  "hint_config": "Make this folder writable in the same way as data/. After installing, 755 is enough again.",
   "chk_gd": "GD with JPEG (image versions made on the server)",
   "hint_gd": "Without GD the web interface makes the web and thumbnail versions in the browser.",
   "chk_zip": "zip (zip uploads and imports)",
@@ -25,6 +25,7 @@
   "hint_upload": "Raise upload_max_filesize and post_max_size (public/.user.ini does this on most hosts).",
   "s2": "2. Setup code",
   "s2_text": "We wrote a code to {file} on your server. Open it with your FTP program or the file manager of your host. This proves you are the owner.",
+  "s2_wait": "As soon as the data folder is writable (step 1), we write a code to {file}. Reload this page after changing the permissions.",
   "code_label": "Setup code",
   "s3": "3. Web address",
   "url_label": "Address of this portal",
@@ -58,5 +59,6 @@
   "done_bg": "Background work",
   "done_bg_text": "Imports, zip downloads and e-mails run in the background. Add one of these in your hosting control panel (cron jobs), every minute or every 5 minutes:",
   "done_bg_or": "or, if your host can only call a web address:",
+  "done_bg_url_only": "On this hosting, use the web address: a cron job runs as your FTP account, which may not open the files the portal wrote. Most control panels let you enter it as a cron job with a URL, or with curl or wget.",
   "done_bg_none": "Without a cron job the portal still works: it catches up whenever someone uses it."
 }

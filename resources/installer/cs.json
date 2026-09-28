@@ -13,8 +13,8 @@
   "chk_pdo": "PDO se SQLite nebo MySQL",
   "hint_ext": "V ovládacím panelu hostingu zapněte rozšíření PHP {ext}.",
   "chk_folder": "Do složky {folder} lze zapisovat",
-  "hint_data": "Dejte webovému serveru právo zápisu do této složky (oprávnění 775).",
-  "hint_config": "Pro tento krok dejte webovému serveru právo zápisu do této složky.",
+  "hint_data": "V programu pro FTP nastavte oprávnění této složky na 775 a načtěte stránku znovu. Stále nelze zapisovat? Použijte 777.",
+  "hint_config": "Umožněte zápis do této složky stejně jako u data/. Po instalaci opět stačí 755.",
   "chk_gd": "GD s JPEG (verze obrázků vytvářené na serveru)",
   "hint_gd": "Bez GD vytváří webové rozhraní webové verze a náhledy v prohlížeči.",
   "chk_zip": "zip (nahrávání a importy zip)",
@@ -25,6 +25,7 @@
   "hint_upload": "Zvyšte upload_max_filesize a post_max_size (u většiny hostingů to zařídí public/.user.ini).",
   "s2": "2. Instalační kód",
   "s2_text": "Na váš server jsme zapsali kód do souboru {file}. Otevřete jej svým FTP programem nebo správcem souborů hostingu. Tím prokážete, že jste vlastník.",
+  "s2_wait": "Jakmile bude do složky data možné zapisovat (krok 1), zapíšeme kód do {file}. Po změně oprávnění načtěte stránku znovu.",
   "code_label": "Instalační kód",
   "s3": "3. Webová adresa",
   "url_label": "Adresa tohoto portálu",
@@ -58,5 +59,6 @@
   "done_bg": "Práce na pozadí",
   "done_bg_text": "Importy, stahování zip a e-maily běží na pozadí. Přidejte v ovládacím panelu hostingu (úlohy cron) jednu z těchto úloh, každou minutu nebo každých 5 minut:",
   "done_bg_or": "nebo, pokud hosting umí volat jen webovou adresu:",
+  "done_bg_url_only": "U tohoto hostingu použijte webovou adresu: úloha cron běží pod vaším FTP účtem, který nesmí otevřít soubory zapsané portálem. Ve většině ovládacích panelů ji zadáte jako úlohu cron s URL, nebo pomocí curl či wget.",
   "done_bg_none": "Portál funguje i bez úlohy cron: práci dožene, jakmile ho někdo použije."
 }

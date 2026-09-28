@@ -13,8 +13,8 @@
   "chk_pdo": "PDO so SQLite alebo MySQL",
   "hint_ext": "V ovládacom paneli hostingu zapnite rozšírenie PHP {ext}.",
   "chk_folder": "Do priečinka {folder} sa dá zapisovať",
-  "hint_data": "Dajte webovému serveru právo zápisu do tohto priečinka (oprávnenia 775).",
-  "hint_config": "Na tento krok dajte webovému serveru právo zápisu do tohto priečinka.",
+  "hint_data": "V programe FTP nastavte oprávnenia tohto priečinka na 775 a znova načítajte stránku. Stále sa nedá zapisovať? Použite 777.",
+  "hint_config": "Umožnite zápis do tohto priečinka rovnako ako do data/. Po inštalácii opäť stačí 755.",
   "chk_gd": "GD s JPEG (verzie obrázkov vytvárané na serveri)",
   "hint_gd": "Bez GD vytvára webové rozhranie webové verzie a náhľady v prehliadači.",
   "chk_zip": "zip (nahrávanie a importy zip)",
@@ -25,6 +25,7 @@
   "hint_upload": "Zvýšte upload_max_filesize a post_max_size (pri väčšine hostingov to zariadi public/.user.ini).",
   "s2": "2. Inštalačný kód",
   "s2_text": "Na váš server sme zapísali kód do súboru {file}. Otvorte ho svojím FTP programom alebo správcom súborov hostingu. Tým preukážete, že ste vlastník.",
+  "s2_wait": "Hneď ako bude možné zapisovať do priečinka data (krok 1), zapíšeme kód do {file}. Po zmene oprávnení znova načítajte stránku.",
   "code_label": "Inštalačný kód",
   "s3": "3. Webová adresa",
   "url_label": "Adresa tohto portálu",
@@ -58,5 +59,6 @@
   "done_bg": "Práca na pozadí",
   "done_bg_text": "Importy, sťahovanie zip a e-maily bežia na pozadí. Pridajte v ovládacom paneli hostingu (úlohy cron) jednu z týchto úloh, každú minútu alebo každých 5 minút:",
   "done_bg_or": "alebo, ak hosting dokáže volať len webovú adresu:",
+  "done_bg_url_only": "Pri tomto hostingu použite webovú adresu: úloha cron beží pod vaším FTP účtom, ktorý nesmie otvoriť súbory zapísané portálom. Vo väčšine ovládacích panelov ju zadáte ako úlohu cron s URL alebo cez curl či wget.",
   "done_bg_none": "Portál funguje aj bez úlohy cron: prácu dobehne, keď ho niekto použije."
 }

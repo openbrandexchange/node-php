@@ -13,8 +13,8 @@
   "chk_pdo": "PDO le SQLite nó MySQL",
   "hint_ext": "Cas air an síneadh PHP {ext} i bpainéal rialaithe d'óstála.",
   "chk_folder": "Is féidir scríobh san fhillteán {folder}",
-  "hint_data": "Tabhair cead scríofa don fhreastalaí gréasáin san fhillteán seo (ceadanna 775).",
-  "hint_config": "Don chéim seo, tabhair cead scríofa don fhreastalaí gréasáin san fhillteán seo.",
+  "hint_data": "I do chlár FTP, socraigh ceadanna an fhillteáin seo go 775 agus athlódáil an leathanach seo. Fós gan cead scríofa? Úsáid 777.",
+  "hint_config": "Tabhair cead scríofa don fhillteán seo ar an mbealach céanna le data/. Tar éis na suiteála is leor 755 arís.",
   "chk_gd": "GD le JPEG (leaganacha íomhá déanta ar an bhfreastalaí)",
   "hint_gd": "Gan GD, déanann an comhéadan gréasáin na leaganacha gréasáin agus mionsamhla sa bhrabhsálaí.",
   "chk_zip": "zip (uaslódálacha agus iompórtálacha zip)",
@@ -25,6 +25,7 @@
   "hint_upload": "Méadaigh upload_max_filesize agus post_max_size (déanann public/.user.ini é sin ar fhormhór na n-óstach).",
   "s2": "2. Cód suiteála",
   "s2_text": "Scríobhamar cód sa chomhad {file} ar do fhreastalaí. Oscail é le do ríomhchlár FTP nó le bainisteoir comhad d'óstála. Cruthaíonn sé sin gur tusa an t-úinéir.",
+  "s2_wait": "Chomh luath is atá cead scríofa ar an bhfillteán data (céim 1), scríobhaimid cód i {file}. Athlódáil an leathanach seo tar éis duit na ceadanna a athrú.",
   "code_label": "Cód suiteála",
   "s3": "3. Seoladh gréasáin",
   "url_label": "Seoladh na tairsí seo",
@@ -58,5 +59,6 @@
   "done_bg": "Obair sa chúlra",
   "done_bg_text": "Ritheann iompórtálacha, íoslódálacha zip agus ríomhphoist sa chúlra. Cuir ceann díobh seo le painéal rialaithe d'óstála (jabanna cron), gach nóiméad nó gach 5 nóiméad:",
   "done_bg_or": "nó, mura féidir le d'óstach ach seoladh gréasáin a ghlaoch:",
+  "done_bg_url_only": "Ar an óstáil seo, úsáid an seoladh gréasáin: ritheann jab cron faoi do chuntas FTP, nach bhfuil cead aige na comhaid a scríobh an tairseach a oscailt. I bhformhór na bpainéal rialaithe cuireann tú isteach é mar jab cron le URL, nó le curl nó wget.",
   "done_bg_none": "Oibríonn an tairseach gan jab cron freisin: déanann sí an obair a luaithe a úsáideann duine í."
 }

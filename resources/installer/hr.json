@@ -13,8 +13,8 @@
   "chk_pdo": "PDO sa SQLite ili MySQL",
   "hint_ext": "U upravljačkoj ploči hostinga uključite PHP proširenje {ext}.",
   "chk_folder": "U mapu {folder} može se pisati",
-  "hint_data": "Dajte web-poslužitelju pravo pisanja u ovu mapu (dozvole 775).",
-  "hint_config": "Za ovaj korak dajte web-poslužitelju pravo pisanja u ovu mapu.",
+  "hint_data": "U FTP programu postavite dopuštenja ove mape na 775 i ponovno učitajte stranicu. I dalje nije moguće pisati? Upotrijebite 777.",
+  "hint_config": "Omogućite pisanje u ovu mapu na isti način kao za data/. Nakon instalacije ponovno je dovoljno 755.",
   "chk_gd": "GD s JPEG-om (verzije slika izrađene na poslužitelju)",
   "hint_gd": "Bez GD-a web-sučelje izrađuje web-verzije i sličice u pregledniku.",
   "chk_zip": "zip (prijenos i uvoz zip datoteka)",
@@ -25,6 +25,7 @@
   "hint_upload": "Povećajte upload_max_filesize i post_max_size (kod većine hostinga to radi public/.user.ini).",
   "s2": "2. Instalacijski kod",
   "s2_text": "Na vaš poslužitelj zapisali smo kod u datoteku {file}. Otvorite je FTP programom ili upraviteljem datoteka hostinga. Time dokazujete da ste vlasnik.",
+  "s2_wait": "Čim bude moguće pisati u mapu data (korak 1), zapisat ćemo kôd u {file}. Ponovno učitajte stranicu nakon promjene dopuštenja.",
   "code_label": "Instalacijski kod",
   "s3": "3. Web-adresa",
   "url_label": "Adresa ovog portala",
@@ -58,5 +59,6 @@
   "done_bg": "Rad u pozadini",
   "done_bg_text": "Uvozi, preuzimanja zip datoteka i e-pošta rade u pozadini. U upravljačkoj ploči hostinga (cron zadaci) dodajte jedan od ovih zadataka, svake minute ili svakih 5 minuta:",
   "done_bg_or": "ili, ako hosting može pozvati samo web-adresu:",
+  "done_bg_url_only": "Na ovom hostingu upotrijebite web-adresu: cron zadatak radi pod vašim FTP računom, koji ne smije otvoriti datoteke koje je portal zapisao. U većini upravljačkih ploča unosite je kao cron zadatak s URL-om ili s curl ili wget.",
   "done_bg_none": "Portal radi i bez cron zadatka: posao nadoknadi čim ga netko koristi."
 }

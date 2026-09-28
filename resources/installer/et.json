@@ -13,8 +13,8 @@
   "chk_pdo": "PDO koos SQLite'i või MySQL-iga",
   "hint_ext": "Lülitage majutuse halduspaneelis sisse PHP laiendus {ext}.",
   "chk_folder": "Kausta {folder} saab kirjutada",
-  "hint_data": "Andke veebiserverile sellesse kausta kirjutusõigus (õigused 775).",
-  "hint_config": "Andke veebiserverile selle sammu ajaks sellesse kausta kirjutusõigus.",
+  "hint_data": "Määrake FTP-programmis selle kausta õigusteks 775 ja laadige leht uuesti. Ikka pole kirjutatav? Kasutage 777.",
+  "hint_config": "Muutke see kaust kirjutatavaks samamoodi nagu data/. Pärast paigaldamist piisab jälle 755-st.",
   "chk_gd": "GD koos JPEG-ga (pildiversioonid tehakse serveris)",
   "hint_gd": "Ilma GD-ta teeb veebiliides veebi- ja pisipildiversioonid brauseris.",
   "chk_zip": "zip (zip-failide üleslaadimine ja import)",
@@ -25,6 +25,7 @@
   "hint_upload": "Suurendage upload_max_filesize ja post_max_size väärtusi (enamiku majutuste puhul teeb seda public/.user.ini).",
   "s2": "2. Seadistuskood",
   "s2_text": "Kirjutasime teie serverisse faili {file} koodi. Avage see FTP-programmi või majutuse failihalduriga. Nii tõendate, et olete omanik.",
+  "s2_wait": "Kui kaust data on kirjutatav (samm 1), kirjutame koodi faili {file}. Laadige leht pärast õiguste muutmist uuesti.",
   "code_label": "Seadistuskood",
   "s3": "3. Veebiaadress",
   "url_label": "Selle portaali aadress",
@@ -58,5 +59,6 @@
   "done_bg": "Taustatööd",
   "done_bg_text": "Impordid, zip-allalaadimised ja e-kirjad töödeldakse taustal. Lisage majutuse halduspaneelis (cron-tööd) üks neist töödest, iga minuti või iga 5 minuti järel:",
   "done_bg_or": "või, kui teie majutus saab kutsuda ainult veebiaadressi:",
+  "done_bg_url_only": "Kasutage selle majutuse puhul veebiaadressi: cron-töö töötab teie FTP-konto all, mis ei tohi avada portaali kirjutatud faile. Enamikus juhtpaneelides sisestate selle cron-tööna URL-iga või curli või wgetiga.",
   "done_bg_none": "Portaal töötab ka ilma cron-tööta: see teeb töö järele niipea, kui keegi seda kasutab."
 }

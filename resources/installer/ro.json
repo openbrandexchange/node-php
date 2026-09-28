@@ -13,8 +13,8 @@
   "chk_pdo": "PDO cu SQLite sau MySQL",
   "hint_ext": "Activați extensia PHP {ext} din panoul de control al găzduirii.",
   "chk_folder": "Dosarul {folder} permite scrierea",
-  "hint_data": "Dați serverului web drept de scriere în acest dosar (permisiuni 775).",
-  "hint_config": "Pentru acest pas, dați serverului web drept de scriere în acest dosar.",
+  "hint_data": "În programul FTP, setați permisiunile acestui dosar la 775 și reîncărcați pagina. Tot nu se poate scrie? Folosiți 777.",
+  "hint_config": "Permiteți scrierea în acest dosar la fel ca pentru data/. După instalare, 755 este din nou suficient.",
   "chk_gd": "GD cu JPEG (versiunile imaginilor create pe server)",
   "hint_gd": "Fără GD, interfața web creează versiunile web și miniaturile în browser.",
   "chk_zip": "zip (încărcări și importuri zip)",
@@ -25,6 +25,7 @@
   "hint_upload": "Măriți upload_max_filesize și post_max_size (la majoritatea găzduirilor se ocupă de asta public/.user.ini).",
   "s2": "2. Cod de instalare",
   "s2_text": "Am scris un cod în {file} pe serverul dvs. Deschideți-l cu programul FTP sau cu managerul de fișiere al găzduirii. Astfel dovediți că sunteți proprietarul.",
+  "s2_wait": "Imediat ce se poate scrie în dosarul data (pasul 1), scriem un cod în {file}. Reîncărcați pagina după ce schimbați permisiunile.",
   "code_label": "Cod de instalare",
   "s3": "3. Adresă web",
   "url_label": "Adresa acestui portal",
@@ -58,5 +59,6 @@
   "done_bg": "Activitate în fundal",
   "done_bg_text": "Importurile, descărcările zip și e-mailurile rulează în fundal. Adăugați una dintre aceste sarcini în panoul de control al găzduirii (sarcini cron), în fiecare minut sau la fiecare 5 minute:",
   "done_bg_or": "sau, dacă găzduirea poate apela doar o adresă web:",
+  "done_bg_url_only": "La această găzduire, folosiți adresa web: o sarcină cron rulează cu contul dvs. FTP, care nu poate deschide fișierele scrise de portal. În majoritatea panourilor de control o introduceți ca sarcină cron cu un URL sau cu curl ori wget.",
   "done_bg_none": "Portalul funcționează și fără sarcină cron: recuperează munca de îndată ce cineva îl folosește."
 }

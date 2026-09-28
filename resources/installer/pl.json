@@ -13,8 +13,8 @@
   "chk_pdo": "PDO z SQLite lub MySQL",
   "hint_ext": "Włącz rozszerzenie PHP {ext} w panelu swojego hostingu.",
   "chk_folder": "Folder {folder} jest zapisywalny",
-  "hint_data": "Nadaj serwerowi WWW prawo zapisu do tego folderu (uprawnienia 775).",
-  "hint_config": "Na czas tego kroku nadaj serwerowi WWW prawo zapisu do tego folderu.",
+  "hint_data": "W programie FTP ustaw uprawnienia tego folderu na 775 i odśwież stronę. Nadal brak zapisu? Użyj 777.",
+  "hint_config": "Umożliw zapis w tym folderze tak samo jak w data/. Po instalacji znów wystarczy 755.",
   "chk_gd": "GD z JPEG (wersje zdjęć tworzone na serwerze)",
   "hint_gd": "Bez GD interfejs WWW tworzy wersje internetowe i miniatury w przeglądarce.",
   "chk_zip": "zip (przesyłanie i import plików zip)",
@@ -25,6 +25,7 @@
   "hint_upload": "Zwiększ upload_max_filesize i post_max_size (u większości dostawców robi to public/.user.ini).",
   "s2": "2. Kod instalacyjny",
   "s2_text": "Zapisaliśmy kod w pliku {file} na Twoim serwerze. Otwórz go programem FTP lub menedżerem plików hostingu. W ten sposób potwierdzasz, że jesteś właścicielem.",
+  "s2_wait": "Gdy tylko folder data będzie zapisywalny (krok 1), zapiszemy kod w {file}. Po zmianie uprawnień odśwież stronę.",
   "code_label": "Kod instalacyjny",
   "s3": "3. Adres internetowy",
   "url_label": "Adres tego portalu",
@@ -58,5 +59,6 @@
   "done_bg": "Praca w tle",
   "done_bg_text": "Importy, pobieranie plików zip i e-maile działają w tle. Dodaj jedno z tych zadań w panelu swojego hostingu (zadania cron), co minutę lub co 5 minut:",
   "done_bg_or": "albo, jeśli Twój hosting może tylko wywołać adres internetowy:",
+  "done_bg_url_only": "Na tym hostingu użyj adresu internetowego: zadanie cron działa na Twoim koncie FTP, które nie może otworzyć plików zapisanych przez portal. W większości paneli wpisujesz go jako zadanie cron z adresem URL albo z curl lub wget.",
   "done_bg_none": "Bez zadania cron portal też działa: nadrabia pracę, gdy tylko ktoś z niego korzysta."
 }

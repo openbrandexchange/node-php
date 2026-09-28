@@ -13,8 +13,8 @@
   "chk_pdo": "PDO ja SQLite tai MySQL",
   "hint_ext": "Ottakaa PHP-laajennus {ext} käyttöön webhotellin hallintapaneelissa.",
   "chk_folder": "Kansioon {folder} voi kirjoittaa",
-  "hint_data": "Antakaa verkkopalvelimelle kirjoitusoikeus tähän kansioon (oikeudet 775).",
-  "hint_config": "Antakaa verkkopalvelimelle kirjoitusoikeus tähän kansioon tämän vaiheen ajaksi.",
+  "hint_data": "Aseta FTP-ohjelmassa tämän kansion oikeuksiksi 775 ja lataa sivu uudelleen. Eikö kirjoittaminen vieläkään onnistu? Käytä arvoa 777.",
+  "hint_config": "Salli kirjoittaminen tähän kansioon samalla tavalla kuin data/-kansioon. Asennuksen jälkeen 755 riittää taas.",
   "chk_gd": "GD ja JPEG (kuvaversiot tehdään palvelimella)",
   "hint_gd": "Ilman GD:tä verkkokäyttöliittymä tekee verkko- ja pikkukuvaversiot selaimessa.",
   "chk_zip": "zip (zip-lataukset ja tuonnit)",
@@ -25,6 +25,7 @@
   "hint_upload": "Nostakaa asetuksia upload_max_filesize ja post_max_size (useimmissa webhotelleissa public/.user.ini hoitaa tämän).",
   "s2": "2. Asennuskoodi",
   "s2_text": "Kirjoitimme koodin tiedostoon {file} palvelimellanne. Avatkaa se FTP-ohjelmalla tai webhotellin tiedostonhallinnalla. Näin osoitatte olevanne omistaja.",
+  "s2_wait": "Heti kun data-kansioon voi kirjoittaa (vaihe 1), kirjoitamme koodin tiedostoon {file}. Lataa sivu uudelleen, kun olet muuttanut oikeudet.",
   "code_label": "Asennuskoodi",
   "s3": "3. Verkko-osoite",
   "url_label": "Portaalin osoite",
@@ -58,5 +59,6 @@
   "done_bg": "Taustatyöt",
   "done_bg_text": "Tuonnit, zip-lataukset ja sähköpostit käsitellään taustalla. Lisätkää jokin näistä ajastetuista tehtävistä webhotellin hallintapaneeliin (cron), minuutin tai 5 minuutin välein:",
   "done_bg_or": "tai, jos webhotelli voi kutsua vain verkko-osoitetta:",
+  "done_bg_url_only": "Käytä tässä palvelussa verkko-osoitetta: cron-ajo toimii FTP-tililläsi, joka ei saa avata portaalin kirjoittamia tiedostoja. Useimmissa hallintapaneeleissa se syötetään cron-ajona URL-osoitteella tai curlilla tai wgetillä.",
   "done_bg_none": "Portaali toimii myös ilman cron-tehtävää: se hoitaa rästit heti, kun joku käyttää sitä."
 }

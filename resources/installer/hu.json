@@ -13,8 +13,8 @@
   "chk_pdo": "PDO SQLite-tal vagy MySQL-lel",
   "hint_ext": "Kapcsolja be a(z) {ext} PHP-bővítményt a tárhely vezérlőpultjában.",
   "chk_folder": "A(z) {folder} mappa írható",
-  "hint_data": "Adjon írási jogot a webszervernek ehhez a mappához (775-ös jogosultság).",
-  "hint_config": "Erre a lépésre adjon írási jogot a webszervernek ehhez a mappához.",
+  "hint_data": "Az FTP-programban állítsa a mappa jogosultságát 775-re, majd töltse újra az oldalt. Még mindig nem írható? Használja a 777-et.",
+  "hint_config": "Tegye írhatóvá ezt a mappát ugyanúgy, mint a data/ mappát. A telepítés után ismét elég a 755.",
   "chk_gd": "GD JPEG-támogatással (a képváltozatok a szerveren készülnek)",
   "hint_gd": "GD nélkül a webes felület a böngészőben készíti el a webes és bélyegkép-változatokat.",
   "chk_zip": "zip (zip-feltöltés és -importálás)",
@@ -25,6 +25,7 @@
   "hint_upload": "Növelje az upload_max_filesize és post_max_size értékét (a legtöbb tárhelyen ezt a public/.user.ini elvégzi).",
   "s2": "2. Telepítési kód",
   "s2_text": "Egy kódot írtunk a szerverén lévő {file} fájlba. Nyissa meg FTP-programmal vagy a tárhely fájlkezelőjével. Ezzel igazolja, hogy Ön a tulajdonos.",
+  "s2_wait": "Amint a data mappa írható (1. lépés), kódot írunk a(z) {file} fájlba. A jogosultságok módosítása után töltse újra az oldalt.",
   "code_label": "Telepítési kód",
   "s3": "3. Webcím",
   "url_label": "A portál címe",
@@ -58,5 +59,6 @@
   "done_bg": "Háttérfeladatok",
   "done_bg_text": "Az importok, a zip-letöltések és az e-mailek a háttérben futnak. Vegye fel az alábbiak egyikét a tárhely vezérlőpultjában (cron feladatok), percenként vagy 5 percenként:",
   "done_bg_or": "vagy, ha a tárhely csak webcímet tud meghívni:",
+  "done_bg_url_only": "Ennél a tárhelynél a webcímet használja: a cron-feladat az FTP-fiókjával fut, amely nem nyithatja meg a portál által írt fájlokat. A legtöbb vezérlőpulton URL-es cron-feladatként, vagy curl-lel vagy wgettel adhatja meg.",
   "done_bg_none": "Cron feladat nélkül is működik a portál: pótolja a munkát, amint valaki használja."
 }

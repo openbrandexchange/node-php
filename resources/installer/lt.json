@@ -13,8 +13,8 @@
   "chk_pdo": "PDO su SQLite arba MySQL",
   "hint_ext": "Talpinimo valdymo skydelyje įjunkite PHP plėtinį {ext}.",
   "chk_folder": "Į aplanką {folder} galima rašyti",
-  "hint_data": "Suteikite žiniatinklio serveriui teisę rašyti į šį aplanką (teisės 775).",
-  "hint_config": "Šiam žingsniui suteikite žiniatinklio serveriui teisę rašyti į šį aplanką.",
+  "hint_data": "FTP programoje nustatykite šio aplanko teises į 775 ir iš naujo įkelkite puslapį. Vis dar negalima rašyti? Naudokite 777.",
+  "hint_config": "Leiskite rašyti į šį aplanką taip pat kaip į data/. Po įdiegimo vėl pakanka 755.",
   "chk_gd": "GD su JPEG (vaizdų versijos kuriamos serveryje)",
   "hint_gd": "Be GD žiniatinklio sąsaja internetines ir miniatiūrų versijas sukuria naršyklėje.",
   "chk_zip": "zip (zip failų įkėlimas ir importas)",
@@ -25,6 +25,7 @@
   "hint_upload": "Padidinkite upload_max_filesize ir post_max_size (daugumoje talpinimo paslaugų tai padaro public/.user.ini).",
   "s2": "2. Diegimo kodas",
   "s2_text": "Jūsų serveryje į failą {file} įrašėme kodą. Atidarykite jį FTP programa arba talpinimo failų tvarkykle. Taip įrodysite, kad esate savininkas.",
+  "s2_wait": "Kai tik į aplanką data bus galima rašyti (1 žingsnis), įrašysime kodą į {file}. Pakeitę teises, iš naujo įkelkite puslapį.",
   "code_label": "Diegimo kodas",
   "s3": "3. Žiniatinklio adresas",
   "url_label": "Šio portalo adresas",
@@ -58,5 +59,6 @@
   "done_bg": "Darbas fone",
   "done_bg_text": "Importai, zip atsisiuntimai ir el. laiškai vykdomi fone. Talpinimo valdymo skydelyje (cron užduotys) pridėkite vieną iš šių užduočių, kas minutę arba kas 5 minutes:",
   "done_bg_or": "arba, jei talpinimo paslauga gali iškviesti tik žiniatinklio adresą:",
+  "done_bg_url_only": "Šiame prieglobos plane naudokite žiniatinklio adresą: cron užduotis vykdoma jūsų FTP paskyra, kuri negali atidaryti portalo įrašytų failų. Daugelyje valdymo skydelių jį įvedate kaip cron užduotį su URL arba su curl ar wget.",
   "done_bg_none": "Portalas veikia ir be cron užduoties: darbus atlieka, kai tik kas nors juo pasinaudoja."
 }
