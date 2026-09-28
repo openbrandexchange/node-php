@@ -116,17 +116,23 @@ final class Downloads
         $files = [];
         foreach ($assets as $a) {
             $f = $this->file($a, $rendition);
-            $files[] = [($folders ? Str::safeFilename((string) $a['style_number']) . '/' : '') . $f['name'], $f['path']];
+            $files[] = [($folders ? Str::safeFilename((string) $a['style_number']) . '/' : '') . $f['name'], $f['path'], $a];
         }
         $res = new \Obx\Node\Http\Response(200);
         $res->header('Content-Type', 'application/zip');
         $res->header('Content-Disposition', Str::contentDisposition('attachment', $filename));
         $res->header('Cache-Control', 'private, no-store');
-        $res->stream = static function () use ($files, $extra): void {
+        $res->stream = function () use ($files, $extra): void {
             $out = fopen('php://output', 'wb');
             $zip = new ZipWriter($out);
-            foreach ($files as [$name, $path]) {
-                $zip->addFile($zip->uniqueName($name), $path);
+            $entries = [];
+            foreach ($files as [$name, $path, $a]) {
+                $unique = $zip->uniqueName($name);
+                $zip->addFile($unique, $path);
+                $entries[] = [$unique, $a];
+            }
+            if ($entries !== []) {
+                $zip->addString('assets.csv', $this->assetsCsv($entries));
             }
             if ($extra !== null) {
                 $extra($zip);
@@ -135,6 +141,61 @@ final class Downloads
             fclose($out);
         };
         return $res;
+    }
+
+    /**
+     * The assets.csv of a portal download (import-format.md §2.3): one row per image in the zip
+     * with its effective rights, embargo and AI provenance in the import format's columns, so they
+     * travel with the files. Cells are formula-escaped like the article data CSV.
+     *
+     * @param list<array{0: string, 1: array<string, mixed>}> $entries name in the zip, asset row
+     */
+    public function assetsCsv(array $entries): string
+    {
+        $langs = [];
+        $reps = [];
+        foreach ($entries as [$name, $a]) {
+            $rep = Json::decode((string) $a['rep'], []);
+            foreach (array_keys((array) ($rep['alt_text'] ?? [])) as $l) {
+                $langs[(string) $l] = true;
+            }
+            $reps[] = [$name, $rep, (string) $a['style_number']];
+        }
+        ksort($langs, SORT_STRING);
+        $langs = array_keys($langs);
+        $header = ['file', 'style_number', 'color_code', 'position', 'role', 'view'];
+        foreach ($langs as $l) {
+            $header[] = 'alt_text:' . $l;
+        }
+        array_push($header, 'license', 'license_text', 'channels', 'territories', 'embargo_until', 'expires_at', 'credit', 'model_release', 'ai_generated', 'ai_edited', 'source', 'c2pa', 'generator');
+        $bool = static fn (mixed $b): string => $b === null ? '' : ((bool) $b ? 'true' : 'false');
+        $out = Csv::line($header, ',');
+        foreach ($reps as [$name, $rep, $style]) {
+            $r = (array) ($rep['rights'] ?? []);
+            $p = (array) ($rep['provenance'] ?? []);
+            $cells = [basename($name), $style, (string) ($rep['color_code'] ?? ''), (string) ($rep['position'] ?? ''), (string) ($rep['role'] ?? ''), (string) ($rep['view'] ?? '')];
+            foreach ($langs as $l) {
+                $cells[] = (string) ($rep['alt_text'][$l] ?? '');
+            }
+            array_push(
+                $cells,
+                (string) ($r['license'] ?? ''),
+                (string) ($r['license_text'] ?? ''),
+                implode('|', (array) ($r['channels'] ?? [])),
+                implode('|', (array) ($r['territories'] ?? [])),
+                (string) ($r['embargo_until'] ?? ''),
+                (string) ($r['expires_at'] ?? ''),
+                (string) ($r['credit'] ?? ''),
+                $bool($r['model_release'] ?? null),
+                $bool($p['ai_generated'] ?? false),
+                $bool($p['ai_edited'] ?? false),
+                (string) ($p['source'] ?? ''),
+                (string) ($p['c2pa'] ?? ''),
+                (string) ($p['generator'] ?? '')
+            );
+            $out .= Csv::line($cells, ',');
+        }
+        return $out;
     }
 
     // ================================================================ CSV
@@ -360,6 +421,7 @@ final class Downloads
         $fh = fopen($tmp, 'wb');
         $zip = new ZipWriter($fh);
         $files = 0;
+        $entries = [];
         foreach (array_chunk($productIds, 50) as $n => $chunk) {
             foreach ($this->assetsOf($chunk, $v) as $a) {
                 try {
@@ -367,11 +429,16 @@ final class Downloads
                 } catch (ApiError) {
                     continue;
                 }
-                $zip->addFile($zip->uniqueName(Str::safeFilename((string) $a['style_number']) . '/' . $f['name']), $f['path']);
+                $unique = $zip->uniqueName(Str::safeFilename((string) $a['style_number']) . '/' . $f['name']);
+                $zip->addFile($unique, $f['path']);
+                $entries[] = [$unique, $a];
                 $files++;
             }
             $this->app->db->update('obx_download_jobs', ['progress_done' => min(count($productIds), ($n + 1) * 50)], ['id' => $id]);
             $this->app->jobs->progress((string) $job['id'], min(count($productIds), ($n + 1) * 50), count($productIds));
+        }
+        if ($entries !== []) {
+            $zip->addString('assets.csv', $this->assetsCsv($entries));
         }
         if ((int) $d['include_csv'] === 1 && ($v->preview || $this->app->settings->get('portal', 'allow_article_data_export'))) {
             $zip->addString('data.csv', $this->csv($productIds, $v, ','));

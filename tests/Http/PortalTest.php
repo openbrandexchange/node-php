@@ -48,6 +48,35 @@ final class PortalTest extends NodeTestCase
         return $names;
     }
 
+    /** import-format.md §2.3: the zip of a product carries its images' rights, embargo and AI provenance. */
+    public function testAProductZipCarriesTheEmbargoInAssetsCsv(): void
+    {
+        $this->retailerUser('r1', ['name' => 'Shop One']);
+        $id = (string) $this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'KO-1002'");
+        $zip = $this->http('GET', '/admin/api/portal/products/' . $id . '/download.zip', ['browser' => 'r1', 'query' => ['variant' => 'web']]);
+        $this->assertSame(200, $zip->status);
+        $f = $this->dir . '/p-' . bin2hex(random_bytes(3)) . '.zip';
+        file_put_contents($f, $zip->content());
+        $z = new \ZipArchive();
+        $this->assertTrue($z->open($f) === true);
+        $csv = (string) $z->getFromName('assets.csv');
+        $images = $z->numFiles - 1;
+        $z->close();
+        $lines = array_map(static fn ($l) => str_getcsv($l, ',', '"', ''), explode("\r\n", trim($csv)));
+        $head = array_flip($lines[0]);
+        $this->assertCount($images + 1, $lines, 'one row per image');
+        $blk = null;
+        foreach (array_slice($lines, 1) as $l) {
+            if (str_starts_with($l[$head['file']], 'KO-1002_BLK_2_')) {
+                $blk = $l;
+            }
+        }
+        $this->assertNotNull($blk, 'KO-1002_BLK_2 has a row');
+        $this->assertStringStartsWith('2030-01-01', $blk[$head['embargo_until']]);
+        $this->assertSame('Photo: Kestrel Studio', $blk[$head['credit']]);
+        $this->assertSame('false', $blk[$head['ai_generated']]);
+    }
+
     public function testBrowseFilterDetailAndFacets(): void
     {
         $this->retailerUser('r1', ['name' => 'Shop One']);
@@ -101,7 +130,8 @@ final class PortalTest extends NodeTestCase
         sort($entries);
         $this->assertContains('KO-1001/KO-1001_NVY_1_front_web.jpg', $entries);
         $this->assertContains('KT-2002/KT-2002_YLW_1_front_web.jpg', $entries);
-        $this->assertCount(13, $entries);
+        $this->assertContains('assets.csv', $entries, 'the rights, embargo and AI provenance travel with the files');
+        $this->assertCount(13 + 1, $entries);
         $one = $this->http('GET', '/admin/api/portal/products/' . $ids[0] . '/download.zip', ['browser' => 'r1']);
         $origEntries = $this->zipEntries($one->content());
         $this->assertContains('KO-1001_NVY_1_front.png', $origEntries);
@@ -138,6 +168,7 @@ final class PortalTest extends NodeTestCase
         $file = $this->http('GET', '/admin/api/portal/download-jobs/' . $job['id'] . '/file', ['browser' => 'r1']);
         $entries = $this->zipEntries($file->content());
         $this->assertContains('data.csv', $entries);
+        $this->assertContains('assets.csv', $entries);
         $this->assertContains('KO-1002/KO-1002_OLV_1_front_square.jpg', $entries);
         $mail = end($this->app->mailer->sent);
         $this->assertSame('r1@shop.example', $mail['to']);
