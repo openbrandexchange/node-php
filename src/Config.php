@@ -131,6 +131,10 @@ final class Config
         if ($flag !== false) {
             $out['s3_path_style'] = in_array(strtolower($flag), ['1', 'true', 'yes'], true);
         }
+        $factor = getenv('OBX_RATE_LIMIT_FACTOR');
+        if ($factor !== false && is_numeric($factor) && (float) $factor > 0) {
+            $out['rate_limit_factor'] = (float) $factor;
+        }
         foreach (['max_upload_bytes', 'smtp_port'] as $int) {
             if (isset($out[$int])) {
                 $out[$int] = (int) $out[$int];

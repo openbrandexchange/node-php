@@ -128,6 +128,7 @@ variable (Docker, Cloud Run), which wins over the file.
 | `OBX_MAIL_TRANSPORT` (`mail`, `smtp`, `none`), `OBX_MAIL_FROM`, `OBX_SMTP_HOST`, `OBX_SMTP_PORT`, `OBX_SMTP_USER`, `OBX_SMTP_PASSWORD`, `OBX_SMTP_ENCRYPTION` (`tls`, `ssl`, `none`) | e-mail | PHP `mail()`, off without a sender |
 | `OBX_RENDITIONS` | `auto`, `server` or `client` (who makes web/square/thumb) | `auto` (server when GD is available) |
 | `OBX_MAX_UPLOAD_BYTES` | largest single upload | 100 MB |
+| `OBX_RATE_LIMIT_FACTOR` | multiplies all rate limits (e.g. `0.01` to test 429 handling) | `1` |
 | `OBX_ALLOW_PRIVATE_URLS` | `true` only for local development: allow imports and webhooks to private addresses and plain http | `false` |
 | `OBX_WORKER` (Docker) | `0` disables the in-container background worker (Cloud Run uses Cloud Scheduler) | `1` |
 | `PORT` (Docker) | listen port | `8080` |

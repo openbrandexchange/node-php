@@ -15,7 +15,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && a2enmod rewrite headers \
  && sed -ri 's#/var/www/html#/var/www/html/public#g' /etc/apache2/sites-available/000-default.conf \
- && printf '<Directory /var/www/html/public>\n  AllowOverride All\n  Require all granted\n</Directory>\nServerTokens Prod\nServerSignature Off\n' > /etc/apache2/conf-available/obx.conf \
+ && printf '<Directory /var/www/html/public>\n  AllowOverride All\n  Require all granted\n</Directory>\nServerName localhost\nServerTokens Prod\nServerSignature Off\n# No query strings in the access log (signed links, cron key).\nLogFormat "%%h %%l %%u %%t \\"%%m %%U %%H\\" %%>s %%O \\"%%{User-Agent}i\\"" combined\n' > /etc/apache2/conf-available/obx.conf \
  && a2enconf obx \
  && printf 'upload_max_filesize=512M\npost_max_size=520M\nmemory_limit=512M\nmax_execution_time=300\nexpose_php=Off\nopcache.validate_timestamps=0\nenable_post_data_reading=Off\n' > /usr/local/etc/php/conf.d/obx.ini
 WORKDIR /var/www/html

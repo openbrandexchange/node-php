@@ -258,6 +258,11 @@ final class App
         }
         if ($this->config->bool('jobs_inline')) {
             $this->runDeferred();
+        } elseif ($this->settings->setupDone() && (int) ($this->settings->state()['tick_ts'] ?? 0) < time() - 60 && !str_starts_with($req->path, '/cron')) {
+            // Hosts without cron: any request may carry a short background pass (after the
+            // response on FastCGI), at most once a minute.
+            $this->settings->updateState(['tick_ts' => time()]);
+            $this->defer(fn () => $this->worker()->tick(25));
         }
         return $res;
     }
