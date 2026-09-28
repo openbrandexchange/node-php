@@ -15,8 +15,18 @@ use Obx\Node\Support\Clock;
  */
 final class UiController extends Controller
 {
-    public const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; "
-        . "font-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'";
+    /**
+     * The policy admin-ui documents in docs/node-integration.md and runs its own Playwright tests
+     * under: no inline styles, nothing from other hosts except images (object storage, a CDN).
+     */
+    public const CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https:; "
+        . "connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'";
+
+    /** The "web interface not installed" page has its own inline style and nothing else. */
+    private const PLACEHOLDER_CSP = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'";
+
+    /** Licence files of the build have no extension. */
+    private const PLAIN_TEXT = ['LICENSE', 'NOTICE'];
 
     private const TYPES = [
         'js' => 'text/javascript; charset=utf-8',
@@ -56,7 +66,10 @@ final class UiController extends Controller
         }
         $accept = strtolower((string) $req->header('accept', ''));
         $looksLikeFile = (bool) preg_match('#/[^/]+\.[a-z0-9]{1,8}$#i', $p);
-        if ($looksLikeFile && !str_contains($accept, 'text/html')) {
+        // A missing build file is a 404, never index.html: an open tab from an older version must
+        // see that its file is gone (it then reloads once) instead of parsing HTML as code.
+        $isBuildFile = (bool) preg_match('#^/(assets|locales)/#', $p);
+        if ($isBuildFile || ($looksLikeFile && !str_contains($accept, 'text/html'))) {
             return Response::text('Not found', 'text/plain; charset=utf-8', 404);
         }
         return $this->index($req);
@@ -76,7 +89,8 @@ final class UiController extends Controller
         }
         $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
         $res = new Response(200);
-        $res->header('Content-Type', self::TYPES[$ext] ?? 'application/octet-stream');
+        $type = in_array($rel, self::PLAIN_TEXT, true) ? 'text/plain; charset=utf-8' : (self::TYPES[$ext] ?? 'application/octet-stream');
+        $res->header('Content-Type', $type);
         $res->header('Cache-Control', str_starts_with($rel, 'assets/') ? 'public, max-age=31536000, immutable' : 'public, max-age=3600');
         $res->header('Content-Length', (string) filesize($file));
         $res->file = $file;
@@ -86,11 +100,12 @@ final class UiController extends Controller
     public function index(Request $req): Response
     {
         $file = $this->uiDir() . '/index.html';
-        $html = is_file($file) ? (string) file_get_contents($file) : self::placeholder();
+        $installed = is_file($file);
+        $html = $installed ? (string) file_get_contents($file) : self::placeholder();
         $base = $req->basePath . '/';
         $html = (string) preg_replace('#<base\s+href="[^"]*"\s*/?>#i', '<base href="' . htmlspecialchars($base, ENT_QUOTES) . '" />', $html, 1);
         $res = Response::text($html, 'text/html; charset=utf-8');
-        $res->header('Content-Security-Policy', self::CSP);
+        $res->header('Content-Security-Policy', $installed ? self::CSP : self::PLACEHOLDER_CSP);
         $res->header('X-Frame-Options', 'DENY');
         $res->header('Referrer-Policy', 'strict-origin-when-cross-origin');
         $res->header('Cache-Control', 'no-cache');
@@ -122,9 +137,8 @@ final class UiController extends Controller
         if ($blob === null || $path === null) {
             throw new ApiError('not_found', 'No such logo.');
         }
-        $res = $this->serveFile($req, $path, (string) $blob['content_type'], $m[1], 'inline', 'logo.' . $m[2], 'public, max-age=31536000, immutable');
-        $res->header('Access-Control-Allow-Origin', '*');
-        return $res;
+        // No CORS header: an <img> needs none, and CORS is only on the discovery document.
+        return $this->serveFile($req, $path, (string) $blob['content_type'], $m[1], 'inline', 'logo.' . $m[2], 'public, max-age=31536000, immutable');
     }
 
     public function cron(Request $req): Response

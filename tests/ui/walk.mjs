@@ -21,6 +21,8 @@ const buyer = { email: 'buyer@shop.example', password: 'kestrel-shop-2026' }
 
 let failures = 0
 const problems = []
+// Content-Security-Policy violations fail the walk: the node must serve what admin-ui needs, no more.
+const cspViolations = []
 const browser = await chromium.launch()
 
 async function context(name) {
@@ -29,6 +31,10 @@ async function context(name) {
   const page = await ctx.newPage()
   page.setDefaultTimeout(10000)
   page.on('pageerror', (e) => problems.push(`[${name}] page error: ${e.message}`))
+  // Every page runs under the node's real Content-Security-Policy; a violation is a problem.
+  page.on('console', (m) => {
+    if (m.type() === 'error' && /Content Security Policy/i.test(m.text())) cspViolations.push(`[${name}] ${m.text()}`)
+  })
   page.on('response', (r) => {
     // HEAD 404 on blobs is the normal "not uploaded yet" answer.
     if (r.status() >= 400 && !(r.request().method() === 'HEAD' && r.status() === 404)) {
@@ -270,5 +276,7 @@ await step(K.page, 'log in with the keyboard only', async () => {
 await browser.close()
 for (const x of problems) console.log('note  ' + x)
 for (const x of a11yFindings) console.log('a11y  ' + x)
+for (const x of cspViolations) console.log('CSP   ' + x)
+if (cspViolations.length) failures++
 console.log(failures ? `${failures} step(s) failed; screenshots in ${OUT}` : 'All flows passed.')
 process.exit(failures ? 1 : 0)

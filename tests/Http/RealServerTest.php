@@ -192,7 +192,7 @@ final class RealServerTest extends NodeTestCase
         $spa = $this->curl('GET', $base . '/login', null, ['Accept' => 'text/html']);
         $this->assertSame(200, $spa['status']);
         $this->assertSame('DENY', $spa['headers']['x-frame-options']);
-        $this->assertStringContainsString("script-src 'self'", $spa['headers']['content-security-policy']);
+        $this->assertStringContainsString("frame-ancestors 'none'", $spa['headers']['content-security-policy']);
         $this->assertStringContainsString('<base href="/" />', $spa['body']);
         $api404 = $this->curl('GET', $base . '/admin/api/nope');
         $this->assertSame(404, $api404['status']);

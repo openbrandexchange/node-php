@@ -71,6 +71,40 @@ final class OpsTest extends NodeTestCase
         $this->assertGreaterThanOrEqual(400, $prefl->status);
     }
 
+    public function testTheWebInterfaceFollowsAdminUisIntegrationGuide(): void
+    {
+        $this->kestrelNode();
+        $placeholder = $this->http('GET', '/login', ['headers' => ['Accept' => 'text/html']]);
+        $this->assertStringContainsString('not installed', $placeholder->content());
+        $this->assertStringStartsWith("default-src 'none'", (string) $placeholder->getHeader('Content-Security-Policy'));
+
+        $ui = $this->dir . '/ui';
+        @mkdir($ui . '/assets', 0777, true);
+        @mkdir($ui . '/locales', 0777, true);
+        file_put_contents($ui . '/index.html', '<!doctype html><base href="/"><div id="app"></div><script type="module" src="assets/index-AbCd1234.js"></script>');
+        file_put_contents($ui . '/assets/index-AbCd1234.js', 'export {}');
+        file_put_contents($ui . '/locales/en.json', '{}');
+        file_put_contents($ui . '/LICENSE', 'Apache License');
+        file_put_contents($ui . '/NOTICE', 'Open Brand Exchange');
+        file_put_contents($ui . '/THIRD-PARTY-LICENSES.txt', 'MIT');
+
+        $page = $this->http('GET', '/admin/catalog', ['headers' => ['Accept' => 'text/html']]);
+        $this->assertStringContainsString('<div id="app">', $page->content());
+        $csp = (string) $page->getHeader('Content-Security-Policy');
+        $this->assertStringContainsString("script-src 'self';", $csp);
+        $this->assertStringContainsString("style-src 'self';", $csp);
+        $this->assertStringNotContainsString('unsafe-inline', $csp);
+        $this->assertSame('no-cache', $page->getHeader('Cache-Control'));
+        $this->assertStringContainsString('immutable', (string) $this->http('GET', '/assets/index-AbCd1234.js')->getHeader('Cache-Control'));
+        foreach (['/assets/Gone-12345678.js', '/locales/xx.json'] as $path) {
+            $this->assertSame(404, $this->http('GET', $path, ['headers' => ['Accept' => 'text/html,*/*']])->status, $path);
+        }
+        foreach (['/LICENSE', '/NOTICE', '/THIRD-PARTY-LICENSES.txt'] as $path) {
+            $res = $this->http('GET', $path);
+            $this->assertSame([200, 'text/plain; charset=utf-8'], [$res->status, $res->getHeader('Content-Type')], $path);
+        }
+    }
+
     public function testRequestIdsAndSecurityHeaders(): void
     {
         $this->freshNode();
@@ -90,7 +124,7 @@ final class OpsTest extends NodeTestCase
             $this->assertNull($res->getHeader('Strict-Transport-Security'), 'no HSTS over plain http');
         }
         $ui = $this->http('GET', '/login', ['headers' => ['Accept' => 'text/html']]);
-        $this->assertStringContainsString("script-src 'self'", (string) $ui->getHeader('Content-Security-Policy'));
+        $this->assertStringContainsString("frame-ancestors 'none'", (string) $ui->getHeader('Content-Security-Policy'));
         $tls = $this->http('GET', '/.well-known/obx', ['scheme' => 'https']);
         $this->assertSame('max-age=63072000', $tls->getHeader('Strict-Transport-Security'));
     }

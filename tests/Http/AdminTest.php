@@ -264,7 +264,9 @@ final class AdminTest extends NodeTestCase
         $withLogo = $this->json($this->http('PUT', '/admin/api/settings/logo', ['browser' => 'admin', 'body' => $png, 'headers' => ['Content-Type' => 'image/png']]));
         $logo = $withLogo['branding']['logo_url'];
         $this->assertNotNull($logo);
-        $this->assertSame($png, $this->http('GET', substr($logo, strlen('http://localhost')))->content());
+        $logoRes = $this->http('GET', substr($logo, strlen('http://localhost')));
+        $this->assertSame($png, $logoRes->content());
+        $this->assertNull($logoRes->getHeader('Access-Control-Allow-Origin'), 'CORS only on the discovery document');
         $this->assertProblem($this->http('PUT', '/admin/api/settings/logo', ['browser' => 'admin', 'body' => '<svg xmlns="http://www.w3.org/2000/svg"/>', 'headers' => ['Content-Type' => 'image/svg+xml']]), 415, 'unsupported_media_type');
         // Default rights change re-publishes assets with new effective rights.
         [, $cursor] = $this->drainSnapshot($client);
