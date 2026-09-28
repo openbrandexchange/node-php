@@ -140,6 +140,8 @@ final class Response
             foreach ($this->cookies as $c) {
                 header('Set-Cookie: ' . $c, false);
             }
+            // A Location header makes PHP switch to 302; restore the intended status (202, 201…).
+            http_response_code($this->status);
         }
         if ($this->file !== null) {
             $fh = fopen($this->file, 'rb');

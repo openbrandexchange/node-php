@@ -113,7 +113,8 @@ final class Formats
             }
             $fibers = [];
             $sum = 0.0;
-            foreach (explode(',', $partText) as $f) {
+            // Fibres are separated by commas; a comma between digits is a decimal comma ("87,5%").
+            foreach (preg_split('/(?<!\d),|,(?!\d)/', $partText) ?: [] as $f) {
                 $f = trim($f);
                 if ($f === '') {
                     continue;

@@ -46,7 +46,7 @@ TXT;
                 case 'serve':
                     $port = (int) ($args[1] ?? getenv('PORT') ?: 8080);
                     $out('Portal on http://localhost:' . $port . '/ (Ctrl+C to stop)');
-                    passthru(escapeshellarg(PHP_BINARY) . ' -S 0.0.0.0:' . $port . ' -t ' . escapeshellarg($root . '/public') . ' ' . escapeshellarg($root . '/public/index.php'), $code);
+                    passthru(escapeshellarg(PHP_BINARY) . ' -d enable_post_data_reading=0 -d upload_max_filesize=512M -d post_max_size=520M -S 0.0.0.0:' . $port . ' -t ' . escapeshellarg($root . '/public') . ' ' . escapeshellarg($root . '/public/index.php'), $code);
                     return (int) $code;
                 case 'migrate':
                     $config = Config::load($root);

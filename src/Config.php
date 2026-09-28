@@ -36,6 +36,7 @@ final class Config
         $env = self::fromEnv();
         $values = array_replace(self::defaults($root), $file, $env, $overrides);
         $values['root'] = $root;
+        $values['config_file'] = $configFile;
         $values['installed'] = is_file($configFile) || self::envConfigured() || !empty($overrides['installed']);
         return new self($values);
     }
@@ -169,6 +170,11 @@ final class Config
     public function dataDir(): string
     {
         return rtrim((string) $this->values['data_dir'], '/');
+    }
+
+    public function configFile(): string
+    {
+        return (string) $this->values['config_file'];
     }
 
     public function installed(): bool

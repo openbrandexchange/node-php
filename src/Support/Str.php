@@ -71,7 +71,7 @@ final class Str
     public static function contentDisposition(string $type, string $filename): string
     {
         $filename = self::safeFilename($filename);
-        $ascii = preg_replace('/[^\x20-\x7E]/', '_', $filename) ?? 'file';
+        $ascii = preg_replace('/[^\x20-\x7E]/u', '_', $filename) ?? 'file';
         $ascii = str_replace(['"', '\\'], '_', $ascii);
         $value = $type . '; filename="' . $ascii . '"';
         if ($ascii !== $filename) {

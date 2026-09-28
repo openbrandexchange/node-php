@@ -56,7 +56,8 @@ final class Request
         $rawQuery = (string) (parse_url($uri, PHP_URL_QUERY) ?? '');
         $script = (string) ($_SERVER['SCRIPT_NAME'] ?? '/index.php');
         $base = rtrim(str_replace('\\', '/', dirname($script)), '/');
-        if ($base === '.' || $base === '/') {
+        if ($base === '.' || $base === '/' || !str_ends_with($script, '/index.php')) {
+            // php -S with a router script reports the request path as SCRIPT_NAME.
             $base = '';
         }
         $path = $rawPath;
@@ -131,6 +132,26 @@ final class Request
             }
         }
         $isMultipart = str_contains(strtolower($headers['content-type'] ?? ''), 'multipart/form-data');
+        $post = $_POST;
+        if ($isMultipart && $_FILES === [] && $_POST === [] && in_array($method, ['POST', 'PUT', 'PATCH'], true)) {
+            // PHP's own form parsing is off (public/.user.ini): parse the stream ourselves, which
+            // keeps repeated file fields ("images") and has no max_file_uploads cap.
+            $in = fopen('php://input', 'rb');
+            if ($in !== false) {
+                $tmpDir = sys_get_temp_dir() . '/obx-upload';
+                [$post, $files] = Multipart::parse($in, (string) $headers['content-type'], $tmpDir, 600 * 1024 * 1024);
+                fclose($in);
+                register_shutdown_function(static function () use ($files): void {
+                    foreach ($files as $list) {
+                        foreach ($list as $f) {
+                            if (is_file($f['tmp'])) {
+                                @unlink($f['tmp']);
+                            }
+                        }
+                    }
+                });
+            }
+        }
         return new self(
             method: $method,
             path: $path === '' ? '/' : $path,
@@ -138,7 +159,7 @@ final class Request
             headers: $headers,
             cookies: array_map('strval', array_filter($_COOKIE, 'is_scalar')),
             body: null,
-            post: $isMultipart || $method === 'POST' ? $_POST : [],
+            post: $isMultipart || $method === 'POST' ? $post : [],
             files: $files,
             ip: $ip,
             scheme: $https ? 'https' : 'http',

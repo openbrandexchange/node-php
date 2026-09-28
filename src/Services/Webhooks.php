@@ -271,7 +271,7 @@ final class Webhooks
     {
         $secret = (string) $this->app->crypto->decrypt((string) $hook['secret_enc']);
         $ts = (string) Clock::time();
-        $sig = hash_hmac('sha256', $ts . '.' . $body, $secret);
+        $sig = self::signature($secret, $ts, $body);
         $start = microtime(true);
         $status = null;
         $error = null;
@@ -281,7 +281,7 @@ final class Webhooks
                     'Content-Type' => 'application/json',
                     'OBX-Webhook-Id' => $eventId,
                     'OBX-Webhook-Timestamp' => $ts,
-                    'OBX-Webhook-Signature' => 'v1=' . $sig,
+                    'OBX-Webhook-Signature' => $sig,
                 ],
                 'body' => $body,
                 'timeout' => 10,
@@ -325,6 +325,12 @@ final class Webhooks
         ];
         $this->app->db->insert('obx_webhook_deliveries', $delivery);
         return self::deliveryJson($delivery);
+    }
+
+    /** OBX-Webhook-Signature value: v1=hex(HMAC-SHA256(secret as UTF-8 incl. whsec_, "<ts>.<body>")). */
+    public static function signature(string $secret, string $timestamp, string $rawBody): string
+    {
+        return 'v1=' . hash_hmac('sha256', $timestamp . '.' . $rawBody, $secret);
     }
 
     /** @param array<string, mixed> $d @return array<string, mixed> */

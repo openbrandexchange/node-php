@@ -33,6 +33,9 @@ final class Db
             PDO::ATTR_EMULATE_PREPARES => false,
             PDO::ATTR_STRINGIFY_FETCHES => false,
         ];
+        if (str_starts_with($dsn, 'mysql:')) {
+            $options[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = true;
+        }
         $this->pdo = new PDO($dsn, $user, $password, $options);
         $this->driver = (string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
         if ($this->driver === 'sqlite') {
@@ -174,7 +177,7 @@ final class Db
             $this->pdo->exec('BEGIN IMMEDIATE');
         } else {
             $this->pdo->beginTransaction();
-            $this->pdo->exec("SELECT v FROM obx_settings WHERE k = 'write_lock' FOR UPDATE");
+            $this->pdo->query("SELECT v FROM obx_settings WHERE k = 'write_lock' FOR UPDATE")->fetchAll();
         }
         $this->depth = 1;
         try {

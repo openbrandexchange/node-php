@@ -43,7 +43,7 @@ final class Installer
             ['label' => 'OpenSSL', 'ok' => extension_loaded('openssl'), 'required' => true, 'hint' => 'Enable the openssl extension.'],
             ['label' => 'mbstring', 'ok' => extension_loaded('mbstring'), 'required' => true, 'hint' => 'Enable the mbstring extension.'],
             ['label' => 'Folder data/ is writable', 'ok' => is_dir($data) ? is_writable($data) : is_writable(dirname($data)), 'required' => true, 'hint' => 'Give the web server write access to the data folder (chmod 775).'],
-            ['label' => 'Folder config/ is writable', 'ok' => is_writable($this->root . '/config'), 'required' => true, 'hint' => 'Give the web server write access to the config folder for this step.'],
+            ['label' => 'Folder config/ is writable', 'ok' => is_writable(dirname($this->config->configFile())), 'required' => true, 'hint' => 'Give the web server write access to the config folder for this step.'],
             ['label' => 'GD with JPEG (image versions made on the server)', 'ok' => \Obx\Node\Images\Renderer::available(), 'required' => false, 'hint' => 'Without GD the web interface makes the web and thumbnail versions in the browser.'],
             ['label' => 'zip (zip uploads and imports)', 'ok' => class_exists(\ZipArchive::class), 'required' => false, 'hint' => 'Without it, upload CSV and images separately.'],
             ['label' => 'curl (scheduled imports and webhooks)', 'ok' => function_exists('curl_init'), 'required' => false, 'hint' => 'Enable curl to fetch imports from a web address or bucket.'],
@@ -86,10 +86,15 @@ final class Installer
         $done = null;
         $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
         $code = $this->code();
-        if ($method === 'POST') {
-            [$errors, $done] = $this->install($_POST, $code);
+        $post = $_POST;
+        if ($method === 'POST' && $post === []) {
+            // Form parsing may be switched off (enable_post_data_reading): read the body.
+            parse_str((string) file_get_contents('php://input', false, null, 0, 65536), $post);
         }
-        echo $done ?? $this->form($_POST, $errors);
+        if ($method === 'POST') {
+            [$errors, $done] = $this->install($post, $code);
+        }
+        echo $done ?? $this->form($post, $errors);
     }
 
     /**
@@ -157,7 +162,7 @@ final class Installer
             'smtp_encryption' => in_array($in['smtp_encryption'] ?? 'tls', ['tls', 'ssl', 'none'], true) ? $in['smtp_encryption'] : 'tls',
         ];
         $php = "<?php\n// Written by the Open Brand Exchange installer on " . gmdate('Y-m-d H:i') . " UTC.\n// Keep this file private: it holds the database password and the secret key.\n\nreturn " . var_export($values, true) . ";\n";
-        $target = $this->root . '/config/config.php';
+        $target = $this->config->configFile();
         if (@file_put_contents($target . '.tmp', $php) === false || !@rename($target . '.tmp', $target)) {
             return [['config/config.php could not be written. Make the config folder writable and try again.'], null];
         }
@@ -182,7 +187,7 @@ final class Installer
         $e = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
         $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
         $script = (string) ($_SERVER['SCRIPT_NAME'] ?? '/index.php');
-        $base = rtrim(str_replace('\\', '/', dirname($script)), '/');
+        $base = str_ends_with($script, '/index.php') ? rtrim(str_replace('\\', '/', dirname($script)), '/') : '';
         $reqPath = (string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
         if ($base !== '' && !str_starts_with($reqPath, $base)) {
             $base = str_ends_with($base, '/public') ? substr($base, 0, -7) : '';
