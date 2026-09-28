@@ -30,9 +30,12 @@ sed 's/Merino Crew Sweater,/Merino Crew Sweater (nightly),/' "$fixtures/products
 docker network create "$net" >/dev/null
 docker build -q -t obx-node-php:ui-walk "$here" >/dev/null
 docker build -q -t obx-node-php-test -f "$here/docker/test.Dockerfile" "$here/docker" >/dev/null
-# A copy of the release files that is not installed yet, for the web installer.
+# A copy of the release files that is not installed yet, for the web installer. A fresh
+# checkout has no vendor/ (the release zip ships it), so the copy installs its own.
 docker run -d --name obx-ui-walk-installer -p 8092:8092 -v "$here":/src:ro obx-node-php-test sh -c \
-  'cp -R /src /app2 && cd /app2 && rm -f config/config.php && find data -mindepth 1 ! -name .htaccess ! -name .gitkeep -exec rm -rf {} + ; php -d enable_post_data_reading=0 -S 0.0.0.0:8092 -t public public/index.php' >/dev/null
+  'cp -R /src /app2 && cd /app2 && rm -f config/config.php && find data -mindepth 1 ! -name .htaccess ! -name .gitkeep -exec rm -rf {} + ;
+   [ -f vendor/autoload.php ] || composer install --no-dev --no-interaction --no-progress --quiet;
+   php -d enable_post_data_reading=0 -S 0.0.0.0:8092 -t public public/index.php' >/dev/null
 docker run -d --name obx-ui-walk-mail --network "$net" -p 8025:8025 axllent/mailpit >/dev/null
 docker run -d --name obx-ui-walk-feed --network "$net" -v "$work/feed":/srv:ro -w /srv python:3.12-alpine python -m http.server 8000 >/dev/null
 docker run -d --name obx-ui-walk-node --network "$net" -p "$port":8080 \

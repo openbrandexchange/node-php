@@ -18,7 +18,9 @@ fixtures="$here/tests/fixtures/spec/kestrel"
 work=$(mktemp -d)
 names=()
 cleanup() {
-  for n in "${names[@]:-}"; do [ -n "$n" ] && docker rm -f "$n" >/dev/null 2>&1 || true; done
+  for n in "${names[@]:-}"; do
+    if [ -n "$n" ]; then docker rm -f "$n" >/dev/null 2>&1 || true; fi
+  done
   rm -rf "$work"
 }
 trap cleanup EXIT
@@ -88,7 +90,8 @@ for v in "${versions[@]}"; do
       fi
     done
     curl -fsS "$base/healthz" | grep -q '"ok"' || fail "/healthz"
-    curl -fsS "$base/.well-known/obx" -o /dev/null -w '%{http_code}' | grep -q 200 && fail "discovery before setup should be 503" || true
+    status=$(curl -s -o /dev/null -w '%{http_code}' "$base/.well-known/obx")
+    [ "$status" = 503 ] || fail "discovery before setup answered $status (expected 503)"
 
     # Setup wizard over the admin API (what the web interface does).
     curl -fsS -c "$jar" -b "$jar" "$base/admin/api/session" >/dev/null

@@ -44,11 +44,11 @@ fi
 "$@" &
 main_pid=$!
 stopping=0
-# shellcheck disable=SC2329 # invoked by the trap below
+# shellcheck disable=SC2317,SC2329 # invoked by the trap below (SC2317 on shellcheck < 0.10)
 stop() {
   stopping=1
   kill -WINCH "$main_pid" 2>/dev/null || true
-  [ -n "$worker_pid" ] && kill -TERM "$worker_pid" 2>/dev/null || true
+  if [ -n "$worker_pid" ]; then kill -TERM "$worker_pid" 2>/dev/null || true; fi
 }
 trap stop TERM INT
 status=0

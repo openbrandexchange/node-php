@@ -20,7 +20,9 @@ if [ ! -f "$stage/public/ui/index.html" ]; then
   echo "public/ui has no web interface build; run scripts/update-ui.sh first" >&2
   exit 1
 fi
-docker run --rm -v "$stage":/app -w /app composer:2 \
+# As the calling user: on Linux, files a root container writes into the bind mount could not be
+# removed afterwards (rm: Permission denied on vendor/).
+docker run --rm --user "$(id -u):$(id -g)" -e COMPOSER_HOME=/tmp/composer -v "$stage":/app -w /app composer:2 \
   composer install --no-dev --no-interaction --no-progress --optimize-autoloader --classmap-authoritative \
   --ignore-platform-req=ext-gd --ignore-platform-req=ext-zip --quiet
 rm -f "$stage/composer.phar"

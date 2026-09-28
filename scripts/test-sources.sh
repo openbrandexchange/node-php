@@ -1,7 +1,14 @@
 #!/usr/bin/env sh
 # Runs the scheduled-import tests against real servers in Docker: an S3-compatible store
 # (SeaweedFS) and an SFTP server (atmoz/sftp) holding the Kestrel fixtures.
+# The server images are pinned so a new upstream release cannot turn CI red overnight;
+# SEAWEEDFS_IMAGE / SFTP_IMAGE override them to try a newer one. Every bucket is a SeaweedFS
+# collection that grows its own volumes: small volumes and an explicit maximum keep the
+# number of volumes independent of the free disk space (a CI runner allowed too few, and
+# uploads into the second bucket failed with HTTP 500).
 set -eu
+seaweedfs=${SEAWEEDFS_IMAGE:-chrislusf/seaweedfs:4.47}
+sftp=${SFTP_IMAGE:-atmoz/sftp@sha256:0960390462a4441dbb63698d7c185b76a41ffcee7b78ff4adf275f3e66f9c475}
 here=$(cd "$(dirname "$0")/.." && pwd)
 net=obx-php-test-net
 work=$(mktemp -d)
@@ -12,8 +19,9 @@ mkdir -p "$work/sftp/export/images"
 cp "$here/tests/fixtures/spec/kestrel/products.csv" "$here/tests/fixtures/spec/kestrel/assets.csv" "$work/sftp/export/"
 cp "$here"/tests/fixtures/spec/kestrel/images/*.png "$work/sftp/export/images/"
 docker rm -f obx-php-s3 obx-php-sftp >/dev/null 2>&1 || true
-docker run -d --name obx-php-s3 --network "$net" -v "$work/s3.json:/etc/s3.json:ro" chrislusf/seaweedfs server -s3 -s3.config=/etc/s3.json -s3.port=8333 >/dev/null
-docker run -d --name obx-php-sftp --network "$net" -v "$work/sftp:/home/brand/upload:ro" atmoz/sftp brand:brandpass:1001 >/dev/null
+docker run -d --name obx-php-s3 --network "$net" -v "$work/s3.json:/etc/s3.json:ro" "$seaweedfs" server -s3 -s3.config=/etc/s3.json -s3.port=8333 \
+  -master.volumeSizeLimitMB=64 -volume.max=100 >/dev/null
+docker run -d --name obx-php-sftp --network "$net" -v "$work/sftp:/home/brand/upload:ro" "$sftp" brand:brandpass:1001 >/dev/null
 docker build -q -t obx-node-php-test -f "$here/docker/test.Dockerfile" "$here/docker" >/dev/null
 echo "Waiting for the servers ..."
 i=0
