@@ -9,7 +9,8 @@ use Obx\Node\Http\ApiError;
 /**
  * Canonical CSV rules (docs/import-format.md §1.1): UTF-8 with or without BOM, RFC 4180
  * quoting, "," or ";" (or tab) detected from the header row, header names matched
- * case-insensitively with spaces and "-" as "_".
+ * case-insensitively after trimming white space (space, tab, CR, LF), each run of white space
+ * and "-" counting as one "_". A column whose header is empty is no column.
  */
 final class Csv
 {
@@ -66,7 +67,7 @@ final class Csv
      */
     public static function table(array $header, iterable $records): array
     {
-        $raw = array_values(array_map(static fn ($h) => trim((string) $h), $header));
+        $raw = array_values(array_map(static fn ($h) => trim((string) $h, self::WS), $header));
         $headers = array_map([self::class, 'normalizeHeader'], $raw);
         $rows = [];
         foreach ($records as $n => $values) {
@@ -111,18 +112,21 @@ final class Csv
         return $counts[';'] > $counts[','] ? ';' : ',';
     }
 
-    /** "Style Number" -> style_number; "Name:NL-be" -> name:nl-BE; aliases applied. */
+    /** White space in header names (§1.1): space, tab, CR, LF. */
+    private const WS = " \t\r\n";
+
+    /** "Style Number" (or "Style  -  Number") -> style_number; "Name:NL-be" -> name:nl-BE; aliases applied. */
     public static function normalizeHeader(string $h): string
     {
-        $h = trim($h);
         $h = preg_replace('/^\xEF\xBB\xBF/', '', $h) ?? $h;
+        $h = trim($h, self::WS);
         $lang = null;
         if (str_contains($h, ':')) {
             [$h, $lang] = explode(':', $h, 2);
-            $lang = trim($lang);
+            $lang = trim($lang, self::WS);
         }
-        $base = strtolower(trim($h));
-        $base = (string) preg_replace('/[\s\-]+/', '_', $base);
+        $base = strtolower(trim($h, self::WS));
+        $base = (string) preg_replace('/[ \t\r\n-]+/', '_', $base);
         $aliases = [
             'style' => 'style_number',
             'ean' => 'gtin',
@@ -136,7 +140,7 @@ final class Csv
             return $base;
         }
         if ($base === 'attr' || $base === 'feature') {
-            return $base . ':' . strtolower((string) preg_replace('/[\s\-]+/', '_', $lang));
+            return $base . ':' . strtolower((string) preg_replace('/[ \t\r\n-]+/', '_', $lang));
         }
         $parts = explode('-', str_replace('_', '-', $lang));
         $tag = strtolower($parts[0]) . (isset($parts[1]) ? '-' . strtoupper($parts[1]) : '');

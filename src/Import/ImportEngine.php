@@ -113,7 +113,8 @@ final class ImportEngine
     /**
      * Reads products.csv / assets.csv, or the workbook that takes its place: converted to rows
      * (import-format.md §5) and then read with the CSV rules. A workbook that cannot be imported
-     * is one error, and nothing of that file is imported.
+     * fails the run (§5.5), as an unreadable CSV does: its one ImportRowError (row and column
+     * null) is the run's only one, and nothing of the import is written.
      *
      * @param array{path: string, xlsx: bool}|null $source
      * @return array{headers: list<string>, raw_headers: list<string>, rows: list<array{row: int, values: array<string, string>}>}|null
@@ -128,18 +129,15 @@ final class ImportEngine
         }
         $file = $role . '.xlsx';
         if (!Xlsx::available()) {
-            $this->issue($file, null, null, 'error', 'unsupported_media_type', 'This server cannot read Excel workbooks (the PHP zlib or xmlreader extension is missing). Save the sheet as CSV UTF-8 and import that.');
-            return null;
+            $this->refuse($file, 'unsupported_media_type', 'This server cannot read Excel workbooks (the PHP zlib or xmlreader extension is missing). Save the sheet as CSV UTF-8 and import that.');
         }
         if ((int) @filesize($source['path']) > $this->maxBytes) {
-            $this->issue($file, null, null, 'error', 'payload_too_large', 'The workbook is larger than the upload limit (' . $this->maxBytes . ' bytes).');
-            return null;
+            $this->refuse($file, 'payload_too_large', 'The workbook is larger than the limit for one CSV file (' . $this->maxBytes . ' bytes).');
         }
         try {
             $wb = Xlsx::convert($source['path'], $role);
         } catch (WorkbookError $e) {
-            $this->issue($file, null, null, 'error', $e->obxError, ucfirst($e->getMessage()) . '.');
-            return null;
+            $this->refuse($file, $e->obxError, ucfirst($e->getMessage()) . '.');
         }
         foreach ([...$wb['errors'], ...$wb['warnings']] as $e) {
             $this->errors[] = $e;
@@ -148,8 +146,20 @@ final class ImportEngine
             throw new ApiError('import_invalid', $file . ': row 1 of the sheet "' . $wb['sheet'] . '" is empty; a header row is required.');
         }
         $table = Csv::table($wb['header'], $wb['records']);
-        $this->workbooks[$role] = ['raw' => array_map([Xlsx::class, 'trim'], $wb['header']), 'headers' => $table['headers']];
+        $this->workbooks[$role] = ['raw' => array_map([Xlsx::class, 'trimHeader'], $wb['header']), 'headers' => $table['headers']];
         return $table;
+    }
+
+    /**
+     * Refuses a workbook (§5.5): the run fails with a problem of that code, and its results hold
+     * exactly this one ImportRowError (what other files of the import gave so far is dropped:
+     * nothing of the import is imported).
+     */
+    private function refuse(string $file, string $code, string $detail): never
+    {
+        $this->errors = [];
+        $this->issue($file, null, null, 'error', $code, $detail);
+        throw new ApiError($code, $file . ': ' . $detail);
     }
 
     // ================================================================ entry

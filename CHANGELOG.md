@@ -8,6 +8,8 @@ All notable changes to the PHP edition of the Open Brand Exchange portal ("Porta
 
 - **Excel workbooks** (`.xlsx`) can be imported wherever a `products.csv` or `assets.csv` can: the admin upload, the Ingest API's `csv` and `assets_csv` parts, package zips and scheduled folders (as `products.xlsx` / `assets.xlsx`) and web addresses that end in `.xlsx`. The conversion follows the specification's import format §5 exactly (sheet choice, stored values only, EANs typed as numbers keep every digit, dates, Excel row numbers and a `row 12, column ean (C): ` locator in errors), so the spec's templates can be uploaded as they are. Workbooks with macros, external links or data connections are refused; the four new error codes are `workbook_invalid`, `workbook_unsafe`, `workbook_sheet_missing` and `workbook_too_large`. Other spreadsheet files (`.xlsm`, `.xls`, `.ods`, …) get `415 unsupported_media_type`.
 
+- A workbook that cannot be imported (macros, a damaged or encrypted file, no products sheet, too large) now fails the whole import with that reason, as an unreadable CSV does, instead of importing the images and `assets.csv` sent with it (spec import-format.md §5.5). Header names count every run of spaces, tabs, line breaks and `-` as one `_` (`Style  -  Number` is `style_number`), in CSV files and when the sheet is chosen; values in a column without a header are reported with a warning.
+
 ### Hosting
 
 - Workbooks are read in pure PHP with the zlib and xmlreader extensions (the zip extension is not needed). The installer and `php bin/obx check` show whether they are there.

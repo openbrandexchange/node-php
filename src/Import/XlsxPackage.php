@@ -21,6 +21,8 @@ final class XlsxPackage
     /** @var list<string> entry names (no folders) */
     public array $names = [];
     private int $inflated = 0;
+    /** @var array<string, true> parts already counted toward the 256 MiB (a part read twice counts once) */
+    private array $counted = [];
     /** @var resource */
     private $fh;
     private int $size;
@@ -232,11 +234,13 @@ final class XlsxPackage
     /**
      * The inflated bytes of a part (name without leading "/", any case), or null when the zip
      * has no such entry. Stops with workbook_too_large when the entry inflates beyond its
-     * declared size or all parts read so far beyond 256 MiB.
+     * declared size or all parts read so far beyond 256 MiB (each part counted once, also when
+     * it is read again: a sheet looked at for §5.2 and then converted).
      */
     public function read(string $name): ?string
     {
-        $e = $this->byName[strtolower(ltrim($name, '/'))] ?? null;
+        $key = strtolower(ltrim($name, '/'));
+        $e = $this->byName[$key] ?? null;
         if ($e === null) {
             return null;
         }
@@ -252,11 +256,17 @@ final class XlsxPackage
         $tooLarge = fn () => new WorkbookError('workbook_too_large', $e['name'] . ' expands beyond its declared size');
         $crc = hash_init('crc32b');
         $out = '';
-        $count = function (string $piece) use (&$out, $e, $crc, $tooLarge): void {
+        $again = isset($this->counted[$key]);
+        $count = function (string $piece) use (&$out, $e, $crc, $tooLarge, $again): void {
             $n = strlen($piece);
-            $this->inflated += $n;
-            if (strlen($out) + $n > $e['usize'] || $this->inflated > self::MAX_TOTAL_BYTES) {
+            if (!$again) {
+                $this->inflated += $n;
+            }
+            if (strlen($out) + $n > $e['usize']) {
                 throw $tooLarge();
+            }
+            if ($this->inflated > self::MAX_TOTAL_BYTES) {
+                throw new WorkbookError('workbook_too_large', 'the parts read expand to more than ' . self::MAX_TOTAL_BYTES . ' bytes');
             }
             hash_update($crc, $piece);
             $out .= $piece;
@@ -298,6 +308,7 @@ final class XlsxPackage
         if (strlen($out) !== $e['usize'] || hexdec(hash_final($crc)) !== $e['crc']) {
             throw new WorkbookError('workbook_invalid', 'the zip cannot be read (' . $e['name'] . ' is damaged)');
         }
+        $this->counted[$key] = true;
         return $out;
     }
 }

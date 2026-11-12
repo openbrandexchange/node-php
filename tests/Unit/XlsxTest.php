@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Obx\Node\Tests\Unit;
 
+use Obx\Node\Import\Csv;
 use Obx\Node\Import\WorkbookError;
 use Obx\Node\Import\Xlsx;
 use Obx\Node\Support\Json;
@@ -107,15 +108,29 @@ final class XlsxTest extends TestCase
         $this->assertSame('😀', Xlsx::unescape('_xD83D__xDE00_'));
         $this->assertNull(Xlsx::numberText('abc'));
         $this->assertNull(Xlsx::numberText('.'));
-        $this->assertNull(Xlsx::numberText('1E99999'), 'an absurd exponent is not a number');
+        $this->assertNull(Xlsx::numberText('1E99999'), 'outside Excel\'s range');
+        $this->assertNull(Xlsx::numberText('1E+' . str_repeat('9', 30)), 'a huge exponent is refused without building the number');
+        $this->assertSame('0', Xlsx::numberText('0.000E+' . str_repeat('9', 30)), 'zero is 0 whatever its exponent');
         $this->assertSame('2026-03-01', Xlsx::isoCellText('2026-03-01T00:00:00Z'));
         $this->assertSame('2026-03-01T12:30:00Z', Xlsx::isoCellText('2026-03-01T12:30'));
         $this->assertNull(Xlsx::isoCellText('1 March 2026'));
         $this->assertSame('row 12, column ean (C): ', Xlsx::locator(12, 'ean', 3));
+        $this->assertSame('row 1, column E: ', Xlsx::locator(1, '', 5), 'a cell without a header');
+        $this->assertSame('row 3, column C: ', Xlsx::locator(3, null, 3));
         $this->assertSame('row 12: ', Xlsx::locator(12, null, null));
         $this->assertSame('column ean (C): ', Xlsx::locator(null, 'ean', 3));
         $this->assertSame('column M: ', Xlsx::locator(null, null, 13));
         $this->assertSame('ALL', Xlsx::colLetter(1000));
+    }
+
+    /** §1.1: one header normalisation for CSV headers and the sheet choice. */
+    public function testHeaderNormalisation(): void
+    {
+        $this->assertSame('style_number', Csv::normalizeHeader('  Style  -  Number '));
+        $this->assertSame('style_number', Csv::normalizeHeader("Style\r\nNumber"));
+        $this->assertSame('style_number', Csv::normalizeHeader("\tstyle number\t"));
+        $this->assertSame('', Csv::normalizeHeader('   '));
+        $this->assertSame('Style - Number', Xlsx::trimHeader("  Style - Number \n"));
     }
 
     public function testWhatIsAWorkbook(): void

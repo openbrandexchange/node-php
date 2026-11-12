@@ -93,10 +93,8 @@ final class Xlsx
             throw new WorkbookError('workbook_invalid', 'this server cannot read Excel files (the PHP zlib or xmlreader extension is missing); save the sheet as CSV UTF-8');
         }
         $pkg = XlsxPackage::open($path);
-        $ctText = $pkg->read('[Content_Types].xml');
-        $ct = $ctText === null ? null : self::contentTypes($ctText);
-        unset($ctText);
-        // Step 5: macros, ActiveX, external links, data connections; never inflated.
+        // Step 5: macros, ActiveX, external links, data connections; never inflated. First by
+        // entry name, before [Content_Types].xml is read, then by content type.
         foreach ($pkg->names as $name) {
             $n = strtolower($name);
             $parts = explode('/', $n);
@@ -112,15 +110,18 @@ final class Xlsx
                 throw new WorkbookError('workbook_unsafe', 'the workbook contains data connections (' . $name . '); save it as an Excel Workbook (.xlsx) without them');
             }
         }
-        foreach ($ct['all'] ?? [] as $t) {
+        $ctText = $pkg->read('[Content_Types].xml');
+        if ($ctText === null) {
+            throw new WorkbookError('workbook_invalid', '[Content_Types].xml is missing');
+        }
+        $ct = self::contentTypes($ctText);
+        unset($ctText);
+        foreach ($ct['all'] as $t) {
             if (preg_match('/macroenabled|vbaproject/i', $t)) {
                 throw new WorkbookError('workbook_unsafe', 'the workbook is macro-enabled (' . $t . '); save it as an Excel Workbook (.xlsx)');
             }
         }
         // Step 6: structure.
-        if ($ct === null) {
-            throw new WorkbookError('workbook_invalid', '[Content_Types].xml is missing');
-        }
         $rootRels = $pkg->read('_rels/.rels');
         if ($rootRels === null) {
             throw new WorkbookError('workbook_invalid', '_rels/.rels is missing');
@@ -294,7 +295,7 @@ final class Xlsx
         }
         $errors = [];
         $error = static function (int $rn, int $cn, string $column, array $v) use ($file): array {
-            $column = self::trim($column);
+            $column = self::trimHeader($column);
             return [
                 'file' => $file,
                 'row' => $rn,
@@ -312,12 +313,17 @@ final class Xlsx
         }
         $last = 1;
         $stray = [];
+        // §5.3: values without a header (right of W, or under an empty header name) are ignored
+        // with one warning per column.
         foreach ($cells as $rn => $row) {
             foreach ($row as $cn => $_) {
                 if ($cn > $width) {
                     $stray[$cn] = true;
                 } elseif ($rn > 1) {
                     $last = max($last, $rn);
+                    if (self::trimHeader($header[$cn - 1]) === '') {
+                        $stray[$cn] = true;
+                    }
                 }
             }
         }
@@ -386,11 +392,14 @@ final class Xlsx
         return $out;
     }
 
-    /** §5.5 locator: "row 12, column ean (C): ", "row 12: ", "column ean (C): " or "column M: ". */
+    /**
+     * §5.5 locator: "row 12, column ean (C): ", "row 12, column C: " (no header), "row 12: ",
+     * "column ean (C): " or "column M: ".
+     */
     public static function locator(?int $row, ?string $header, ?int $col): string
     {
         if ($row !== null && $col !== null) {
-            return 'row ' . $row . ', column ' . ($header !== null && $header !== '' ? $header . ' ' : '') . '(' . self::colLetter($col) . '): ';
+            return 'row ' . $row . ', column ' . ($header !== null && $header !== '' ? $header . ' (' . self::colLetter($col) . ')' : self::colLetter($col)) . ': ';
         }
         if ($row !== null) {
             return 'row ' . $row . ': ';
@@ -428,10 +437,16 @@ final class Xlsx
         return (string) preg_replace('/^[\s\x{FEFF}\x{A0}]+|[\s\x{FEFF}\x{A0}]+$/u', '', $s);
     }
 
-    /** The header normalisation used to find the key column of a sheet (§5.2). */
+    /** Trims a header name as §1.1 does: white space is space, tab, CR and LF. */
+    public static function trimHeader(string $s): string
+    {
+        return trim($s, " \t\r\n");
+    }
+
+    /** The header normalisation used to find the key column of a sheet (§5.2 = §1.1). */
     private static function normalizeKey(string $h): string
     {
-        return str_replace([' ', '-'], '_', strtolower(self::trim($h)));
+        return (string) preg_replace('/[ \t\r\n-]+/', '_', strtolower(self::trimHeader($h)));
     }
 
     // ================================================================ XML
@@ -801,15 +816,16 @@ final class Xlsx
                 if ($v === null || self::trim($v) === '') {
                     return '';
                 }
+                // A date cell holds a number too: not a number, or outside Excel's range, is workbook_invalid.
+                $t = self::numberText($v);
+                if ($t === null) {
+                    return ['x', 'a number cell holds "' . mb_substr($v, 0, 40) . (mb_strlen($v) > 40 ? '…' : '') . '", which is not a number Excel can store'];
+                }
                 $id = $ctx['styles']['xfs'][$c['s']] ?? 0;
                 $code = $ctx['styles']['fmts'][$id] ?? null;
                 $kind = self::dateKind($id, $code);
                 if ($kind !== null) {
-                    return self::serialText($v, $kind, $ctx['date1904']) ?? ['e', $v, 'a date out of range (before 1900-03-01, or before 1904-01-01 in the 1904 date system)'];
-                }
-                $t = self::numberText($v);
-                if ($t === null) {
-                    return ['x', 'a number cell holds "' . mb_substr($v, 0, 50) . '"'];
+                    return self::serialText($v, $kind, $ctx['date1904']) ?? ['e', $v, 'a date outside ' . ($ctx['date1904'] ? '1904-01-01' : '1900-03-01') . ' to 9999-12-31'];
                 }
                 $w = self::zeroPad($code);
                 if ($w > 0 && ctype_digit($t) && strlen($t) < $w) {
@@ -844,7 +860,8 @@ final class Xlsx
     /**
      * The text of a number cell (§5.4): the exact decimal value of <v>, rounded to 15
      * significant digits (halves away from zero), without exponent or trailing zeros.
-     * Null when <v> is not a number.
+     * Null when <v> is not a number, or a number other than 0 outside Excel's range
+     * (1E-308 <= |x| < 1E+308 after the rounding).
      */
     public static function numberText(string $lex): ?string
     {
@@ -860,14 +877,14 @@ final class Xlsx
         $all = $intPart . $fracPart;
         $digits = ltrim($all, '0');
         $z = strlen($all) - strlen($digits);
+        if (rtrim($digits, '0') === '') {
+            return '0'; // zero, whatever its exponent
+        }
         $exp = $m[4] ?? '';
-        if (strlen(ltrim(ltrim($exp, '+-'), '0')) > 4) {
-            return null; // far beyond what a double holds (an exponent of 10 000 or more)
+        if (strlen(ltrim(ltrim($exp, '+-'), '0')) > 9) {
+            return null; // out of range for every non-zero number (and never built as a string)
         }
         $point = strlen($intPart) + (int) $exp - $z;
-        if ($digits === '') {
-            return '0';
-        }
         if (strlen($digits) > 15) {
             $kept = array_map('intval', str_split(substr($digits, 0, 15)));
             if ($digits[15] >= '5') {
@@ -890,8 +907,9 @@ final class Xlsx
             $digits = implode('', $kept);
         }
         $digits = rtrim($digits, '0');
-        if ($digits === '') {
-            return '0';
+        // Excel's range: the leading digit's place is 10^(point - 1).
+        if ($point - 1 >= 308 || $point - 1 < -308) {
+            return null;
         }
         if ($point <= 0) {
             $int = '0';
@@ -972,8 +990,10 @@ final class Xlsx
             return null;
         }
         $v = (float) $t;
-        if (!is_finite($v) || ($date1904 ? $v < 0 : $v < 61) || $v >= 2958466) {
-            return null; // 2958466 is 10000-01-01, beyond Excel's last date
+        // 9999-12-31, Excel's last date, is serial 2958465 (1900) or 2957003 (1904)
+        $lastDay = $date1904 ? 2957003 : 2958465;
+        if (!is_finite($v) || ($date1904 ? $v < 0 : $v < 61) || $v >= $lastDay + 1) {
+            return null;
         }
         $days = (int) floor($v);
         $x = ($v - $days) * 86400;
@@ -984,6 +1004,9 @@ final class Xlsx
         if ($secs >= 86400) {
             $days++;
             $secs -= 86400;
+        }
+        if ($days > $lastDay) {
+            return null; // the seconds carried over into 10000-01-01
         }
         $epoch = $date1904 ? -2082844800 : -2209161600; // 1904-01-01, 1899-12-30
         $ts = $epoch + $days * 86400;

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Obx\Node\Tests\Http;
 
-use Obx\Node\Import\Xlsx;
 use Obx\Node\Support\Json;
 use Obx\Node\Tests\Support\NodeTestCase;
 
@@ -64,11 +63,9 @@ final class XlsxImportTest extends NodeTestCase
     }
 
     /**
-     * I-IMP-9: each converting case as a dry run on a node that holds the Kestrel fixtures.
-     * Two cases need more than the expected.json description says: date1904.xlsx has no brand
-     * column, so it runs on a node with one brand (with two, as after the fixtures, every row
-     * needs a brand); assets-template.xlsx names two images, so the import sends an images
-     * manifest with them (an assets row whose file is not provided is files_missing, §2.2).
+     * I-IMP-9: each converting case as a dry run on a node that holds the Kestrel fixtures, with
+     * the images_manifest of its "send" (assets-template.xlsx names two images; alone, each row
+     * would be files_missing, §2.2).
      */
     public function testConvertingCasesGiveTheExpectedRowErrors(): void
     {
@@ -76,17 +73,15 @@ final class XlsxImportTest extends NodeTestCase
             if (isset($c['error'])) {
                 continue;
             }
-            $token = $c['file'] === 'date1904.xlsx' ? $this->freshToken() : $this->kestrelToken();
+            $token = $this->kestrelToken();
             $before = $this->catalogSize();
             $field = $c['role'] === 'products' ? 'csv' : 'assets_csv';
             $options = ['dry_run' => true];
             $post = [];
-            if ($c['role'] === 'assets') {
+            if (isset($c['send']['images_manifest'])) {
                 $manifest = [];
-                foreach (Xlsx::rows(Xlsx::convert(self::fixtures('imports/xlsx/' . $c['file']), 'assets')) as $i => $row) {
-                    if ($i > 0 && $row[0] !== '') {
-                        $manifest[] = ['file' => $row[0], 'sha256' => hash_file('sha256', self::fixtures('kestrel/images/' . $row[0]))];
-                    }
+                foreach ($c['send']['images_manifest'] as $file) {
+                    $manifest[] = ['file' => $file, 'sha256' => hash_file('sha256', self::fixtures('kestrel/images/' . $file))];
                 }
                 $post['images_manifest'] = Json::encode($manifest);
             }
@@ -94,7 +89,7 @@ final class XlsxImportTest extends NodeTestCase
             $this->assertSame('succeeded', $job['status'], $c['file'] . ': ' . Json::encode($job));
             $items = $this->results($token, $job['id']);
             $errors = array_values(array_filter($items, static fn ($e) => $e['severity'] === 'error'));
-            $want = $c['import_errors'] ?? $c['errors'];
+            $want = $c['import_errors'];
             $this->assertSame(self::comparable($want), self::comparable($errors), $c['file'] . ': ' . Json::encode($items));
             foreach ($want as $w) {
                 $hit = array_values(array_filter($errors, static fn ($e) => $e['row'] === $w['row'] && $e['column'] === $w['column']));
@@ -104,6 +99,10 @@ final class XlsxImportTest extends NodeTestCase
                 $hit = array_filter($items, static fn ($e) => $e['severity'] === 'warning' && $e['file'] === $w['file'] && $e['row'] === $w['row'] && str_starts_with($e['detail'], $w['detail_prefix']));
                 $this->assertNotEmpty($hit, $c['file'] . ' warning ' . $w['detail_prefix'] . ': ' . Json::encode($items));
             }
+            // Columns without a header give the conversion's warning only: the CSV import gives
+            // no unknown-column warning for an empty header name (§1.1).
+            $noColumn = array_values(array_filter($items, static fn ($e) => $e['severity'] === 'warning' && ($e['column'] === null || $e['column'] === '')));
+            $this->assertCount(count($c['warnings']), $noColumn, $c['file'] . ': ' . Json::encode($noColumn));
             foreach ($items as $e) {
                 $this->assertSame($c['role'] . '.xlsx', $e['file'], 'every error names the workbook, whatever the upload was called');
             }
@@ -124,8 +123,12 @@ final class XlsxImportTest extends NodeTestCase
         return $this->kestrelNode()['ingest'];
     }
 
-    /** I-IMP-10: each refusal is one ImportRowError with row null, and nothing is written. */
-    public function testRefusedWorkbooksGiveOneErrorAndWriteNothing(): void
+    /**
+     * I-IMP-10 (§5.5): a refused workbook fails the run with its code, the results hold exactly
+     * one ImportRowError with row null, and nothing of the import is written (also not the
+     * images and assets.csv sent with it); the same with dry_run.
+     */
+    public function testRefusedWorkbooksFailTheRunWithOneErrorAndWriteNothing(): void
     {
         $this->freshNode();
         $token = $this->ingestToken();
@@ -133,14 +136,29 @@ final class XlsxImportTest extends NodeTestCase
             if (!isset($c['error'])) {
                 continue;
             }
-            $job = $this->import($token, ['csv' => [$this->workbook($c['file'], $c['file'])]]);
-            $this->assertSame('succeeded', $job['status'], $c['file'] . ': ' . Json::encode($job));
-            $items = $this->results($token, $job['id']);
-            $this->assertCount(1, $items, $c['file'] . ': ' . Json::encode($items));
-            $e = $items[0];
-            $this->assertSame(['products.xlsx', null, null, 'error', $c['error']['obx_error']], [$e['file'], $e['row'], $e['column'], $e['severity'], $e['obx_error']], $c['file']);
-            $this->assertStringContainsStringIgnoringCase($c['error']['detail_contains'], $e['detail'], $c['file']);
-            $this->assertSame(0, $this->catalogSize(), $c['file']);
+            foreach ([false, true] as $dry) {
+                $files = ['csv' => [$this->workbook($c['file'], $c['file'])]];
+                if (!$dry) {
+                    $files['assets_csv'] = [$this->upload(self::fixtures('kestrel/assets.csv'), 'assets.csv')];
+                    $files['images'] = [];
+                    foreach (array_slice(glob(self::fixtures('kestrel/images') . '/*.png') ?: [], 0, 2) as $img) {
+                        $files['images'][] = $this->upload($img, basename($img), 'image/png'); // an upload is used once
+                    }
+                }
+                $job = $this->import($token, $files, $dry ? ['dry_run' => true] : []);
+                $what = $c['file'] . ($dry ? ' (dry run)' : '') . ': ' . Json::encode($job);
+                $this->assertSame('failed', $job['status'], $what);
+                $this->assertSame($c['error']['obx_error'], $job['import_run']['error']['obx_error'] ?? null, $what);
+                $this->assertSame(1, $job['import_run']['counts']['errors'], $what);
+                $this->assertCount(1, $job['import_run']['errors_preview'], $what);
+                $items = $this->results($token, $job['id']);
+                $this->assertCount(1, $items, $c['file'] . ': ' . Json::encode($items));
+                $e = $items[0];
+                $this->assertSame(['products.xlsx', null, null, 'error', $c['error']['obx_error']], [$e['file'], $e['row'], $e['column'], $e['severity'], $e['obx_error']], $c['file']);
+                $this->assertStringContainsStringIgnoringCase($c['error']['detail_contains'], $e['detail'], $c['file']);
+                $this->assertSame(0, $this->catalogSize(), $c['file']);
+                $this->assertSame(0, (int) $this->app->db->value('SELECT COUNT(*) FROM obx_assets'), $c['file']);
+            }
         }
     }
 
@@ -164,6 +182,7 @@ final class XlsxImportTest extends NodeTestCase
         $this->assertSame(0, $again['import_run']['counts']['created'] + $again['import_run']['counts']['updated'], Json::encode($again['import_run']['counts']));
         $this->assertSame($counts['created'] - 1, $again['import_run']['counts']['unchanged'], 'the same objects, less the brand the first import created');
 
+        $this->resetNode(); // MySQL has no snapshots: without a reset the setup would run twice (409)
         ['ingest' => $token] = $this->kestrelNode();
         [, $id, $secret] = $this->retailerClient();
         $client = $this->accessToken($id, $secret);
@@ -207,7 +226,7 @@ final class XlsxImportTest extends NodeTestCase
         $job = $this->import($token, ['csv' => [$this->workbook('date1904.xlsx', '')]], ['dry_run' => true]);
         $this->assertSame('succeeded', $job['status']);
         $this->assertSame(0, $job['import_run']['counts']['errors']);
-        $this->assertSame(2, $job['import_run']['counts']['rows']);
+        $this->assertSame(3, $job['import_run']['counts']['rows']);
 
         // Other spreadsheet files are not workbooks: 415.
         $xls = $this->dir . '/old.xls';
@@ -229,6 +248,19 @@ final class XlsxImportTest extends NodeTestCase
         $this->assertSame('succeeded', $job['status'], Json::encode($job));
         $this->assertSame(0, $job['import_run']['counts']['errors'], Json::encode($this->results($token, $job['id'])));
         $this->assertGreaterThan(0, $job['import_run']['counts']['unchanged']);
+
+        // products.xlsx and one other CSV: the workbook is the products file, the "only *.csv"
+        // fallback does not apply (§5.1), so the CSV is not read.
+        $other = $this->dir . '/wb-other.zip';
+        $zip = new \ZipArchive();
+        $zip->open($other, \ZipArchive::CREATE);
+        $zip->addFile(self::fixtures('imports/xlsx/products-template.xlsx'), 'products.xlsx');
+        $zip->addFromString('export.csv', "style_number,name:en\r\nKX-7777,Not imported\r\n");
+        $zip->close();
+        $job = $this->import($token, ['package' => [$this->upload($other, 'wb-other.zip', 'application/zip')]], ['dry_run' => true]);
+        $this->assertSame('succeeded', $job['status'], Json::encode($job));
+        $this->assertSame(0, $job['import_run']['counts']['errors'], Json::encode($this->results($token, $job['id'])));
+        $this->assertSame(0, $job['import_run']['counts']['created'], 'export.csv is not read');
 
         // Both products.csv and products.xlsx in one package: import_invalid.
         $both = $this->kestrelZip(null, ['products.xlsx' => (string) file_get_contents(self::fixtures('imports/xlsx/products-template.xlsx'))]);
