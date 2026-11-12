@@ -2,17 +2,30 @@
 
 All notable changes to the PHP edition of the Open Brand Exchange portal ("Portal for web hosting"). The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [semantic versioning](https://semver.org/): while it is 0.x, a minor version may change behaviour, and the upgrade notes say what to do.
 
-## [Unreleased]
+## [0.2.1] - 2026-11-12
+
+Excel workbooks next to CSV files: this release implements the Excel import of the specification's import format §5 (spec 0.2.0 plus the clarified §5 of spec commit 9219d68). Nothing changes for retailers' software.
 
 ### For brands
 
 - **Excel workbooks** (`.xlsx`) can be imported wherever a `products.csv` or `assets.csv` can: the admin upload, the Ingest API's `csv` and `assets_csv` parts, package zips and scheduled folders (as `products.xlsx` / `assets.xlsx`) and web addresses that end in `.xlsx`. The conversion follows the specification's import format §5 exactly (sheet choice, stored values only, EANs typed as numbers keep every digit, dates, Excel row numbers and a `row 12, column ean (C): ` locator in errors), so the spec's templates can be uploaded as they are. Workbooks with macros, external links or data connections are refused; the four new error codes are `workbook_invalid`, `workbook_unsafe`, `workbook_sheet_missing` and `workbook_too_large`. Other spreadsheet files (`.xlsm`, `.xls`, `.ods`, …) get `415 unsupported_media_type`.
 
-- A workbook that cannot be imported (macros, a damaged or encrypted file, no products sheet, too large) now fails the whole import with that reason, as an unreadable CSV does, instead of importing the images and `assets.csv` sent with it (spec import-format.md §5.5). Header names count every run of spaces, tabs, line breaks and `-` as one `_` (`Style  -  Number` is `style_number`), in CSV files and when the sheet is chosen; values in a column without a header are reported with a warning.
+- A workbook that cannot be imported (macros, a damaged or encrypted file, no products sheet, too large) fails the whole import with that reason, as an unreadable CSV does; the images and `assets.csv` sent with it are not imported either (spec import-format.md §5.5). Header names count every run of spaces, tabs, line breaks and `-` as one `_` (`Style  -  Number` is `style_number`), in CSV files and when the sheet is chosen; values in a column without a header are reported with a warning.
+
+- The admin web interface admin-ui 0.2.1 (commit 271150c) takes `products.xlsx` and `assets.xlsx`, links the Excel templates and shows import problems as "Row 12, column EAN (C)", sorted by row or by problem, with a CSV download of the whole list; a refused workbook is explained in plain words.
+
+### For retailers
+
+- "Article data (Excel)" next to the CSV on the catalog and the selection (the same columns and rows as the CSV), and the article page shows the brand's own extra fields under "Other details".
 
 ### Hosting
 
 - Workbooks are read in pure PHP with the zlib and xmlreader extensions (the zip extension is not needed). The installer and `php bin/obx check` show whether they are there.
+- The language files the browser loads no longer carry the e-mail texts; the portal still reads them from `public/ui/locales/`.
+
+### Upgrading
+
+- Upload the new files (or pull the new image) as for every upgrade; there is no database change. Without the zlib or xmlreader extension the portal keeps working and answers a workbook with a request to save it as CSV UTF-8.
 
 ## [0.2.0] - 2026-11-12
 
@@ -92,5 +105,6 @@ The first release. It implements Open Brand Exchange specification 0.1.0 (OBX Pr
 - The installer's *Open the setup wizard* link fills in the setup code (as `#code=`, never sent to the server).
 - Web interface admin-ui 0.1.1 (commit d3ee574): the cron address under Settings, web version as the first download choice, download texts without an e-mail promise, a "Get started" step to set up e-mail while none is configured.
 
+[0.2.1]: https://github.com/openbrandexchange/node-php/releases/tag/v0.2.1
 [0.2.0]: https://github.com/openbrandexchange/node-php/releases/tag/v0.2.0
 [0.1.0]: https://github.com/openbrandexchange/node-php/releases/tag/v0.1.0
