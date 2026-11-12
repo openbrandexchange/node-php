@@ -105,9 +105,11 @@ This procedure is tested: the PHPUnit suite backs up an imported node, restores 
 4. **Migrate:** on shared hosting the first request after the upload runs the migrations (one process at a time, under a lock); `php bin/obx migrate` does it explicitly and says from which version to which.
 5. **Check** `/readyz` and sign in.
 
+**0.1 → 0.2:** schema 4 rewrites every stored article and size once into the 0.2 form (the new article data fields as "not stated", recycled and organic fibres as flags). On shared hosting this runs in the first request after the upload; with tens of thousands of articles run `php bin/obx migrate` from the command line instead, so the request time limit does not apply. Articles that used the 0.1 fibre keys (`recycled_polyester`, `organic_cotton`) get one change entry each; nothing else is sent to retailers' software again.
+
 Downgrades are not supported: a database written by a newer release is refused with "the database is at schema version N, but this software only knows up to version M". To go back, install the old release and restore the backup you made before upgrading.
 
-If a migration fails (for example the database user may not create indexes), nothing is half-done on SQLite. On MySQL each statement commits by itself; fix the cause and run `php bin/obx migrate` again: statements whose table or index already exists are skipped.
+If a migration fails (for example the database user may not create indexes), nothing is half-done on SQLite. On MySQL each statement commits by itself; fix the cause and run `php bin/obx migrate` again: statements whose table or index already exists are skipped. Data upgrades such as schema 4 can run again safely; rows that are already upgraded are left as they are.
 
 ## Limits and sizing
 

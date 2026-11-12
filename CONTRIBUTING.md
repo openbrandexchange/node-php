@@ -26,7 +26,7 @@ docker compose logs portal | grep "Setup code"
 ./scripts/test-sources.sh            # scheduled imports against real S3 and SFTP servers
 ./scripts/test-hosting.sh            # release zip + web installer on stock php-apache 8.2/8.3/8.4, no cron
 ./scripts/ui-walk.sh                 # the real web interface in a browser, axe on every screen, keyboard only
-./scripts/conformance.sh ../obx-go   # the official conformance suite (needs a checkout of obx-go)
+./scripts/conformance.sh ../obx-go   # the official conformance suite (needs a checkout of obx-go; DB=mysql|mariadb, RENDITIONS=client)
 docker run --rm -v "$PWD":/app -w /app obx-node-php-test vendor/bin/phpstan analyse   # static analysis
 ./scripts/check-licenses.sh          # licences of production dependencies
 ```

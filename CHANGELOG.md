@@ -2,6 +2,31 @@
 
 All notable changes to the PHP edition of the Open Brand Exchange portal ("Portal for web hosting"). The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [semantic versioning](https://semver.org/): while it is 0.x, a minor version may change behaviour, and the upgrade notes say what to do.
 
+## [0.2.0] - 2026-11-12
+
+Article data for fashion, shoes, bags and luggage: this release implements Open Brand Exchange specification 0.2.0 (OBX Protocol 0.2, [proposal 0002](https://github.com/openbrandexchange/spec/blob/main/docs/proposals/0002-product-data.md)) and passes the conformance suite of obx-go 0.2.0, including P-CAT-5, P-CAT-6, I-IMP-7 and I-IMP-8, on SQLite and MySQL, with server-made and with client-made image versions. Everything new is optional: retailers' software written for 0.1 keeps working.
+
+### For brands
+
+- **Article data** in the spreadsheet, the Ingest API and the admin: the kind of article (`item_subtype`, for example cabin size or ankle boot) and the article type "luggage", "contains non-textile parts of animal origin", the footwear materials of upper, lining and sock and outer sole, certifications (scheme, licence number, product or material), features (shell, wheels, lock, expandable, closure, laptop compartment, water resistance, detachable and adjustable parts, fit, sleeve length, neckline and your own), and per size the second size (jeans 30/32), the colour family and the measurements in cm, kg, litres and inch.
+- New import columns `item_subtype`, `contains_animal_origin`, `footwear_materials`, `certifications`, `feature:<key>`, `color_family`, `size_length` and the measurement columns (`height_cm` … `inseam_cm`; a decimal comma is fine). A cell that does not follow the rules skips its row with an error that names the column. Like every other column, a feature or measurement column the file does not have leaves that value as it is, so a file with only `weight_kg` changes only the weights.
+- Materials take `(recycled)` and `(organic)`: `outer: 100% polyester (recycled)`. The 0.1 spelling `recycled_polyester` / `organic_cotton` still works and means the same.
+- **Label warnings**: imports and the Ingest API say when a product misses what its label needs by law (fibre composition, the animal-origin statement, footwear materials, percentages that do not add up to 100), with the legal basis. They never block publishing.
+- The admin web interface admin-ui 0.2.0 (commit 2582973) shows and edits all of this; the import template has the column `contains_animal_origin`.
+
+### For retailers
+
+- The article page shows the label information, measurements and features, and the article data CSV has the columns of the import format, with a column per feature and per measurement (it can be imported again as it is).
+
+### For retailers' software
+
+- Products have `item_subtype`, `contains_animal_origin`, `footwear_materials`, `certifications` and `features`; variants `size_length`, `measurements` and `color.family`. Every one of them is always present, `null` when not stated; fibres carry `recycled` / `organic` (only when true) and never the 0.1 keys. `OBX-Version: 0.2`.
+- IngestResult has `warning_details` (`code`, `pointer`, `detail`) for the label warnings.
+
+### Upgrading
+
+- Upload the new files (or pull the new image) and open the portal: database schema 4 brings the stored articles to the 0.2 form once. Articles whose fibres used a 0.1 key (`recycled_polyester`) get one change entry each; everything else keeps its `updated_at`, so retailers' software does not download the catalog again. Sending the same spreadsheet again afterwards changes nothing. Make a backup first (`php bin/obx backup`), as for every upgrade.
+
 ## [0.1.0] - 2026-11-12
 
 The first release. It implements Open Brand Exchange specification 0.1.0 (OBX Protocol 0.1) and passes the official conformance suite: protocol, ingest, portal and security profiles, with server-made and with client-made image versions.
@@ -55,4 +80,5 @@ The first release. It implements Open Brand Exchange specification 0.1.0 (OBX Pr
 - The installer's *Open the setup wizard* link fills in the setup code (as `#code=`, never sent to the server).
 - Web interface admin-ui 0.1.1 (commit d3ee574): the cron address under Settings, web version as the first download choice, download texts without an e-mail promise, a "Get started" step to set up e-mail while none is configured.
 
+[0.2.0]: https://github.com/openbrandexchange/node-php/releases/tag/v0.2.0
 [0.1.0]: https://github.com/openbrandexchange/node-php/releases/tag/v0.1.0

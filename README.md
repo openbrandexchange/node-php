@@ -1,7 +1,8 @@
 # Open Brand Exchange · Portal for web hosting
 
 Your own brand portal, on the web hosting you already have. Retailers log in to find your
-product photos and article data (EAN, sizes, colours, materials, care), download what they need,
+product photos and article data (EAN, sizes, colours, composition, care, measurements, features
+and the other label information), download what they need,
 and their shop software can pull the same content automatically. You keep publishing from your
 own systems: upload a spreadsheet, point the portal at an export folder, or let your PIM send
 updates.
@@ -21,9 +22,13 @@ your automation work with any of them.
 - **Your admin**: brand profile and branding (logo, colour, welcome text), products and images,
   imports with clear error lists, retailers and their access requests, retailer accounts, API
   keys for retailers' software, automation tokens, webhooks and download statistics.
-- **An open API for retailers' software** (the OBX Protocol): a change feed, product lookups by
-  EAN, image downloads in *original*, *web*, *square* and *thumb* versions, bulk exports and
-  signed webhooks.
+- **An open API for retailers' software** (the OBX Protocol 0.2): a change feed, product lookups
+  by EAN, the article data (composition with recycled and organic fibres, the animal-origin
+  statement, footwear materials, certifications, features, measurements per size), image
+  downloads in *original*, *web*, *square* and *thumb* versions, bulk exports and signed webhooks.
+- **Label warnings**: imports and the Ingest API tell you when an article misses what its label
+  needs by EU law (fibre composition, non-textile parts of animal origin, footwear materials);
+  they never block publishing.
 - **Easy automation** (the OBX Ingest API): a spreadsheet plus images named
   `STYLE_COLOUR_1.jpg`, scheduled imports from a web address, an SFTP folder or an S3/R2 bucket,
   the `obx` command-line tool, and copy-paste recipes for cron, GitHub Actions, n8n, Make and
@@ -138,7 +143,7 @@ rules for changes (tests test behaviour, shared hosting first, 25 languages, DCO
 ./scripts/test-sources.sh              # scheduled imports against real S3 (SeaweedFS) and SFTP servers
 ./scripts/test-hosting.sh              # release zip + web installer on stock php-apache 8.2/8.3/8.4, no cron
 ./scripts/ui-walk.sh                   # the real web interface in a browser: every flow, axe, keyboard only
-./scripts/conformance.sh ../obx-go     # the official obx-conformance suite against the Docker image
+./scripts/conformance.sh ../obx-go     # the official obx-conformance suite against the Docker image (DB=mysql, RENDITIONS=client)
 ./scripts/load-test.sh                 # seeded load test (10 000 articles), prints a table of timings
 ./scripts/check-licenses.sh            # licences of the production dependencies
 ./scripts/build-release.sh             # build/obx-portal-php-<version>.zip for FTP upload

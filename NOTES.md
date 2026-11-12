@@ -1,6 +1,6 @@
 # Implementation notes (node-php)
 
-Decisions taken where the spec (v0.1.0) was silent or ambiguous, and deliberate
+Decisions taken where the spec (v0.1.0, and since 0.2.0 v0.2.0) was silent or ambiguous, and deliberate
 extensions. Each is the simplest reading; the spec repository is the source of truth.
 
 ## Protocol and feed
@@ -149,7 +149,8 @@ extensions. Each is the simplest reading; the spec repository is the source of t
 38. **Migrations** are forward-only and idempotent (SQLite `IF NOT EXISTS`, MySQL skips existing
     tables/indexes), run under a lock (SQLite `BEGIN IMMEDIATE`, MySQL `GET_LOCK`), and a database
     with a higher `schema_version` than the code is refused (`SchemaTooNew`). Schema 2 adds the
-    audit log, schema 3 indexes found with the load test.
+    audit log, schema 3 indexes found with the load test, schema 4 (0.2.0) brings stored articles
+    to the 0.2 model (note 48).
 39. **Node state writes** (`obx_settings.state`) read the stored state inside the write
     transaction; the worker clears its caches every pass. Before this, a worker started before
     first-run setup wrote its old copy back and undid `setup_done`.
@@ -178,6 +179,53 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     unreadable `config.php` instead of printing a PHP warning. The installer's link to the wizard
     carries the code as `#code=` (a fragment never reaches the server) and the wizard fills it in.
     Without mod_rewrite every address answers the root `.htaccess`'s one-line explanation.
+
+## Article data (0.2.0)
+
+46. **Stored in the write model.** The article data of spec 0.2 is part of the product and
+    variant write model (the `input` JSON), like the other fields; schema 4 adds no columns. The
+    Validator writes the canonical 0.2 model: every field present (`null` when not stated),
+    fibres normalised (`recycled_polyester` → `polyester` + `recycled: true`, flags only when
+    true), features in registry order then the other keys sorted, measurements in schema order,
+    an empty `features`, `measurements` or `certifications` and a `footwear_materials` without any
+    part stored as `null`.
+47. **Null and absent** follow obx-go's mock node: every new product and variant property (and
+    `color.family`) is always present, `null` when not stated; inside `measurements` and
+    `features` only stated members appear; `footwear_materials` always has its three parts;
+    `licence_number` is always present (string or `null`).
+48. **Upgrade of a 0.1 database (schema 4).** Every product and variant gets the 0.2 model and
+    representation once, in batches of 500, on SQLite and MySQL alike. When the representation
+    only gains the new properties as `null`, it is replaced without a change entry and keeps its
+    `updated_at` (a consumer learns nothing new, and a full re-download of every catalog after an
+    upgrade would be wasted); a visible article whose fibres used a 0.1 key gets an upsert entry,
+    since its content changed. Re-sending the same data afterwards is `unchanged`.
+49. **Import cells (import-format.md §1.6).** A cell of `contains_animal_origin`,
+    `footwear_materials`, `certifications`, `feature:<key>`, `color_family`, `size_length` (more
+    than 64 characters) or a measurement column that does not follow the rules is an error for
+    that row, and the whole row is skipped (product part included), as in obx-go's importer.
+    `item_subtype` follows `item_type` (a value that is no key is a warning and left empty), and an
+    unparsable `materials` cell stays a warning (note 15). Variant cells on a row without a
+    variant are ignored with a warning; a different `color_family` on a later size of the same
+    colour is a warning and the first value wins. The 0.1 warning about percentages that do not add
+    up to 100 is replaced by the label warning `fibre_percentages_not_100`, which, as in obx-go,
+    applies to textile item types only.
+50. **Label warnings (rule 10)** are computed from the product as stored after the row was applied
+    (so also in a dry run, inside its rolled-back transaction) and reported once per product at
+    its first row. The Ingest API adds them to `warnings` as `"<code>: <detail>"` and to
+    `warning_details`, also for an `unchanged` result; batches and the admin catalog API return
+    the same IngestResult.
+51. **Validation in the Ingest API** (ingest.md §3.4) is the node's own, like the rest of the
+    Validator: unknown members (also inside `footwear_materials`, `measurements` and
+    certifications) are ignored with a warning, as for every other object; a registry feature
+    outside its type or values, a list with duplicates, a measurement that is not a positive
+    number, a strap whose `min` is above its `max`, a footwear material, colour family or
+    certification scope outside its list, and a certification without `scheme` or `scope` are
+    `422 validation_failed` with the pointer of the field (`/features/wheels`, `/measurements/weight_kg`).
+52. **Portal CSV** (`data.csv`): the columns of import-format.md §1.2 in its order, including the
+    status columns, with a `feature:<key>` column for every registry key and then the other keys
+    the exported products have, and the measurement columns after `size_system`; booleans as
+    `yes`/`no`, `strap_length_cm` as `min-max` (one number when both are equal), numbers with `.`.
+    Importing the file again changes nothing.
 
 ## Known limitations (tracked)
 

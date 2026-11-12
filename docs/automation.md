@@ -20,7 +20,7 @@ Every call is safe to repeat: sending the same data again changes nothing and ca
 
 ## The file format in short
 
-`products.csv` with one row per EAN (style number, colour code and name, size, EAN, name, description, materials, care, …), an optional `assets.csv`, and images named `STYLE_COLOUR_POSITION.jpg` (for example `KO-1001_NVY_1.jpg`; `_front`, `_back`, `_detail`, `_model` and more after the position set the view). Images without a colour, which apply to every colour of an article, get the id `{style}_ALL_{position}`. The admin offers a filled-in template under **Imports**. JPEG, PNG and WebP are accepted; TIFF is not (GD cannot read it).
+`products.csv` with one row per EAN (style number, colour code and name, size, EAN, name, description, materials, care, …; since 0.2 also `item_subtype`, `contains_animal_origin`, `footwear_materials`, `certifications`, `feature:<key>`, `color_family`, `size_length` and the measurement columns such as `weight_kg`, see the specification's [article data columns](https://github.com/openbrandexchange/spec/blob/main/docs/import-format.md#article-data)), an optional `assets.csv`, and images named `STYLE_COLOUR_POSITION.jpg` (for example `KO-1001_NVY_1.jpg`; `_front`, `_back`, `_detail`, `_model` and more after the position set the view). Images without a colour, which apply to every colour of an article, get the id `{style}_ALL_{position}`. The admin offers a filled-in template under **Imports**. JPEG, PNG and WebP are accepted; TIFF is not (GD cannot read it).
 
 ## What this edition does
 
