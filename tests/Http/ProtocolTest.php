@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Obx\Node\Tests\Http;
 
+use Obx\Node\Catalog\Feed;
+use Obx\Node\Db\Schema;
 use Obx\Node\Support\Json;
 use Obx\Node\Tests\Support\NodeTestCase;
 
@@ -28,7 +30,7 @@ final class ProtocolTest extends NodeTestCase
         $doc = $this->json($res);
         $this->assertSame('*', $res->getHeader('Access-Control-Allow-Origin'));
         $this->assertSame('http://localhost/obx/v1', $doc['api_base']);
-        $this->assertSame('0.2', $doc['obx_version']);
+        $this->assertSame('0.3', $doc['obx_version']);
         $this->assertSame(['nl', 'en'], $doc['languages']);
         $this->assertSame('Kestrel Outfitters', $doc['publisher']['name']);
         foreach (['changes', 'products', 'by_gtin', 'renditions', 'exports', 'webhooks', 'usage', 'ingest', 'portal'] as $cap) {
@@ -69,6 +71,40 @@ final class ProtocolTest extends NodeTestCase
     public function testGarbageCursorIsRejected(): void
     {
         $this->assertProblem($this->http('GET', '/obx/v1/changes', ['bearer' => $this->token, 'query' => ['cursor' => 'garbage']]), 400, 'cursor_invalid');
+    }
+
+    /** protocol.md §6.4, conformance P-FEED-7: the 0.2 → 0.3 upgrade expires every earlier cursor. */
+    public function testCursorsFromBeforeThe03UpgradeExpire(): void
+    {
+        $db = $this->app->db;
+        // The node as 0.2.x left it: schema 4, no cursor epoch.
+        $db->run('DELETE FROM obx_settings WHERE k = ?', [Feed::EPOCH_KEY]);
+        $db->run("UPDATE obx_settings SET v = '4' WHERE k = 'schema_version'");
+        [, $live] = $this->drainSnapshot($this->token);
+        $snapshot = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $this->token, 'query' => ['limit' => '1']]))['next_cursor'];
+        // A cursor exactly as 0.2.x sealed it (no epoch field).
+        $sealed02 = $this->app->crypto->seal('cursor', ['p' => 'l', 's' => 1]);
+        foreach ([$live, $snapshot, $sealed02] as $cursor) {
+            $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $this->token, 'query' => ['cursor' => $cursor]]));
+        }
+
+        Schema::migrate($db);
+        $this->assertSame('1', $db->value('SELECT v FROM obx_settings WHERE k = ?', [Feed::EPOCH_KEY]));
+
+        foreach (['live' => $live, 'snapshot' => $snapshot, '0.2 sealed' => $sealed02] as $what => $cursor) {
+            $res = $this->http('GET', '/obx/v1/changes', ['bearer' => $this->token, 'query' => ['cursor' => $cursor]]);
+            $this->assertSame(410, $res->status, $what);
+            $this->assertProblem($res, 410, 'cursor_expired');
+        }
+        // Without a cursor the feed starts over, and its cursors work.
+        [$entries, $fresh] = $this->drainSnapshot($this->token);
+        $this->assertNotSame([], $entries);
+        $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $this->token, 'query' => ['cursor' => $fresh]]));
+        $this->assertSame('live', $page['phase']);
+        $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $this->token, 'query' => ['cursor' => $page['next_cursor']]]));
+        // Migrating again (nothing to do) keeps them valid.
+        Schema::migrate($db);
+        $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $this->token, 'query' => ['cursor' => $fresh]]));
     }
 
     public function testProductsMatchExpectedFixtures(): void

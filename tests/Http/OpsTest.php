@@ -65,7 +65,7 @@ final class OpsTest extends NodeTestCase
         $api = $this->http('GET', '/obx/v1/products', ['bearer' => $token]);
         $this->assertSame(200, $api->status);
         $this->assertNull($api->getHeader('Access-Control-Allow-Origin'));
-        $this->assertSame('0.2', $api->getHeader('OBX-Version'));
+        $this->assertSame('0.3', $api->getHeader('OBX-Version'));
         $prefl = $this->http('OPTIONS', '/obx/v1/products');
         $this->assertNull($prefl->getHeader('Access-Control-Allow-Origin'));
         $this->assertGreaterThanOrEqual(400, $prefl->status);

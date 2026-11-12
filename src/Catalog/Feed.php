@@ -18,6 +18,26 @@ final class Feed
 {
     public const TYPES = ['brand', 'product', 'variant', 'asset'];
     public const RETENTION_DAYS = 90;
+    /**
+     * Cursor epoch (obx_settings `cursor_epoch`, 0 when absent). Every cursor carries the epoch
+     * it was issued in; a cursor from another epoch is 410 cursor_expired (protocol.md §6.4).
+     * A migration that makes the object shapes incompatible sets a new epoch: schema 5
+     * (0.2 → 0.3) sets 1, so every cursor of a 0.1/0.2 node (which had no epoch) expires.
+     */
+    public const EPOCH_KEY = 'cursor_epoch';
+
+    /** Sets the cursor epoch; every cursor issued in another epoch expires. Idempotent. */
+    public static function setEpoch(Db $db, int $epoch): void
+    {
+        $db->run('DELETE FROM obx_settings WHERE k = ?', [self::EPOCH_KEY]);
+        $db->insert('obx_settings', ['k' => self::EPOCH_KEY, 'v' => (string) $epoch]);
+    }
+
+    private function epoch(): int
+    {
+        $v = $this->db->value('SELECT v FROM obx_settings WHERE k = ?', [self::EPOCH_KEY]);
+        return is_numeric($v) ? (int) $v : 0;
+    }
 
     public function __construct(
         private Db $db,
@@ -30,7 +50,7 @@ final class Feed
 
     public function liveCursor(int $seq): string
     {
-        return $this->crypto->seal('cursor', ['p' => 'l', 's' => $seq]);
+        return $this->crypto->seal('cursor', ['p' => 'l', 's' => $seq, 'e' => $this->epoch()]);
     }
 
     /**
@@ -41,12 +61,16 @@ final class Feed
     {
         if ($cursor === null || $cursor === '') {
             $hw = (int) ($this->db->value('SELECT MAX(seq) FROM obx_changes') ?? 0);
-            $state = ['p' => 's', 'hw' => $hw, 't' => 0, 'id' => '', 'ts' => Clock::time()];
+            $state = ['p' => 's', 'hw' => $hw, 't' => 0, 'id' => '', 'ts' => Clock::time(), 'e' => $this->epoch()];
             return $this->snapshot($state, $limit, $v, $retailer);
         }
         $state = $this->crypto->unseal('cursor', $cursor);
         if ($state === null || !isset($state['p'])) {
             throw new ApiError('cursor_invalid', 'This cursor is malformed or comes from another node. Restart without a cursor.');
+        }
+        $epoch = $state['e'] ?? 0;
+        if (!is_int($epoch) || $epoch !== $this->epoch()) {
+            throw new ApiError('cursor_expired', 'This cursor was issued before the node was upgraded to a new protocol version. Restart without a cursor.');
         }
         if ($state['p'] === 's') {
             if ((int) ($state['ts'] ?? 0) < Clock::time() - 86400) {
@@ -93,7 +117,7 @@ final class Feed
             // Snapshot exhausted on a page boundary: continue live.
             return $this->live((int) $state['hw'], $limit, $v, $retailer);
         }
-        $next = $this->crypto->seal('cursor', ['p' => 's', 'hw' => (int) $state['hw'], 't' => $t, 'id' => $lastId, 'ts' => (int) $state['ts']]);
+        $next = $this->crypto->seal('cursor', ['p' => 's', 'hw' => (int) $state['hw'], 't' => $t, 'id' => $lastId, 'ts' => (int) $state['ts'], 'e' => $this->epoch()]);
         return ['changes' => $changes, 'next_cursor' => $next, 'has_more' => true, 'phase' => 'snapshot'];
     }
 

@@ -333,8 +333,8 @@ final class Downloads
     }
 
     /**
-     * The materials grammar of import-format.md §1.4, with the fibre flags "(recycled)" and
-     * "(organic)".
+     * The materials grammar of import-format.md §1.4, with the qualifier of a fibre in
+     * brackets ("100% polyester (recycled)").
      *
      * @param list<array<string, mixed>>|null $materials
      */

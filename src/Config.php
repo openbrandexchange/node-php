@@ -10,10 +10,10 @@ namespace Obx\Node;
  */
 final class Config
 {
-    public const VERSION = '0.2.1';
+    public const VERSION = '0.3.0';
     public const SOFTWARE = 'obx-node-php';
-    public const SPEC_VERSION = '0.2.0';
-    public const OBX_VERSION = '0.2';
+    public const SPEC_VERSION = '0.3.0';
+    public const OBX_VERSION = '0.3';
 
     /** @param array<string, mixed> $values */
     public function __construct(private array $values)

@@ -67,12 +67,13 @@ final class SupportTest extends TestCase
             'style_number' => ' KO-1 ',
             'name' => ['nl' => 'Trui', 'en' => 'Sweater'],
             'care' => [['code' => 'wash_30']],
-            'materials' => [['part' => 'main', 'fibers' => [['fiber' => 'cotton', 'percentage' => 100.0]]]],
+            'materials' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100.0]]]],
             'status' => 'unpublished',
         ]);
         $this->assertSame('KO-1', $model['style_number']);
         $this->assertSame(['en' => 'Sweater', 'nl' => 'Trui'], $model['name']);
-        $this->assertSame([['code' => 'wash_30', 'text' => null]], $model['care']);
+        $this->assertSame(['code' => 'wash_30', 'category' => 'washing', 'symbol' => '1_D_30'], array_slice($model['care'][0], 0, 3));
+        $this->assertSame([null, 'Cotton'], [$model['materials'][0]['part']['name'], $model['materials'][0]['fibers'][0]['material']['name']['en']]);
         $this->assertSame(100, $model['materials'][0]['fibers'][0]['percentage']);
         $this->assertSame('unpublished', $status);
         try {

@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Obx\Node\Catalog;
 
 /**
- * The article data of spec 0.2 (docs/protocol.md §5.9): vocabularies, the 0.1 fibre key
- * normalisation, the label completeness warnings (import-format.md rule 10) and the cell
+ * The article data of spec 0.3 (docs/protocol.md §5.9): vocabularies (the registries of this
+ * file and the named terms of materials and care in resources/vocabularies), the 0.1 material
+ * key normalisation, the label completeness warnings (import-format.md rule 10) and the cell
  * formats of the products.csv columns (import-format.md §1.6), shared by the Ingest API,
  * imports and the CSV export.
  */
@@ -51,52 +52,171 @@ final class ArticleData
 
     public const KEY = '/^[a-z][a-z0-9_]{0,63}$/';
 
+    /** The ISO 3758 symbol groups of a care entry (schemas/Care.json), in label order. */
+    public const CARE_CATEGORIES = ['washing', 'bleaching', 'drying', 'ironing', 'professional_care'];
+    /** GINETEX symbol notation of a care entry (schemas/Care.json). */
+    public const CARE_SYMBOL = '/^[1-5]_[A-Za-z0-9_]{1,30}$/';
+
+    /** @var array<string, array<string, array<string, mixed>>> vocabulary name => code => entry */
+    private static array $vocabularies = [];
+
     /**
-     * The 0.1 fibre keys recycled_<fibre> and organic_<fibre> become the fibre with the flag
-     * (protocol.md §5.9.1); flags are kept only when true, in the order fiber, percentage,
-     * recycled, organic.
+     * A vocabulary of the specification (resources/vocabularies/<name>.json, copied from the
+     * spec's vocabularies/ by scripts/sync-spec.sh): code => entry with name (and for care
+     * category and symbol).
      *
-     * @param array<string, mixed> $f
-     * @return array<string, mixed>
+     * @param 'parts'|'materials'|'qualifiers'|'care' $name
+     * @return array<string, array<string, mixed>>
      */
-    public static function normalizeFiber(array $f): array
+    public static function vocabulary(string $name): array
     {
-        $key = (string) ($f['fiber'] ?? '');
-        $recycled = ($f['recycled'] ?? false) === true;
-        $organic = ($f['organic'] ?? false) === true;
-        while (true) {
-            if (str_starts_with($key, 'recycled_') && strlen($key) > 9) {
-                $key = substr($key, 9);
-                $recycled = true;
-            } elseif (str_starts_with($key, 'organic_') && strlen($key) > 8) {
-                $key = substr($key, 8);
-                $organic = true;
-            } else {
-                break;
+        if (!isset(self::$vocabularies[$name])) {
+            $file = dirname(__DIR__, 2) . '/resources/vocabularies/' . $name . '.json';
+            $doc = json_decode((string) @file_get_contents($file), true);
+            if (!is_array($doc) || !is_array($doc['entries'] ?? null)) {
+                throw new \RuntimeException('The vocabulary ' . $file . ' is missing or unreadable.');
             }
+            $out = [];
+            foreach ($doc['entries'] as $e) {
+                $out[(string) $e['code']] = $e;
+            }
+            self::$vocabularies[$name] = $out;
         }
-        $out = ['fiber' => $key, 'percentage' => $f['percentage'] ?? null];
-        if ($recycled) {
-            $out['recycled'] = true;
-        }
-        if ($organic) {
-            $out['organic'] = true;
-        }
-        return $out;
+        return self::$vocabularies[$name];
     }
 
     /**
-     * @param list<array<string, mixed>>|null $materials
-     * @return list<array<string, mixed>>|null
+     * A term {code, name} (protocol.md §5.9.1): for a code in the vocabulary its name there,
+     * otherwise the name it was given (or null). Languages without a name are left out; an
+     * object without any language is null. The vocabulary's language order is kept.
+     *
+     * @param 'parts'|'materials'|'qualifiers' $vocabulary
+     * @param array<string, string>|null $given
+     * @return array{code: string, name: array<string, string>|null}
      */
-    public static function normalizeMaterials(?array $materials): ?array
+    public static function term(string $vocabulary, string $code, ?array $given = null): array
     {
-        if ($materials === null) {
+        $known = self::vocabulary($vocabulary)[$code] ?? null;
+        $name = $known !== null ? ($known['name'] ?? null) : $given;
+        return ['code' => $code, 'name' => self::cleanName($name)];
+    }
+
+    /**
+     * A care entry {code, category, symbol, name, text}: category, symbol and name of a code in
+     * vocabularies/care.json, otherwise what was given.
+     *
+     * @param array<string, string>|null $name
+     * @param array<string, string>|null $text
+     * @return array{code: string, category: ?string, symbol: ?string, name: array<string, string>|null, text: array<string, string>|null}
+     */
+    public static function careEntry(string $code, ?string $category = null, ?string $symbol = null, ?array $name = null, ?array $text = null): array
+    {
+        $known = self::vocabulary('care')[$code] ?? null;
+        if ($known !== null) {
+            $category = $known['category'] ?? null;
+            $symbol = $known['symbol'] ?? null;
+            $name = $known['name'] ?? null;
+        }
+        return ['code' => $code, 'category' => $category, 'symbol' => $symbol, 'name' => self::cleanName($name), 'text' => $text];
+    }
+
+    /**
+     * @param mixed $name
+     * @return array<string, string>|null
+     */
+    private static function cleanName(mixed $name): ?array
+    {
+        if (!is_array($name)) {
             return null;
         }
         $out = [];
+        foreach ($name as $lang => $text) {
+            if (is_string($text) && trim($text) !== '') {
+                $out[(string) $lang] = $text;
+            }
+        }
+        return $out === [] ? null : $out;
+    }
+
+    /**
+     * The 0.1 material keys recycled_<material> and organic_<material> are the material with
+     * that qualifier (protocol.md §5.9.1); the key wins over a qualifier that was also given.
+     * With several prefixes ("organic_recycled_cotton") the first one is the qualifier.
+     *
+     * @return array{0: string, 1: ?string} [material code, qualifier code from the key or null]
+     */
+    public static function splitMaterialKey(string $code): array
+    {
+        $qualifier = null;
+        while (true) {
+            if (str_starts_with($code, 'recycled_') && strlen($code) > 9) {
+                $qualifier ??= 'recycled';
+                $code = substr($code, 9);
+            } elseif (str_starts_with($code, 'organic_') && strlen($code) > 8) {
+                $qualifier ??= 'organic';
+                $code = substr($code, 8);
+            } else {
+                return [$code, $qualifier];
+            }
+        }
+    }
+
+    /**
+     * A stored fibre in the 0.3 shape {material, percentage, qualifier}, with the 0.1 material
+     * keys normalised and the names of the vocabulary.
+     *
+     * @param array<string, mixed> $material {code, name?}
+     * @param array<string, mixed>|null $qualifier {code, name?} or null
+     * @return array{material: array{code: string, name: array<string, string>|null}, percentage: int|float, qualifier: array{code: string, name: array<string, string>|null}|null}
+     */
+    public static function fibre(array $material, int|float $percentage, ?array $qualifier): array
+    {
+        [$code, $fromKey] = self::splitMaterialKey((string) ($material['code'] ?? ''));
+        if ($fromKey !== null && ($qualifier === null || $qualifier['code'] !== $fromKey)) {
+            $qualifier = ['code' => $fromKey];
+        }
+        return [
+            'material' => self::term('materials', $code, is_array($material['name'] ?? null) ? $material['name'] : null),
+            'percentage' => self::number($percentage),
+            'qualifier' => $qualifier === null ? null
+                : self::term('qualifiers', (string) $qualifier['code'], is_array($qualifier['name'] ?? null) ? $qualifier['name'] : null),
+        ];
+    }
+
+    /**
+     * Materials as stored by 0.1 or 0.2 ({"part": "lining", "fibers": [{"fiber": "polyester",
+     * "percentage": 100, "recycled": true}]}) in the 0.3 shape, for the upgrade of a database
+     * (schema 5). Parts that are already 0.3 are left as they are; flags that are false are
+     * dropped, and of recycled and organic both true, recycled is kept.
+     *
+     * @return mixed the materials, converted where they were 0.1/0.2
+     */
+    public static function materialsFromLegacy(mixed $materials): mixed
+    {
+        if (!is_array($materials) || !array_is_list($materials)) {
+            return $materials;
+        }
+        $out = [];
         foreach ($materials as $part) {
-            $part['fibers'] = array_map([self::class, 'normalizeFiber'], (array) ($part['fibers'] ?? []));
+            if (!is_array($part)) {
+                $out[] = $part;
+                continue;
+            }
+            if (is_string($part['part'] ?? null)) {
+                $part['part'] = ['code' => $part['part']];
+            }
+            if (is_array($part['fibers'] ?? null)) {
+                $fibers = [];
+                foreach ($part['fibers'] as $f) {
+                    if (is_array($f) && array_key_exists('fiber', $f) && !array_key_exists('material', $f)) {
+                        $q = ($f['recycled'] ?? false) === true ? 'recycled' : (($f['organic'] ?? false) === true ? 'organic' : null);
+                        $f = ['material' => ['code' => $f['fiber']], 'percentage' => $f['percentage'] ?? null,
+                            'qualifier' => $q === null ? null : ['code' => $q]];
+                    }
+                    $fibers[] = $f;
+                }
+                $part['fibers'] = $fibers;
+            }
             $out[] = $part;
         }
         return $out;
@@ -128,7 +248,7 @@ final class ArticleData
             if (($product['contains_animal_origin'] ?? null) === null) {
                 foreach ($materials as $part) {
                     foreach ((array) ($part['fibers'] ?? []) as $f) {
-                        $key = (string) self::normalizeFiber((array) $f)['fiber'];
+                        $key = self::splitMaterialKey((string) ($f['material']['code'] ?? ''))[0];
                         if (self::isAnimalFibre($key)) {
                             $out[] = ['code' => 'animal_origin_unknown', 'column' => 'contains_animal_origin', 'pointer' => '/contains_animal_origin',
                                 'detail' => 'The materials contain ' . $key . '; state whether the product contains non-textile parts of animal origin (Regulation (EU) No 1007/2011 Art. 12).'];
@@ -144,7 +264,7 @@ final class ArticleData
                 }
                 if (abs($sum - 100) > 0.01) {
                     $out[] = ['code' => 'fibre_percentages_not_100', 'column' => 'materials', 'pointer' => '/materials/' . $i,
-                        'detail' => 'The percentages of ' . ($part['part'] ?? 'main') . ' add up to ' . self::number($sum) . ', not 100.'];
+                        'detail' => 'The percentages of ' . ($part['part']['code'] ?? 'main') . ' add up to ' . self::number($sum) . ', not 100.'];
                 }
             }
         } elseif (in_array($type, self::FOOTWEAR_ITEM_TYPES, true)) {
@@ -472,7 +592,7 @@ final class ArticleData
     }
 
     /**
-     * The materials grammar with the fibre flags: "outer: 100% polyester (recycled)".
+     * The materials grammar with the qualifier: "outer: 100% polyester (recycled)".
      *
      * @param list<array<string, mixed>>|null $materials
      */
@@ -485,17 +605,13 @@ final class ArticleData
         foreach ($materials as $m) {
             $fibers = [];
             foreach ((array) $m['fibers'] as $f) {
-                $f = self::normalizeFiber((array) $f);
-                $s = self::formatNumber($f['percentage']) . '% ' . $f['fiber'];
-                if (!empty($f['recycled'])) {
-                    $s .= ' (recycled)';
-                }
-                if (!empty($f['organic'])) {
-                    $s .= ' (organic)';
+                $s = self::formatNumber($f['percentage']) . '% ' . $f['material']['code'];
+                if (($f['qualifier'] ?? null) !== null) {
+                    $s .= ' (' . $f['qualifier']['code'] . ')';
                 }
                 $fibers[] = $s;
             }
-            $parts[] = $m['part'] . ': ' . implode(', ', $fibers);
+            $parts[] = $m['part']['code'] . ': ' . implode(', ', $fibers);
         }
         return implode('; ', $parts);
     }

@@ -426,6 +426,9 @@ final class ImportEngine
             try {
                 if ($col === 'contains_animal_origin' && Formats::bool($cell) === null) {
                     $fail($col, 'Write yes or no (or leave the cell empty when it is not known).');
+                } elseif ($col === 'materials') {
+                    $mw = [];
+                    Formats::parseMaterials($cell, $mw); // two qualifiers on one fibre are an error
                 } elseif ($col === 'footwear_materials') {
                     ArticleData::parseFootwear($cell);
                 } elseif ($col === 'certifications') {
@@ -573,7 +576,11 @@ final class ImportEngine
         }
         if (($v = $val('materials')) !== null) {
             $mw = [];
-            $m = Formats::parseMaterials($v, $mw);
+            try {
+                $m = Formats::parseMaterials($v, $mw);
+            } catch (\InvalidArgumentException) {
+                $m = null; // reported by articleCellsValid
+            }
             if ($m === null) {
                 $this->issue($file, $row('materials'), 'materials', 'warning', 'validation_failed', 'Materials could not be read (use e.g. "outer: 65% cotton, 35% polyamide; lining: 100% polyester"); left empty.', $v);
             } else {
@@ -613,7 +620,7 @@ final class ImportEngine
                     $this->issue($file, $row('care'), 'care', 'error', 'validation_failed', 'Unknown care code "' . $code . '".', $v);
                     return null;
                 }
-                if (!in_array($code, Formats::CARE_CODES, true)) {
+                if (!isset(ArticleData::vocabulary('care')[$code])) {
                     $this->issue($file, $row('care'), 'care', 'warning', 'validation_failed', 'Care code "' . $code . '" is not in the recommended list; kept.', $v);
                 }
                 $care[] = ['code' => $code];
