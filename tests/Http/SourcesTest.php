@@ -54,7 +54,7 @@ final class SourcesTest extends NodeTestCase
     {
         $this->assertSame('succeeded', $run['status'], Json::encode($run));
         $this->assertSame(0, $run['counts']['errors'], Json::encode($run['errors_preview']));
-        $this->assertSame(27, (int) $this->app->db->value('SELECT COUNT(*) FROM obx_assets WHERE visible = 1'));
+        $this->assertSame(35, (int) $this->app->db->value('SELECT COUNT(*) FROM obx_assets WHERE visible = 1'));
     }
 
     public function testWebAddressImportRunsAndSkipsUnchangedFiles(): void
@@ -78,7 +78,7 @@ final class SourcesTest extends NodeTestCase
         $this->assertSame('succeeded', $again['status']);
         $this->assertSame(0, $again['counts']['created'] + $again['counts']['updated'] + $again['counts']['unchanged'], 'unchanged file is skipped');
         $forced = $this->runSource($src['id'], ['force' => true]);
-        $this->assertSame(8 + 40 + 27, $forced['counts']['unchanged']);
+        $this->assertSame(11 + 46 + 35, $forced['counts']['unchanged']);
         $list = $this->json($this->http('GET', '/admin/api/import-sources', ['browser' => 'admin']));
         $this->assertSame($forced['id'], $list['items'][0]['last_run']['id']);
         $this->assertSame('manual_run', $list['items'][0]['last_run']['trigger']);
@@ -162,7 +162,7 @@ final class SourcesTest extends NodeTestCase
         $job = $this->importKestrel($token);
         $this->assertSame('succeeded', $job['status']);
         $keys = array_column($s3->list('b/'), 'key');
-        $this->assertCount(27 * 4, $keys, 'originals and renditions are in the bucket');
+        $this->assertCount(35 * 4, $keys, 'originals and renditions are in the bucket');
         // Serving works from a cold local cache.
         $this->rmrf($this->dir . '/data/cache');
         [, $id, $secret] = $this->retailerClient();

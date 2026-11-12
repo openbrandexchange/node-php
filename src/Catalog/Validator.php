@@ -184,24 +184,31 @@ final class Validator
     public function product(mixed $data): array
     {
         $d = $this->object($data);
-        $known = ['brand_external_id', 'style_number', 'name', 'description', 'item_type', 'gpc_brick', 'target_group', 'season',
-            'collection', 'materials', 'care', 'country_of_origin', 'dpp_url', 'attributes', 'status'];
+        $known = ['brand_external_id', 'style_number', 'name', 'description', 'item_type', 'item_subtype', 'gpc_brick', 'target_group',
+            'season', 'collection', 'materials', 'contains_animal_origin', 'footwear_materials', 'care', 'country_of_origin',
+            'certifications', 'dpp_url', 'features', 'attributes', 'status'];
         $this->unknown($d, $known);
         $key = '/^[a-z][a-z0-9_]{0,63}$/';
+        // The canonical stored model (key order = protocol order, docs/protocol.md §5.2).
         $model = [
             'brand_external_id' => $this->str($d, 'brand_external_id', '', 200, false, '/^[^\x00-\x1F\x7F\/]+$/'),
             'style_number' => $this->str($d, 'style_number', '', 200, true),
             'name' => $this->localized($d['name'] ?? null, '/name', true),
             'description' => $this->localized($d['description'] ?? null, '/description'),
             'item_type' => $this->str($d, 'item_type', '', 64, false, $key),
+            'item_subtype' => $this->str($d, 'item_subtype', '', 64, false, $key),
             'gpc_brick' => $this->str($d, 'gpc_brick', '', 8, false, '/^[0-9]{8}$/'),
             'target_group' => $this->str($d, 'target_group', '', 64, false, $key),
             'season' => $this->str($d, 'season', '', 64),
             'collection' => $this->str($d, 'collection', '', 200),
             'materials' => $this->materials($d['materials'] ?? null, '/materials'),
+            'contains_animal_origin' => $this->nullableBool($d, 'contains_animal_origin'),
+            'footwear_materials' => $this->footwear($d['footwear_materials'] ?? null, '/footwear_materials'),
             'care' => $this->care($d['care'] ?? null, '/care'),
             'country_of_origin' => $this->str($d, 'country_of_origin', '', 2, false, '/^[A-Z]{2}$/'),
+            'certifications' => $this->certifications($d['certifications'] ?? null, '/certifications'),
             'dpp_url' => $this->url($d, 'dpp_url', ''),
+            'features' => $this->features($d['features'] ?? null, '/features'),
             'attributes' => $this->attributes($d['attributes'] ?? null, '/attributes'),
         ];
         $status = $this->status($d, '');
@@ -247,7 +254,17 @@ final class Validator
                     $this->err($p . '/' . $i . '/fibers/' . $j . '/percentage', 'A number above 0 and at most 100.');
                     continue;
                 }
-                $fo[] = ['fiber' => $fk, 'percentage' => self::number($pct)];
+                $this->unknown($f, ['fiber', 'percentage', 'recycled', 'organic'], 'materials.fibers.');
+                foreach (['recycled', 'organic'] as $flag) {
+                    if (array_key_exists($flag, $f) && $f[$flag] !== null && !is_bool($f[$flag])) {
+                        $this->err($p . '/' . $i . '/fibers/' . $j . '/' . $flag, 'true or false.');
+                        continue 2;
+                    }
+                }
+                // 0.2: the 0.1 keys recycled_<fibre> / organic_<fibre> become the fibre with the
+                // flag; a flag is stored only when true (docs/ingest.md §3.4).
+                $fo[] = ArticleData::normalizeFiber(['fiber' => $fk, 'percentage' => self::number($pct),
+                    'recycled' => $f['recycled'] ?? false, 'organic' => $f['organic'] ?? false]);
             }
             $out[] = ['part' => $name, 'fibers' => $fo];
         }
@@ -257,6 +274,200 @@ final class Validator
     public static function number(int|float $n): int|float
     {
         return is_float($n) && floor($n) === $n && abs($n) < 1e15 ? (int) $n : $n;
+    }
+
+    /** @param array<string, mixed> $d */
+    private function nullableBool(array $d, string $k, string $p = ''): ?bool
+    {
+        $v = $d[$k] ?? null;
+        if ($v !== null && !is_bool($v)) {
+            $this->err($p . '/' . $k, 'true, false or null.');
+            return null;
+        }
+        return $v;
+    }
+
+    /**
+     * Footwear materials (Directive 94/11/EC): all three parts, null when not stated; an object
+     * with no part stated is stored as null.
+     *
+     * @return array{upper: ?string, lining_and_sock: ?string, outer_sole: ?string}|null
+     */
+    private function footwear(mixed $v, string $p): ?array
+    {
+        if ($v === null) {
+            return null;
+        }
+        if (!Json::isObject($v)) {
+            $this->err($p, 'An object with upper, lining_and_sock and outer_sole.');
+            return null;
+        }
+        $this->unknown($v, ArticleData::FOOTWEAR_PARTS, 'footwear_materials.');
+        $out = [];
+        foreach (ArticleData::FOOTWEAR_PARTS as $part) {
+            $val = $v[$part] ?? null;
+            if ($val !== null && (!is_string($val) || !in_array($val, ArticleData::FOOTWEAR_VALUES, true))) {
+                $this->err($p . '/' . $part, 'One of ' . implode(', ', ArticleData::FOOTWEAR_VALUES) . ' or null.');
+                $val = null;
+            }
+            $out[$part] = $val;
+        }
+        return array_filter($out, static fn ($x) => $x !== null) === [] ? null : $out;
+    }
+
+    /** @return list<array{scheme: string, licence_number: ?string, scope: string}>|null an empty list is null */
+    private function certifications(mixed $v, string $p): ?array
+    {
+        if ($v === null) {
+            return null;
+        }
+        if (!is_array($v) || !array_is_list($v)) {
+            $this->err($p, 'A list of certifications.');
+            return null;
+        }
+        $out = [];
+        foreach ($v as $i => $c) {
+            if (!Json::isObject($c) || $c === []) {
+                $this->err($p . '/' . $i, 'An object with scheme, licence_number and scope.');
+                continue;
+            }
+            $this->unknown($c, ['scheme', 'licence_number', 'scope'], 'certifications.');
+            $scheme = $c['scheme'] ?? null;
+            if (!is_string($scheme) || !preg_match(ArticleData::KEY, $scheme)) {
+                $this->err($p . '/' . $i . '/scheme', 'A scheme key such as gots or oeko_tex_standard_100.');
+                continue;
+            }
+            $licence = $this->str($c, 'licence_number', $p . '/' . $i, 200);
+            $scope = $c['scope'] ?? null;
+            if (!is_string($scope) || !in_array($scope, ArticleData::CERTIFICATION_SCOPES, true)) {
+                $this->err($p . '/' . $i . '/scope', 'Either "product" or "material".');
+                continue;
+            }
+            $out[] = ['scheme' => $scheme, 'licence_number' => $licence, 'scope' => $scope];
+        }
+        return $out === [] ? null : $out;
+    }
+
+    /**
+     * Typed features (protocol.md §5.9.4): registry keys must have their type and values; other
+     * keys are kept as sent (a string, number, boolean or a list of those). An empty object is null.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function features(mixed $v, string $p): ?array
+    {
+        if ($v === null) {
+            return null;
+        }
+        if (!Json::isObject($v)) {
+            $this->err($p, 'An object of features, e.g. {"wheels": 4}.');
+            return null;
+        }
+        $out = [];
+        foreach ($v as $k => $val) {
+            $k = (string) $k;
+            $ptr = $p . '/' . $k;
+            if (!preg_match(ArticleData::KEY, $k)) {
+                $this->err($ptr, 'Feature keys are lower_snake_case.');
+                continue;
+            }
+            if ($val === null) {
+                continue;
+            }
+            $spec = ArticleData::FEATURES[$k] ?? null;
+            if ($spec === null) {
+                $scalar = static fn ($x) => is_string($x) || is_int($x) || is_float($x) || is_bool($x);
+                if ($scalar($val) || is_array($val) && array_is_list($val) && array_filter($val, static fn ($x) => !$scalar($x)) === []) {
+                    $out[$k] = $val;
+                } else {
+                    $this->err($ptr, 'A string, number, boolean or a list of those.');
+                }
+                continue;
+            }
+            [$type, $values] = $spec;
+            $allowed = implode(', ', array_map('strval', $values));
+            switch ($type) {
+                case 'enum':
+                    if (!is_string($val) || !in_array($val, $values, true)) {
+                        $this->err($ptr, 'One of ' . $allowed . '.');
+                        continue 2;
+                    }
+                    break;
+                case 'integer':
+                    if (is_float($val) && floor($val) === $val) {
+                        $val = (int) $val;
+                    }
+                    if (!is_int($val) || !in_array($val, $values, true)) {
+                        $this->err($ptr, 'One of ' . $allowed . '.');
+                        continue 2;
+                    }
+                    break;
+                case 'boolean':
+                    if (!is_bool($val)) {
+                        $this->err($ptr, 'true or false.');
+                        continue 2;
+                    }
+                    break;
+                default:
+                    if (!is_array($val) || !array_is_list($val) || array_diff(array_map(static fn ($x) => is_string($x) ? $x : "\0", $val), $values) !== []) {
+                        $this->err($ptr, 'A list of ' . $allowed . '.');
+                        continue 2;
+                    }
+                    if (count(array_unique($val)) !== count($val)) {
+                        $this->err($ptr, 'A list without duplicates.');
+                        continue 2;
+                    }
+                    if ($val === []) {
+                        continue 2;
+                    }
+            }
+            $out[$k] = $val;
+        }
+        return $out === [] ? null : ArticleData::orderFeatures($out);
+    }
+
+    /**
+     * Measurements of a variant (protocol.md §5.9.3): positive numbers, strap_length_cm as
+     * {min, max}. An empty object is null.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function measurements(mixed $v, string $p): ?array
+    {
+        if ($v === null) {
+            return null;
+        }
+        if (!Json::isObject($v)) {
+            $this->err($p, 'An object of measurements, e.g. {"weight_kg": 2.6}.');
+            return null;
+        }
+        $this->unknown($v, ArticleData::MEASUREMENTS, 'measurements.');
+        $positive = static fn ($x) => (is_int($x) || is_float($x)) && $x > 0 && !is_infinite((float) $x);
+        $out = [];
+        foreach (ArticleData::MEASUREMENTS as $k) {
+            $val = $v[$k] ?? null;
+            if ($val === null) {
+                continue;
+            }
+            if ($k === 'strap_length_cm') {
+                if (!Json::isObject($val) || !$positive($val['min'] ?? null) || !$positive($val['max'] ?? null)) {
+                    $this->err($p . '/' . $k, 'An object {"min": 80, "max": 130} with positive numbers.');
+                    continue;
+                }
+                if ($val['min'] > $val['max']) {
+                    $this->err($p . '/' . $k, 'min is larger than max.');
+                    continue;
+                }
+                $out[$k] = ['min' => self::number($val['min']), 'max' => self::number($val['max'])];
+                continue;
+            }
+            if (!$positive($val)) {
+                $this->err($p . '/' . $k, 'A positive number (' . (str_ends_with($k, '_kg') ? 'kg' : (str_ends_with($k, '_l') ? 'litres' : (str_ends_with($k, '_inch') ? 'inch' : 'cm'))) . ').');
+                continue;
+            }
+            $out[$k] = self::number($val);
+        }
+        return $out === [] ? null : $out;
     }
 
     /** @return list<array{code: string, text: ?array}>|null */
@@ -319,7 +530,7 @@ final class Validator
     public function variant(mixed $data): array
     {
         $d = $this->object($data);
-        $this->unknown($d, ['product_external_id', 'gtin', 'sku', 'color', 'size', 'size_system', 'status']);
+        $this->unknown($d, ['product_external_id', 'gtin', 'sku', 'color', 'size', 'size_length', 'size_system', 'measurements', 'status']);
         $gtin = null;
         if (array_key_exists('gtin', $d) && $d['gtin'] !== null && $d['gtin'] !== '') {
             $g = is_int($d['gtin']) ? (string) $d['gtin'] : $d['gtin'];
@@ -336,11 +547,17 @@ final class Validator
         if (!is_array($color) || array_is_list($color) && $color !== []) {
             $this->err('/color', 'Required: an object with at least "code".');
         } else {
-            $this->unknown($color, ['code', 'name', 'supplier_color'], 'color.');
+            $this->unknown($color, ['code', 'name', 'supplier_color', 'family'], 'color.');
+            $family = $color['family'] ?? null;
+            if ($family !== null && (!is_string($family) || !in_array($family, ArticleData::COLOR_FAMILIES, true))) {
+                $this->err('/color/family', 'One of ' . implode(', ', ArticleData::COLOR_FAMILIES) . ' or null.');
+                $family = null;
+            }
             $colorOut = [
                 'code' => $this->str($color, 'code', '/color', 64, true),
                 'name' => $this->localized($color['name'] ?? null, '/color/name'),
                 'supplier_color' => $this->str($color, 'supplier_color', '/color', 200),
+                'family' => $family,
             ];
         }
         $model = [
@@ -349,7 +566,9 @@ final class Validator
             'sku' => $this->str($d, 'sku', '', 200),
             'color' => $colorOut,
             'size' => $this->str($d, 'size', '', 64),
+            'size_length' => $this->str($d, 'size_length', '', 64),
             'size_system' => $this->str($d, 'size_system', '', 16),
+            'measurements' => $this->measurements($d['measurements'] ?? null, '/measurements'),
         ];
         $status = $this->status($d, '');
         $this->finish();

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Obx\Node\Services;
 
 use Obx\Node\App;
+use Obx\Node\Catalog\ArticleData;
 use Obx\Node\Catalog\Viewer;
 use Obx\Node\Db\Db;
 use Obx\Node\Http\ApiError;
@@ -225,12 +226,22 @@ final class Downloads
             $details[] = $d;
         }
         $attrKeys = [];
+        $otherFeatures = [];
         foreach ($details as $d) {
             foreach (array_keys((array) ($d['attributes'] ?? [])) as $k) {
                 $attrKeys[$k] = true;
             }
+            foreach (array_keys((array) ($d['features'] ?? [])) as $k) {
+                if (!isset(ArticleData::FEATURES[$k])) {
+                    $otherFeatures[$k] = true;
+                }
+            }
         }
         ksort($attrKeys);
+        ksort($otherFeatures, SORT_STRING);
+        // Columns of import-format.md §1.2 in its order: a feature column for every registry key
+        // and for every other key the products have (sorted), attr:<key>, then image_files.
+        $featureKeys = array_merge(array_keys(ArticleData::FEATURES), array_map('strval', array_keys($otherFeatures)));
         $header = ['brand', 'product_id', 'style_number'];
         foreach ($langs as $l) {
             $header[] = 'name:' . $l;
@@ -238,7 +249,11 @@ final class Downloads
         foreach ($langs as $l) {
             $header[] = 'description:' . $l;
         }
-        array_push($header, 'item_type', 'target_group', 'season', 'collection', 'gpc_brick', 'materials', 'care', 'country_of_origin', 'dpp_url', 'status');
+        array_push($header, 'item_type', 'item_subtype', 'target_group', 'season', 'collection', 'gpc_brick', 'materials',
+            'contains_animal_origin', 'footwear_materials', 'care', 'country_of_origin', 'certifications', 'dpp_url', 'status');
+        foreach ($featureKeys as $k) {
+            $header[] = 'feature:' . $k;
+        }
         foreach (array_keys($attrKeys) as $k) {
             $header[] = 'attr:' . $k;
         }
@@ -246,7 +261,9 @@ final class Downloads
         foreach ($langs as $l) {
             $header[] = 'color_name:' . $l;
         }
-        array_push($header, 'supplier_color', 'size', 'size_system', 'variant_status', 'image_files');
+        array_push($header, 'color_family', 'supplier_color', 'size', 'size_length', 'size_system', ...ArticleData::MEASUREMENTS);
+        array_push($header, 'variant_status', 'image_files');
+        $variantColumns = 4 + count($langs) + 5 + count(ArticleData::MEASUREMENTS) + 1;
         $out = "\xEF\xBB\xBF" . Csv::line($header, $delimiter);
         foreach ($details as $d) {
             $row = $rows[$d['id']];
@@ -257,16 +274,27 @@ final class Downloads
             foreach ($langs as $l) {
                 $base[] = $d['description'][$l] ?? '';
             }
-            $base[] = (string) ($d['item_type'] ?? '');
-            $base[] = (string) ($d['target_group'] ?? '');
-            $base[] = (string) ($d['season'] ?? '');
-            $base[] = (string) ($d['collection'] ?? '');
-            $base[] = (string) ($d['gpc_brick'] ?? '');
-            $base[] = self::materialsText($d['materials'] ?? null);
-            $base[] = implode('|', array_map(static fn ($c) => $c['code'], (array) ($d['care'] ?? [])));
-            $base[] = (string) ($d['country_of_origin'] ?? '');
-            $base[] = (string) ($d['dpp_url'] ?? '');
-            $base[] = 'published';
+            $animal = $d['contains_animal_origin'] ?? null;
+            array_push(
+                $base,
+                (string) ($d['item_type'] ?? ''),
+                (string) ($d['item_subtype'] ?? ''),
+                (string) ($d['target_group'] ?? ''),
+                (string) ($d['season'] ?? ''),
+                (string) ($d['collection'] ?? ''),
+                (string) ($d['gpc_brick'] ?? ''),
+                self::materialsText($d['materials'] ?? null),
+                $animal === null ? '' : ($animal ? 'yes' : 'no'),
+                ArticleData::formatFootwear($d['footwear_materials'] ?? null),
+                implode('|', array_map(static fn ($c) => $c['code'], (array) ($d['care'] ?? []))),
+                (string) ($d['country_of_origin'] ?? ''),
+                ArticleData::formatCertifications($d['certifications'] ?? null),
+                (string) ($d['dpp_url'] ?? ''),
+                'published',
+            );
+            foreach ($featureKeys as $k) {
+                $base[] = ArticleData::formatFeature($d['features'][$k] ?? null);
+            }
             foreach (array_keys($attrKeys) as $k) {
                 $val = $d['attributes'][$k] ?? '';
                 $base[] = is_array($val) ? (string) (\Obx\Node\Support\Lang::pick($val, $langs[0]) ?? '') : (is_bool($val) ? ($val ? 'true' : 'false') : (string) $val);
@@ -276,7 +304,7 @@ final class Downloads
                 $imagesByColor[(string) ($a['color_code'] ?? '')][] = $a['filename'];
             }
             if ($d['variants'] === []) {
-                $out .= Csv::line(array_merge($base, array_fill(0, 4 + count($langs) + 4, ''), [implode('|', array_merge($imagesByColor[''] ?? []))]), $delimiter);
+                $out .= Csv::line(array_merge($base, array_fill(0, $variantColumns, ''), [implode('|', array_merge($imagesByColor[''] ?? []))]), $delimiter);
                 continue;
             }
             foreach ($d['variants'] as $var) {
@@ -288,9 +316,14 @@ final class Downloads
                 foreach ($langs as $l) {
                     $cells[] = $var['color']['name'][$l] ?? '';
                 }
+                $cells[] = (string) ($var['color']['family'] ?? '');
                 $cells[] = (string) ($var['color']['supplier_color'] ?? '');
                 $cells[] = (string) ($var['size'] ?? '');
+                $cells[] = (string) ($var['size_length'] ?? '');
                 $cells[] = (string) ($var['size_system'] ?? '');
+                foreach (ArticleData::MEASUREMENTS as $k) {
+                    $cells[] = ArticleData::formatMeasurement($var['measurements'] ?? null, $k);
+                }
                 $cells[] = 'published';
                 $cells[] = implode('|', array_merge($imagesByColor[(string) $var['color']['code']] ?? [], $imagesByColor[''] ?? []));
                 $out .= Csv::line($cells, $delimiter);
@@ -299,18 +332,15 @@ final class Downloads
         return $out;
     }
 
-    /** @param list<array<string, mixed>>|null $materials */
+    /**
+     * The materials grammar of import-format.md §1.4, with the fibre flags "(recycled)" and
+     * "(organic)".
+     *
+     * @param list<array<string, mixed>>|null $materials
+     */
     public static function materialsText(?array $materials): string
     {
-        if ($materials === null) {
-            return '';
-        }
-        $parts = [];
-        foreach ($materials as $m) {
-            $fibers = array_map(static fn ($f) => $f['percentage'] . '% ' . $f['fiber'], $m['fibers']);
-            $parts[] = $m['part'] . ': ' . implode(', ', $fibers);
-        }
-        return implode('; ', $parts);
+        return ArticleData::formatMaterials($materials);
     }
 
     // ================================================================ background jobs

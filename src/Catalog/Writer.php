@@ -285,6 +285,14 @@ final class Writer
         $set = [];
         $sync = [];
         $touch = [];
+        // Label completeness (docs/ingest.md §3.4): reported, never blocking.
+        $details = [];
+        if ($kind === 'product' && !$fileOnly) {
+            foreach (ArticleData::labelWarnings($model) as $lw) {
+                $warnings[] = $lw['code'] . ': ' . $lw['detail'];
+                $details[] = ['code' => $lw['code'], 'pointer' => $lw['pointer'], 'detail' => $lw['detail']];
+            }
+        }
         switch ($kind) {
             case 'brand':
                 $this->checkRestriction($ext, $ctx);
@@ -364,7 +372,7 @@ final class Writer
         $inputJson = Json::encode($model);
         $etag = $this->etag($kind, $model, $status, (string) ($set['files'] ?? ''), (string) ($set['pending'] ?? ''));
         if ($row !== null && $row['etag'] === $etag && $this->sameColumns($row, $set)) {
-            return $this->result($ctx, $kind, $ext, 'unchanged', $row['id'], $row, $warnings);
+            return $this->result($ctx, $kind, $ext, 'unchanged', $row['id'], $row, $warnings, 200, 'auto', $details);
         }
         $set['input'] = $inputJson;
         $set['status'] = $status;
@@ -401,7 +409,7 @@ final class Writer
         }
         $this->sync($sync, $touch);
         $fresh = $this->db->one('SELECT * FROM ' . self::TABLES[$kind] . ' WHERE id = ?', [$id]);
-        return $this->result($ctx, $kind, $ext, $result, $id, $fresh, $warnings, $result === 'created' ? 201 : 200);
+        return $this->result($ctx, $kind, $ext, $result, $id, $fresh, $warnings, $result === 'created' ? 201 : 200, 'auto', $details);
     }
 
     /** @param array<string, list<mixed>> $sync */
@@ -614,12 +622,7 @@ final class Writer
     /** @param array<string, mixed> $model */
     private function etag(string $kind, array $model, string $status, string $files, string $pending): string
     {
-        $record = ['kind' => $kind, 'input' => $model, 'status' => $status];
-        if ($kind === 'asset') {
-            $record['files'] = Json::decode($files, null);
-            $record['pending'] = Json::decode($pending, null);
-        }
-        return '"' . hash('sha256', Json::canonical($record)) . '"';
+        return self::etagOf($kind, $model, $status, $files, $pending);
     }
 
     // ================================================================ reconcile
@@ -947,11 +950,12 @@ final class Writer
      * @param array<string, mixed> $ctx
      * @param array<string, mixed>|null $row
      * @param list<string> $warnings
+     * @param list<array{code: string, pointer: ?string, detail: string}> $details warnings with a stable code
      * @return array<string, mixed>
      */
-    private function result(array $ctx, string $kind, string $ext, string $result, ?string $id, ?array $row, array $warnings, int $status = 200, ?string $visibility = 'auto'): array
+    private function result(array $ctx, string $kind, string $ext, string $result, ?string $id, ?array $row, array $warnings, int $status = 200, ?string $visibility = 'auto', array $details = []): array
     {
-        return [
+        $out = [
             'index' => $ctx['index'] ?? null,
             'op' => $ctx['op'] ?? 'upsert',
             'kind' => $kind,
@@ -964,6 +968,22 @@ final class Writer
             'warnings' => array_values(array_unique($warnings)),
             '_status' => $status,
         ];
+        if ($details !== []) {
+            // IngestResult.warning_details: present only when there are any.
+            $out['warning_details'] = $details;
+        }
+        return $out;
+    }
+
+    /** ETag of a stored record (the canonical write model, status and, for assets, files). */
+    public static function etagOf(string $kind, array $model, string $status, string $files, string $pending): string
+    {
+        $record = ['kind' => $kind, 'input' => $model, 'status' => $status];
+        if ($kind === 'asset') {
+            $record['files'] = Json::decode($files, null);
+            $record['pending'] = Json::decode($pending, null);
+        }
+        return '"' . hash('sha256', Json::canonical($record)) . '"';
     }
 
     /**

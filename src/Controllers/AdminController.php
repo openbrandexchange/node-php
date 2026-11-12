@@ -299,7 +299,7 @@ final class AdminController extends Controller
         foreach ($langs as $l) {
             $header[] = 'description:' . $l;
         }
-        array_push($header, 'item_type', 'target_group', 'season', 'collection', 'materials', 'care', 'country_of_origin', 'gtin', 'sku', 'color_code');
+        array_push($header, 'item_type', 'target_group', 'season', 'collection', 'materials', 'contains_animal_origin', 'care', 'country_of_origin', 'gtin', 'sku', 'color_code');
         foreach ($langs as $l) {
             $header[] = 'color_name:' . $l;
         }
@@ -313,7 +313,7 @@ final class AdminController extends Controller
             foreach ($langs as $_) {
                 $row[] = 'Fine-knit sweater in soft merino wool.';
             }
-            array_push($row, 'sweater', 'unisex', 'AW26', 'Core', 'main: 100% merino_wool', 'wash_30_very_mild|do_not_tumble_dry|dry_flat', 'PT', $gtin, 'ST-1001-NVY-' . $size, 'NVY');
+            array_push($row, 'sweater', 'unisex', 'AW26', 'Core', 'main: 100% merino_wool', 'no', 'wash_30_very_mild|do_not_tumble_dry|dry_flat', 'PT', $gtin, 'ST-1001-NVY-' . $size, 'NVY');
             foreach ($langs as $_) {
                 $row[] = 'Navy';
             }

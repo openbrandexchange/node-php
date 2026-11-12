@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Obx\Node\Import;
 
 use Obx\Node\App;
+use Obx\Node\Catalog\ArticleData;
 use Obx\Node\Catalog\Validator;
 use Obx\Node\Http\ApiError;
 use Obx\Node\Support\Clock;
@@ -18,9 +19,16 @@ use Obx\Node\Support\Str;
  */
 final class ImportEngine
 {
-    private const PRODUCT_COLS = ['brand', 'product_id', 'style_number', 'name', 'description', 'item_type', 'target_group', 'season',
-        'collection', 'gpc_brick', 'materials', 'care', 'country_of_origin', 'dpp_url', 'status'];
-    private const VARIANT_COLS = ['variant_id', 'gtin', 'sku', 'color_code', 'color_name', 'supplier_color', 'size', 'size_system', 'variant_status'];
+    private const PRODUCT_COLS = ['brand', 'product_id', 'style_number', 'name', 'description', 'item_type', 'item_subtype', 'target_group',
+        'season', 'collection', 'gpc_brick', 'materials', 'contains_animal_origin', 'footwear_materials', 'care', 'country_of_origin',
+        'certifications', 'dpp_url', 'status'];
+    private const VARIANT_COLS = ['variant_id', 'gtin', 'sku', 'color_code', 'color_name', 'color_family', 'supplier_color', 'size',
+        'size_length', 'size_system', 'variant_status',
+        'height_cm', 'width_cm', 'depth_cm', 'weight_kg', 'volume_l', 'volume_expanded_l',
+        'handle_drop_cm', 'strap_length_cm', 'laptop_max_inch', 'heel_height_cm', 'shaft_height_cm', 'inseam_cm'];
+    /** Variant columns that only make sense on a row with a variant (import-format.md §1.2). */
+    private const VARIANT_ONLY = ['color_family', 'size_length', 'height_cm', 'width_cm', 'depth_cm', 'weight_kg', 'volume_l',
+        'volume_expanded_l', 'handle_drop_cm', 'strap_length_cm', 'laptop_max_inch', 'heel_height_cm', 'shaft_height_cm', 'inseam_cm'];
     private const ASSET_COLS = ['file', 'asset_id', 'product_id', 'style_number', 'color_code', 'position', 'role', 'view', 'alt_text',
         'license', 'license_text', 'channels', 'territories', 'embargo_until', 'expires_at', 'credit', 'model_release',
         'ai_generated', 'ai_edited', 'source', 'c2pa', 'c2pa_manifest_url', 'generator', 'status'];
@@ -200,10 +208,27 @@ final class ImportEngine
     {
         $file = 'products.csv';
         foreach ($csv['headers'] as $i => $h) {
+            if (str_starts_with($h, 'feature:')) {
+                $key = substr($h, 8);
+                if (!preg_match(ArticleData::KEY, $key)) {
+                    $this->ignoredColumns[$h] = true;
+                    $this->issue($file, null, $csv['raw_headers'][$i], 'warning', 'validation_failed', 'The feature key "' . $key . '" must be lowercase letters, digits and _; the column was ignored.');
+                } elseif (!isset(ArticleData::FEATURES[$key])) {
+                    $this->issue($file, null, $h, 'warning', 'validation_failed', 'The feature "' . $key . '" is not in the feature registry; its cells are stored as text.');
+                }
+                continue;
+            }
             if ($h === '' || $h === 'image_files' || $this->knownProductColumn($h)) {
                 continue;
             }
             $this->issue($file, null, $csv['raw_headers'][$i], 'warning', 'validation_failed', 'Unknown column "' . $csv['raw_headers'][$i] . '" was ignored.');
+        }
+        foreach (array_keys($this->ignoredColumns) as $h) {
+            $csv['headers'] = array_values(array_filter($csv['headers'], static fn ($x) => $x !== $h));
+            foreach ($csv['rows'] as &$r) {
+                unset($r['values'][$h]);
+            }
+            unset($r);
         }
         if (!in_array('style_number', $csv['headers'], true)) {
             throw new ApiError('import_invalid', 'products.csv needs a style_number column.');
@@ -216,6 +241,9 @@ final class ImportEngine
             $style = $v['style_number'] ?? '';
             if ($style === '') {
                 $this->issue($file, $r['row'], 'style_number', 'error', 'validation_failed', 'style_number is required.');
+                continue;
+            }
+            if (!$this->articleCellsValid($r)) {
                 continue;
             }
             $ext = ($v['product_id'] ?? '') !== '' ? $v['product_id'] : $style;
@@ -244,10 +272,76 @@ final class ImportEngine
         return $plans;
     }
 
+    /** @var array<string, true> feature columns with an unusable key */
+    private array $ignoredColumns = [];
+
+    /**
+     * The article data cells of one row (import-format.md §1.6): a cell that does not follow
+     * the rules is an error validation_failed for that row, with the column, and the row is
+     * skipped. Variant cells on a row without a variant are ignored with a warning.
+     *
+     * @param array{row: int, values: array<string, string>} $r
+     */
+    private function articleCellsValid(array $r): bool
+    {
+        $file = 'products.csv';
+        $v = $r['values'];
+        $ok = true;
+        $fail = function (string $col, string $detail) use ($file, $r, $v, &$ok): void {
+            $this->issue($file, $r['row'], $col, 'error', 'validation_failed', $detail, $v[$col] ?? '');
+            $ok = false;
+        };
+        foreach ($v as $col => $cell) {
+            if ($cell === '') {
+                continue;
+            }
+            try {
+                if ($col === 'contains_animal_origin' && Formats::bool($cell) === null) {
+                    $fail($col, 'Write yes or no (or leave the cell empty when it is not known).');
+                } elseif ($col === 'footwear_materials') {
+                    ArticleData::parseFootwear($cell);
+                } elseif ($col === 'certifications') {
+                    ArticleData::parseCertifications($cell);
+                } elseif (str_starts_with($col, 'feature:')) {
+                    ArticleData::parseFeature(substr($col, 8), $cell);
+                }
+            } catch (\InvalidArgumentException $e) {
+                $fail($col, $e->getMessage());
+            }
+        }
+        $hasVariant = false;
+        foreach (['gtin', 'variant_id', 'sku', 'color_code', 'size'] as $c) {
+            if (($v[$c] ?? '') !== '') {
+                $hasVariant = true;
+            }
+        }
+        foreach (self::VARIANT_ONLY as $col) {
+            $cell = $v[$col] ?? '';
+            if ($cell === '') {
+                continue;
+            }
+            if (!$hasVariant) {
+                $this->issue($file, $r['row'], $col, 'warning', 'validation_failed', $col . ' is ignored on a row without a size or colour (gtin, variant_id, sku, color_code or size).', $cell);
+                continue;
+            }
+            try {
+                match (true) {
+                    $col === 'color_family' => ArticleData::parseColorFamily($cell),
+                    $col === 'size_length' => mb_strlen($cell, 'UTF-8') > 64 ? throw new \InvalidArgumentException('At most 64 characters.') : $cell,
+                    $col === 'strap_length_cm' => ArticleData::parseStrapLength($cell),
+                    default => ArticleData::parseMeasurement($cell),
+                };
+            } catch (\InvalidArgumentException $e) {
+                $fail($col, $e->getMessage());
+            }
+        }
+        return $ok;
+    }
+
     private function knownProductColumn(string $h): bool
     {
         $base = explode(':', $h, 2)[0];
-        if (str_starts_with($h, 'attr:')) {
+        if (str_starts_with($h, 'attr:') || str_starts_with($h, 'feature:')) {
             return true;
         }
         if (str_contains($h, ':')) {
@@ -259,7 +353,7 @@ final class ImportEngine
     private function isProductColumn(string $h): bool
     {
         $base = explode(':', $h, 2)[0];
-        return str_starts_with($h, 'attr:') || in_array($base, self::PRODUCT_COLS, true);
+        return str_starts_with($h, 'attr:') || str_starts_with($h, 'feature:') || in_array($base, self::PRODUCT_COLS, true);
     }
 
     private function loadBrands(): void
@@ -323,7 +417,7 @@ final class ImportEngine
             'name' => $name,
             'description' => $this->localized($g['values'], 'description'),
         ];
-        foreach (['item_type', 'target_group'] as $k) {
+        foreach (['item_type', 'item_subtype', 'target_group'] as $k) {
             $v = $val($k);
             if ($v !== null) {
                 $key = Formats::key($v);
@@ -360,6 +454,25 @@ final class ImportEngine
                     $this->issue($file, $row('materials'), 'materials', 'warning', 'validation_failed', $w, $v);
                 }
             }
+        }
+        // 0.2 article data (import-format.md §1.6); the rows were checked in articleCellsValid.
+        if (($v = $val('contains_animal_origin')) !== null) {
+            $data['contains_animal_origin'] = Formats::bool($v);
+        }
+        if (($v = $val('footwear_materials')) !== null) {
+            $data['footwear_materials'] = ArticleData::parseFootwear($v);
+        }
+        if (($v = $val('certifications')) !== null) {
+            $data['certifications'] = ArticleData::parseCertifications($v);
+        }
+        $features = [];
+        foreach ($g['values'] as $col => [$cell]) {
+            if (str_starts_with($col, 'feature:')) {
+                $features[substr($col, 8)] = ArticleData::parseFeature(substr($col, 8), $cell);
+            }
+        }
+        if ($features !== []) {
+            $data['features'] = ArticleData::orderFeatures($features);
         }
         if (($v = $val('care')) !== null) {
             $care = [];
@@ -506,6 +619,21 @@ final class ImportEngine
         }
         $size = ($v['size'] ?? '') !== '' ? $v['size'] : null;
         $ext = ($v['variant_id'] ?? '') !== '' ? $v['variant_id'] : ($gtin ?? ($style . '-' . $color . ($size !== null ? '-' . $size : '')));
+        $family = null;
+        if (($v['color_family'] ?? '') !== '') {
+            $family = ArticleData::parseColorFamily($v['color_family']);
+            $fk = $productExt . "\0" . $color;
+            if (isset($this->families[$fk]) && $this->families[$fk] !== $family) {
+                $this->issue($file, $r['row'], 'color_family', 'warning', 'validation_failed', 'Differs from an earlier row of colour ' . $color . ' (' . $this->families[$fk] . '); every size of one colour should have the same colour family.', $v['color_family']);
+            }
+            $this->families[$fk] ??= $family;
+        }
+        $measurements = [];
+        foreach (ArticleData::MEASUREMENTS as $k) {
+            if (($v[$k] ?? '') !== '') {
+                $measurements[$k] = $k === 'strap_length_cm' ? ArticleData::parseStrapLength($v[$k]) : ArticleData::parseMeasurement($v[$k]);
+            }
+        }
         $data = [
             'product_external_id' => $productExt,
             'gtin' => $gtin,
@@ -514,10 +642,15 @@ final class ImportEngine
                 'code' => $color,
                 'name' => $this->localized($v, 'color_name'),
                 'supplier_color' => ($v['supplier_color'] ?? '') !== '' ? $v['supplier_color'] : null,
+                'family' => $family,
             ],
             'size' => $size,
+            'size_length' => ($v['size_length'] ?? '') !== '' ? $v['size_length'] : null,
             'size_system' => ($v['size_system'] ?? '') !== '' ? $v['size_system'] : null,
         ];
+        if ($measurements !== []) {
+            $data['measurements'] = $measurements;
+        }
         if (($s = strtolower($v['variant_status'] ?? '')) !== '') {
             if (in_array($s, ['published', 'unpublished'], true)) {
                 $data['status'] = $s;
@@ -853,30 +986,40 @@ final class ImportEngine
     /** @var list<string> */
     private array $mirrorUnpublish = [];
 
+    /** @var array<string, string> product external id + "\0" + colour code => first colour family */
+    private array $families = [];
+
     /**
      * Which columns products.csv has (import rule 9): plain columns, the languages of each text
-     * column (the plain one is the import's default language) and the attr:<key> columns.
+     * column (the plain one is the import's default language), the attr:<key> and the
+     * feature:<key> columns.
      *
-     * @var array{plain: array<string, true>, langs: array<string, array<string, true>>, attrs: array<string, true>}
+     * @var array{plain: array<string, true>, langs: array<string, array<string, true>>, attrs: array<string, true>, features: array<string, true>}
      */
-    private array $present = ['plain' => [], 'langs' => [], 'attrs' => []];
+    private array $present = ['plain' => [], 'langs' => [], 'attrs' => [], 'features' => []];
 
     /** Fields of the stored product and variant model, by the products.csv column they come from. */
     private const PRODUCT_FIELDS = [
         ['name', 'name', 'text'], ['description', 'description', 'text'], ['item_type', 'item_type', 'plain'],
+        ['item_subtype', 'item_subtype', 'plain'],
         ['target_group', 'target_group', 'plain'], ['season', 'season', 'plain'], ['collection', 'collection', 'plain'],
-        ['gpc_brick', 'gpc_brick', 'plain'], ['materials', 'materials', 'plain'], ['care', 'care', 'plain'],
-        ['country_of_origin', 'country_of_origin', 'plain'], ['dpp_url', 'dpp_url', 'plain'], ['attributes', 'attr', 'attrs'],
+        ['gpc_brick', 'gpc_brick', 'plain'], ['materials', 'materials', 'plain'],
+        ['contains_animal_origin', 'contains_animal_origin', 'plain'], ['footwear_materials', 'footwear_materials', 'plain'],
+        ['care', 'care', 'plain'], ['country_of_origin', 'country_of_origin', 'plain'],
+        ['certifications', 'certifications', 'plain'], ['dpp_url', 'dpp_url', 'plain'],
+        // Per key (rule 9): feature:<key> columns and the measurement columns.
+        ['features', 'feature', 'features'], ['attributes', 'attr', 'attrs'],
     ];
     private const VARIANT_FIELDS = [
-        ['gtin', 'gtin', 'plain'], ['sku', 'sku', 'plain'], ['size', 'size', 'plain'], ['size_system', 'size_system', 'plain'],
-        ['color.name', 'color_name', 'text'], ['color.supplier_color', 'supplier_color', 'plain'],
+        ['gtin', 'gtin', 'plain'], ['sku', 'sku', 'plain'], ['size', 'size', 'plain'], ['size_length', 'size_length', 'plain'],
+        ['size_system', 'size_system', 'plain'], ['color.name', 'color_name', 'text'], ['color.family', 'color_family', 'plain'],
+        ['color.supplier_color', 'supplier_color', 'plain'], ['measurements', 'measurements', 'measurements'],
     ];
 
     /** @param list<string> $headers normalised products.csv header */
     private function recordPresentColumns(array $headers): void
     {
-        $p = ['plain' => [], 'langs' => ['name' => [], 'description' => [], 'color_name' => []], 'attrs' => []];
+        $p = ['plain' => [], 'langs' => ['name' => [], 'description' => [], 'color_name' => []], 'attrs' => [], 'features' => []];
         foreach ($headers as $h) {
             if ($h === '') {
                 continue;
@@ -885,6 +1028,8 @@ final class ImportEngine
                 [$base, $tag] = explode(':', $h, 2);
                 if ($base === 'attr') {
                     $p['attrs'][$tag] = true;
+                } elseif ($base === 'feature') {
+                    $p['features'][$tag] = true;
                 } elseif (isset($p['langs'][$base])) {
                     $p['langs'][$base][$tag] = true;
                 }
@@ -900,8 +1045,9 @@ final class ImportEngine
 
     /**
      * Import rule 9 (import-format.md): for a product or variant the node already has, a field
-     * whose column the file does not have keeps its stored value (texts per language, attributes
-     * per key); an empty cell in a column the file has still removes the value.
+     * whose column the file does not have keeps its stored value (texts per language; attributes,
+     * features and measurements per key); an empty cell in a column the file has still removes
+     * the value. When the last feature or measurement is removed, the object is null.
      *
      * @param array<string, mixed> $data what this import built
      * @param array<string, mixed> $stored the stored write model
@@ -936,7 +1082,12 @@ final class ImportEngine
             } elseif (is_array($old)) {
                 $now = is_array($parent[$key] ?? null) ? $parent[$key] : [];
                 foreach ($old as $k => $v) {
-                    $absent = $kind === 'attrs' ? !isset($this->present['attrs'][$k]) : !isset($this->present['langs'][$column][$k]);
+                    $absent = match ($kind) {
+                        'attrs' => !isset($this->present['attrs'][$k]),
+                        'features' => !isset($this->present['features'][$k]),
+                        'measurements' => !isset($this->present['plain'][$k]),
+                        default => !isset($this->present['langs'][$column][$k]),
+                    };
                     if (!array_key_exists($k, $now) && $absent) {
                         $now[$k] = $v;
                     }
@@ -992,6 +1143,12 @@ final class ImportEngine
                 $this->issue($file, $p['row'], self::column($e), 'error', $e->obxError, $e->getMessage());
                 unset($assets[$p['ext']]);
                 continue;
+            }
+            // Rule 10: the product as stored (the file's values plus what rule 9 kept), reported
+            // at the product's first row; never blocking.
+            $stored = $w->load('product', $p['ext']);
+            foreach (ArticleData::labelWarnings($stored !== null ? (array) Json::decode((string) $stored['input'], []) : []) as $lw) {
+                $this->issue($file, $p['row'], $lw['column'], 'warning', $lw['code'], $lw['detail']);
             }
             foreach ($p['variants'] as $v) {
                 try {

@@ -40,14 +40,21 @@ final class Representation
             'name' => $in['name'] ?? [],
             'description' => $in['description'] ?? null,
             'item_type' => $in['item_type'] ?? null,
+            'item_subtype' => $in['item_subtype'] ?? null,
             'gpc_brick' => $in['gpc_brick'] ?? null,
             'target_group' => $in['target_group'] ?? null,
             'season' => $in['season'] ?? null,
             'collection' => $in['collection'] ?? null,
-            'materials' => $in['materials'] ?? null,
+            // 0.2 (protocol.md §5.9): every article data property is present, null when not
+            // stated; fibres are always normalised (no recycled_*/organic_* keys).
+            'materials' => ArticleData::normalizeMaterials($in['materials'] ?? null),
+            'contains_animal_origin' => $in['contains_animal_origin'] ?? null,
+            'footwear_materials' => $in['footwear_materials'] ?? null,
             'care' => $in['care'] ?? null,
             'country_of_origin' => $in['country_of_origin'] ?? null,
+            'certifications' => $in['certifications'] ?? null,
             'dpp_url' => $in['dpp_url'] ?? null,
+            'features' => isset($in['features']) && $in['features'] !== [] ? $in['features'] : null,
             'attributes' => $in['attributes'] ?? null,
             'created_at' => $row['created_at'],
         ];
@@ -70,9 +77,12 @@ final class Representation
                 'code' => $in['color']['code'] ?? '',
                 'name' => $in['color']['name'] ?? null,
                 'supplier_color' => $in['color']['supplier_color'] ?? null,
+                'family' => $in['color']['family'] ?? null,
             ],
             'size' => $in['size'] ?? null,
+            'size_length' => $in['size_length'] ?? null,
             'size_system' => $in['size_system'] ?? null,
+            'measurements' => isset($in['measurements']) && $in['measurements'] !== [] ? $in['measurements'] : null,
         ];
     }
 

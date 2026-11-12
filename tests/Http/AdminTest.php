@@ -302,7 +302,7 @@ final class AdminTest extends NodeTestCase
         [, $cursor] = $this->drainSnapshot($client);
         $this->json($this->http('PATCH', '/admin/api/settings', ['browser' => 'admin', 'json' => ['defaults' => ['rights' => ['channels' => ['webshop']]]]]));
         $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $client, 'query' => ['cursor' => $cursor, 'limit' => '500']]));
-        $this->assertCount(27, array_filter($page['changes'], static fn ($c) => $c['type'] === 'asset' && $c['op'] === 'upsert'));
+        $this->assertCount(35, array_filter($page['changes'], static fn ($c) => $c['type'] === 'asset' && $c['op'] === 'upsert'));
         $this->assertSame(['webshop'], $page['changes'][0]['data']['rights']['channels']);
     }
 

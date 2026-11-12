@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Obx\Node\Import;
 
+use Obx\Node\Catalog\ArticleData;
 use Obx\Node\Catalog\Validator;
 
 /**
@@ -117,7 +118,12 @@ final class Formats
     }
 
     /**
-     * materials := part (";" part)*, part := [name ":"] fiber ("," fiber)*, fiber := number "%" key
+     * materials := part (";" part)*, part := [name ":"] fiber ("," fiber)*,
+     * fiber := number "%" key flag*, flag := "(recycled)" | "(organic)" (import-format.md §1.4).
+     * A flag sets recycled or organic on the fibre, and the 0.1 keys recycled_<fibre> and
+     * organic_<fibre> are normalised to the fibre with the flag, so both spellings give the
+     * same materials. Percentages that do not add up to 100 are reported as the label warning
+     * fibre_percentages_not_100 (rule 10), not here.
      *
      * @param list<string> $warnings
      * @return list<array<string, mixed>>|null null when the text cannot be parsed
@@ -139,7 +145,6 @@ final class Formats
                 return null;
             }
             $fibers = [];
-            $sum = 0.0;
             // Fibres are separated by commas; a comma between digits is a decimal comma ("87,5%").
             foreach (preg_split('/(?<!\d),|,(?!\d)/', $partText) ?: [] as $f) {
                 $f = trim($f);
@@ -150,18 +155,20 @@ final class Formats
                     return null;
                 }
                 $pct = (float) str_replace(',', '.', $fm[1]);
-                $key = self::key($fm[2]);
+                $text = $fm[2];
+                $flags = ['recycled' => false, 'organic' => false];
+                while (preg_match('/\s*\((recycled|organic)\)\s*$/i', $text, $flag)) {
+                    $flags[strtolower($flag[1])] = true;
+                    $text = substr($text, 0, -strlen($flag[0]));
+                }
+                $key = self::key($text);
                 if ($key === '' || $pct <= 0 || $pct > 100) {
                     return null;
                 }
-                $fibers[] = ['fiber' => $key, 'percentage' => Validator::number($pct)];
-                $sum += $pct;
+                $fibers[] = ArticleData::normalizeFiber(['fiber' => $key, 'percentage' => Validator::number($pct)] + $flags);
             }
             if ($fibers === []) {
                 return null;
-            }
-            if (abs($sum - 100) > 0.01) {
-                $warnings[] = 'Percentages of "' . $name . '" add up to ' . $sum . ', not 100.';
             }
             $out[] = ['part' => $name, 'fibers' => $fibers];
         }

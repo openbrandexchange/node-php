@@ -111,13 +111,14 @@ final class Csv
             'barcode' => 'gtin',
             'colour_code' => 'color_code',
             'colour_name' => 'color_name',
+            'colour_family' => 'color_family',
         ];
         $base = $aliases[$base] ?? $base;
         if ($lang === null || $lang === '') {
             return $base;
         }
-        if ($base === 'attr') {
-            return 'attr:' . strtolower((string) preg_replace('/[\s\-]+/', '_', $lang));
+        if ($base === 'attr' || $base === 'feature') {
+            return $base . ':' . strtolower((string) preg_replace('/[\s\-]+/', '_', $lang));
         }
         $parts = explode('-', str_replace('_', '-', $lang));
         $tag = strtolower($parts[0]) . (isset($parts[1]) ? '-' . strtoupper($parts[1]) : '');

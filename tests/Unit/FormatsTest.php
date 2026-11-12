@@ -73,11 +73,14 @@ final class FormatsTest extends TestCase
             Formats::parseMaterials('outer: 65% cotton, 35% polyamide; lining: 100% polyester', $w)
         );
         $this->assertSame([], $w);
-        $this->assertSame([['part' => 'main', 'fibers' => [['fiber' => 'organic_cotton', 'percentage' => 100]]]], Formats::parseMaterials('100% Organic Cotton', $w));
+        // 0.2: the 0.1 keys and the flags give the same fibre (import-format.md §1.4).
+        $this->assertSame([['part' => 'main', 'fibers' => [['fiber' => 'cotton', 'percentage' => 100, 'organic' => true]]]], Formats::parseMaterials('100% Organic Cotton', $w));
+        $this->assertSame(Formats::parseMaterials('100% recycled_polyester', $w), Formats::parseMaterials('100% polyester (Recycled)', $w));
+        $this->assertSame([['part' => 'main', 'fibers' => [['fiber' => 'cotton', 'percentage' => 100, 'recycled' => true, 'organic' => true]]]], Formats::parseMaterials('100% cotton (organic) (recycled)', $w));
         $this->assertSame(12.5, Formats::parseMaterials('87,5% wool, 12.5% cashmere', $w)[0]['fibers'][1]['percentage']);
         $this->assertNull(Formats::parseMaterials('cotton', $w));
         Formats::parseMaterials('main: 90% cotton', $w);
-        $this->assertNotEmpty($w, 'percentages not adding up to 100 give a warning');
+        $this->assertSame([], $w, 'a sum other than 100 is the label warning fibre_percentages_not_100, not a parse warning');
     }
 
     public function testGtin(): void

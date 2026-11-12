@@ -6,13 +6,15 @@ namespace Obx\Node\Db;
 
 /**
  * Database schema, versioned. Migrations are append-only; each runs once, in order.
+ * A step is an SQL statement or, for data upgrades, a callable that receives the Db (it must be
+ * idempotent: on MySQL a half-applied version is re-run).
  * Types are written as placeholders and mapped per driver:
  *   {pk} auto-increment primary key, {id} node id / short key, {key} external id (case-sensitive),
  *   {str} short string, {text} long text / JSON, {int} integer.
  */
 final class Schema
 {
-    /** @return array<int, list<string>> */
+    /** @return array<int, list<string|callable(Db): void>> */
     private static function migrations(): array
     {
         return [
@@ -177,6 +179,11 @@ final class Schema
                 'CREATE INDEX obx_import_runs_source ON obx_import_runs (source_id, created_ts)',
                 'CREATE INDEX obx_import_runs_job ON obx_import_runs (job_id)',
             ],
+            // 0.2.0: article data (spec 0.2). Stored as part of the write model, so no new
+            // columns; products and variants written by 0.1 get the 0.2 model and representation.
+            4 => [
+                [\Obx\Node\Catalog\ArticleDataUpgrade::class, 'run'],
+            ],
         ];
     }
 
@@ -226,7 +233,7 @@ final class Schema
         }
     }
 
-    /** @param list<string> $statements */
+    /** @param list<string|callable(Db): void> $statements */
     private static function apply(Db $db, int $v, array $statements): void
     {
         // SQLite runs DDL inside a transaction, so a failed migration leaves nothing behind.
@@ -238,6 +245,10 @@ final class Schema
         }
         try {
             foreach ($statements as $sql) {
+                if (!is_string($sql)) {
+                    $sql($db);
+                    continue;
+                }
                 if (!$db->isSqlite() && self::alreadyApplied($db, $sql)) {
                     continue;
                 }

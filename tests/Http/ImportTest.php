@@ -53,7 +53,7 @@ final class ImportTest extends NodeTestCase
         $counts = $again['import_run']['counts'];
         $this->assertSame(0, $counts['created'], Json::encode($counts));
         $this->assertSame(0, $counts['updated'], Json::encode($counts));
-        $this->assertSame(8 + 40 + 27, $counts['unchanged']);
+        $this->assertSame(11 + 46 + 35, $counts['unchanged']);
         $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $client, 'query' => ['cursor' => $cursor]]));
         $this->assertSame([], $page['changes']);
     }
@@ -250,7 +250,7 @@ final class ImportTest extends NodeTestCase
         $job = $this->import($token, ['package' => [$this->upload($this->kestrelZip(), 'kestrel.zip')]], ['dry_run' => true]);
         $this->assertSame('succeeded', $job['status'], Json::encode($job));
         $this->assertTrue($job['import_run']['dry_run']);
-        $this->assertSame(8 + 40 + 27 + 1, $job['import_run']['counts']['created']);
+        $this->assertSame(11 + 46 + 35 + 1, $job['import_run']['counts']['created']);
         $this->assertSame(0, (int) $this->app->db->value('SELECT COUNT(*) FROM obx_products'));
         $this->assertSame(1, (int) $this->app->db->value('SELECT COUNT(*) FROM obx_brands'));
     }

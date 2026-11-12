@@ -65,7 +65,7 @@ final class OpsTest extends NodeTestCase
         $api = $this->http('GET', '/obx/v1/products', ['bearer' => $token]);
         $this->assertSame(200, $api->status);
         $this->assertNull($api->getHeader('Access-Control-Allow-Origin'));
-        $this->assertSame('0.1', $api->getHeader('OBX-Version'));
+        $this->assertSame('0.2', $api->getHeader('OBX-Version'));
         $prefl = $this->http('OPTIONS', '/obx/v1/products');
         $this->assertNull($prefl->getHeader('Access-Control-Allow-Origin'));
         $this->assertGreaterThanOrEqual(400, $prefl->status);
@@ -446,6 +446,6 @@ final class OpsTest extends NodeTestCase
         $row = $this->app->db->one('SELECT status, attempts FROM obx_jobs WHERE id = ?', [$job['id']]);
         $this->assertSame('succeeded', $row['status']);
         $this->assertSame(2, (int) $row['attempts']);
-        $this->assertSame(8, (int) $this->app->db->value('SELECT COUNT(*) FROM obx_products'));
+        $this->assertSame(11, (int) $this->app->db->value('SELECT COUNT(*) FROM obx_products'));
     }
 }

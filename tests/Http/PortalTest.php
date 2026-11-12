@@ -85,7 +85,7 @@ final class PortalTest extends NodeTestCase
         $this->assertTrue($viewer['permissions']['original_download']);
         $this->assertSame('Kestrel Outfitters', $viewer['branding']['name']);
         $list = $this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'r1']));
-        $this->assertSame(8, $list['total']);
+        $this->assertSame(11, $list['total']);
         $first = $list['items'][0];
         $this->assertSame('KO-1001', $first['style_number']);
         $this->assertSame(['NVY', 'OAT'], array_column($first['colors'], 'code'));
@@ -110,8 +110,10 @@ final class PortalTest extends NodeTestCase
         $page2 = $this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'r1', 'query' => ['limit' => '5']]));
         $this->assertNotNull($page2['next_cursor']);
         $rest = $this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'r1', 'query' => ['limit' => '5', 'cursor' => $page2['next_cursor']]]));
-        $this->assertCount(3, $rest['items']);
-        $this->assertNull($rest['next_cursor']);
+        $this->assertCount(5, $rest['items']);
+        $last = $this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'r1', 'query' => ['limit' => '5', 'cursor' => $rest['next_cursor']]]));
+        $this->assertCount(1, $last['items']);
+        $this->assertNull($last['next_cursor']);
     }
 
     public function testEanPasteSelectionZipsAndCsv(): void
@@ -164,7 +166,7 @@ final class PortalTest extends NodeTestCase
         $job = $this->json($this->http('POST', '/admin/api/portal/download-jobs', ['browser' => 'r1', 'json' => ['source' => 'filter', 'filter' => ['brand_id' => [$this->kestrelId]], 'variant' => 'square']]), 202);
         $got = $this->json($this->http('GET', '/admin/api/portal/download-jobs/' . $job['id'], ['browser' => 'r1']));
         $this->assertSame('succeeded', $got['status']);
-        $this->assertSame(23, $got['files']);
+        $this->assertSame(31, $got['files']);
         $file = $this->http('GET', '/admin/api/portal/download-jobs/' . $job['id'] . '/file', ['browser' => 'r1']);
         $entries = $this->zipEntries($file->content());
         $this->assertContains('data.csv', $entries);
@@ -172,7 +174,7 @@ final class PortalTest extends NodeTestCase
         $this->assertContains('KO-1002/KO-1002_OLV_1_front_square.jpg', $entries);
         $mail = end($this->app->mailer->sent);
         $this->assertSame('r1@shop.example', $mail['to']);
-        $this->assertStringContainsString('23', $mail['text']);
+        $this->assertStringContainsString('31', $mail['text']);
         // Other users cannot read the job.
         $this->retailerUser('r2', ['name' => 'Shop Two']);
         $this->assertProblem($this->http('GET', '/admin/api/portal/download-jobs/' . $job['id'], ['browser' => 'r2']), 404, 'not_found');
@@ -207,7 +209,7 @@ final class PortalTest extends NodeTestCase
     {
         $this->retailerUser('rr', ['name' => 'Kestrel only', 'brand_ids' => [$this->kestrelId], 'allow_original' => false]);
         $list = $this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'rr']));
-        $this->assertSame(6, $list['total']);
+        $this->assertSame(9, $list['total']);
         $trail = (string) $this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'KT-2001'");
         $this->assertProblem($this->http('GET', '/admin/api/portal/products/' . $trail, ['browser' => 'rr']), 404, 'not_found');
         $lookup = $this->json($this->http('POST', '/admin/api/portal/gtin-lookup', ['browser' => 'rr', 'json' => ['gtins' => ['2000200101017']]]));
@@ -293,8 +295,8 @@ final class PortalTest extends NodeTestCase
         $manifest = $this->http('GET', substr($done['manifest_url'], strlen('http://localhost')))->content();
         $lines = array_map([Json::class, 'decode'], array_filter(explode("\n", $manifest)));
         $this->assertSame('header', $lines[0]['type']);
-        $this->assertSame(6, $lines[0]['counts']['products']);
-        $this->assertSame(23, $lines[0]['counts']['files']);
+        $this->assertSame(9, $lines[0]['counts']['products']);
+        $this->assertSame(31, $lines[0]['counts']['files']);
         $part = $this->http('GET', substr($done['parts'][0]['url'], strlen('http://localhost')));
         $zipBytes = $part->content();
         $this->assertSame($done['parts'][0]['sha256'], hash('sha256', $zipBytes));
@@ -344,7 +346,7 @@ final class PortalTest extends NodeTestCase
         $done = $this->json($this->http('GET', '/obx/v1/exports/' . $export['id'], ['bearer' => $token]));
         $this->assertGreaterThan(1, count($done['parts']));
         $manifest = array_map([Json::class, 'decode'], array_filter(explode("\n", $this->http('GET', substr($done['manifest_url'], strlen('http://localhost')))->content())));
-        $this->assertSame(81, $manifest[0]['counts']['files']);
+        $this->assertSame(105, $manifest[0]['counts']['files']);
         $this->assertSame(['header', 'file'], array_values(array_unique(array_column($manifest, 'type'))), 'include_data=false leaves out data lines');
         $zips = [];
         foreach ($done['parts'] as $p) {

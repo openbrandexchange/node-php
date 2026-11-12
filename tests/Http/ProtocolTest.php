@@ -28,7 +28,7 @@ final class ProtocolTest extends NodeTestCase
         $doc = $this->json($res);
         $this->assertSame('*', $res->getHeader('Access-Control-Allow-Origin'));
         $this->assertSame('http://localhost/obx/v1', $doc['api_base']);
-        $this->assertSame('0.1', $doc['obx_version']);
+        $this->assertSame('0.2', $doc['obx_version']);
         $this->assertSame(['nl', 'en'], $doc['languages']);
         $this->assertSame('Kestrel Outfitters', $doc['publisher']['name']);
         foreach (['changes', 'products', 'by_gtin', 'renditions', 'exports', 'webhooks', 'usage', 'ingest', 'portal'] as $cap) {
@@ -73,7 +73,8 @@ final class ProtocolTest extends NodeTestCase
 
     public function testProductsMatchExpectedFixtures(): void
     {
-        foreach (['KO-1001', 'KO-1005'] as $style) {
+        // P-CAT-1 and, with the 0.2 article data, P-CAT-5.
+        foreach (['KO-1001', 'KO-1005', 'KO-1008', 'KO-1009', 'KO-1010', 'KT-2001'] as $style) {
             $expected = Json::decode((string) file_get_contents(self::fixtures('expected/product-' . $style . '.json')));
             $id = $this->productId($style);
             $res = $this->http('GET', '/obx/v1/products/' . $id, ['bearer' => $this->token]);
@@ -184,7 +185,7 @@ final class ProtocolTest extends NodeTestCase
             }
             $cursor = $page['next_cursor'];
         } while ($cursor !== null);
-        $this->assertCount(8, $seen);
+        $this->assertCount(11, $seen);
         $this->assertSame($seen, array_values(array_unique($seen)));
         $some = $this->json($this->http('GET', '/obx/v1/products', ['bearer' => $this->token, 'query' => ['ids' => $seen[0] . ',prd_unknown']]));
         $this->assertCount(1, $some['items']);
