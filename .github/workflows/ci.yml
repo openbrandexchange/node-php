@@ -102,7 +102,7 @@ jobs:
     # The conformance suite (obx-conformance) lives in openbrandexchange/obx-go, a private
     # repository until the project is published. The owner adds a repository secret
     # OBX_READ_TOKEN: a fine-grained token with read access to the contents of obx-go.
-    name: OBX conformance (server and client-made image versions)
+    name: OBX conformance (server and client-made image versions, SQLite and MySQL)
     runs-on: ubuntu-latest
     env:
       OBX_READ_TOKEN: ${{ secrets.OBX_READ_TOKEN }}
@@ -111,8 +111,13 @@ jobs:
       matrix:
         include:
           - renditions: auto
+            db: sqlite
             args: --rate-limit-test
           - renditions: client
+            db: sqlite
+            args: ""
+          - renditions: auto
+            db: mysql
             args: ""
     steps:
       - name: Access to obx-go (the OBX_READ_TOKEN secret while it is private; none once it is public)
@@ -136,6 +141,7 @@ jobs:
         if: env.OBX_ACCESS == 'yes'
         env:
           RENDITIONS: ${{ matrix.renditions }}
+          DB: ${{ matrix.db }}
         run: ./node-php/scripts/conformance.sh "$PWD/obx-go" ${{ matrix.args }} --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
 
   security:
