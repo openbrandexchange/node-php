@@ -18,6 +18,11 @@ const FEED = process.env.FEED_URL // web address of products.csv as the node see
 const OUT = process.env.OUT ?? fs.mkdtempSync('/tmp/obx-ui-walk-')
 const admin = { email: 'admin@kestrel.example', password: 'kestrel-admin-2026' }
 const buyer = { email: 'buyer@shop.example', password: 'kestrel-shop-2026' }
+// Expected numbers come from the fixtures (expected/counts.json next to kestrel/): every
+// product, size and image is new, and so is the second brand (the first one exists after setup).
+const COUNTS = JSON.parse(fs.readFileSync(path.join(FIXTURES, '..', 'expected', 'counts.json'), 'utf8'))
+const NEW_OBJECTS = COUNTS.brands - 1 + COUNTS.products + COUNTS.variants + COUNTS.assets
+const ARTICLES = `${COUNTS.products} articles`
 
 let failures = 0
 const problems = []
@@ -113,7 +118,7 @@ await step(p, 'import CSV and images zip', async () => {
   await p.getByRole('button', { name: /^Start/ }).click()
   await p.getByText('Everything was imported without problems.').waitFor({ timeout: 60000 })
   const text = await p.locator('main').innerText()
-  if (!/New\s+76/.test(text)) throw new Error('expected 76 new objects, got: ' + text.replace(/\s+/g, ' ').slice(0, 200))
+  if (!new RegExp('New\\s+' + NEW_OBJECTS + '\\b').test(text)) throw new Error(`expected ${NEW_OBJECTS} new objects, got: ` + text.replace(/\s+/g, ' ').slice(0, 200))
 })
 
 const R = await context('retailer')
@@ -152,14 +157,14 @@ await step(p, 'retailer accepts the invitation', async () => {
   await p.getByLabel('New password').fill(buyer.password)
   await p.getByLabel('Repeat the password').fill(buyer.password)
   await p.getByRole('button', { name: 'Create my account' }).click()
-  await p.getByText('8 articles').waitFor()
+  await p.getByText(ARTICLES).waitFor()
   await a11y(p, 'portal catalog')
 })
 await step(p, 'browse, search and open an article', async () => {
   await p.getByPlaceholder(/Search by article number/).fill('KT-2001')
   await p.getByText('1 article').waitFor()
   await p.getByPlaceholder(/Search by article number/).fill('')
-  await p.getByText('8 articles').waitFor()
+  await p.getByText(ARTICLES).waitFor()
   await p.locator('main a[href*="products/"]').first().click()
   await p.getByRole('heading', { name: /Sizes and EAN/ }).waitFor()
   await a11y(p, 'article page')
@@ -262,7 +267,7 @@ await step(K.page, 'log in with the keyboard only', async () => {
   if (!onPassword) throw new Error('Tab from the e-mail field does not reach the password field')
   await k.keyboard.type(buyer.password)
   await k.keyboard.press('Enter')
-  await k.getByText('8 articles').waitFor()
+  await k.getByText(ARTICLES).waitFor()
   const visibleFocus = await k.evaluate(() => {
     const a = document.querySelector('main a[href*="products/"]')
     if (!a) return 'no article link'

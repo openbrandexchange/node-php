@@ -206,6 +206,14 @@ abstract class NodeTestCase extends TestCase
         });
     }
 
+    /** expected/counts.json of the spec fixtures (brands, products, variants, assets). @return array<string, int> */
+    protected static function fixtureCounts(): array
+    {
+        $c = Json::decode((string) file_get_contents(self::fixtures('expected/counts.json')));
+        unset($c['note']);
+        return $c;
+    }
+
     public static function fixtures(string $path = ''): string
     {
         return dirname(__DIR__) . '/fixtures/spec' . ($path !== '' ? '/' . $path : '');

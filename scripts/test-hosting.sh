@@ -35,6 +35,8 @@ fi
 cp "$fixtures/products.csv" "$work/feed.csv"
 
 json() { python3 -c "import json,sys; d=json.load(sys.stdin); print(eval(sys.argv[1], {'d': d}))" "$1"; }
+# Expected numbers come from the fixtures, so a new fixture release needs no edit here.
+want_products=$(json "d['products']" < "$here/tests/fixtures/spec/expected/counts.json")
 fail() { echo "FAIL [$label]: $*" >&2; [ -n "${name:-}" ] && docker logs "$name" 2>&1 | tail -30 >&2; exit 1; }
 
 port=18300
@@ -111,7 +113,7 @@ for v in "${versions[@]}"; do
     done
     [ "$st" = succeeded ] || fail "import did not finish without cron (status $st)"
     products=$(curl "${admin[@]}" "$base/admin/api/catalog/products" | json "len(d['items'])")
-    [ "$products" = 8 ] || fail "expected 8 products, got $products"
+    [ "$products" = "$want_products" ] || fail "expected $want_products products, got $products"
 
     # A background zip of everything (a download job), without cron.
     dj=$(curl "${admin[@]}" "$base/admin/api/portal/download-jobs" -d '{"source":"filter","filter":{},"variant":"web"}' | json "d['id']")

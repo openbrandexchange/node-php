@@ -54,7 +54,7 @@ final class SourcesTest extends NodeTestCase
     {
         $this->assertSame('succeeded', $run['status'], Json::encode($run));
         $this->assertSame(0, $run['counts']['errors'], Json::encode($run['errors_preview']));
-        $this->assertSame(35, (int) $this->app->db->value('SELECT COUNT(*) FROM obx_assets WHERE visible = 1'));
+        $this->assertSame(self::fixtureCounts()['assets'], (int) $this->app->db->value('SELECT COUNT(*) FROM obx_assets WHERE visible = 1'));
     }
 
     public function testWebAddressImportRunsAndSkipsUnchangedFiles(): void
@@ -78,7 +78,8 @@ final class SourcesTest extends NodeTestCase
         $this->assertSame('succeeded', $again['status']);
         $this->assertSame(0, $again['counts']['created'] + $again['counts']['updated'] + $again['counts']['unchanged'], 'unchanged file is skipped');
         $forced = $this->runSource($src['id'], ['force' => true]);
-        $this->assertSame(11 + 46 + 35, $forced['counts']['unchanged']);
+        $c = self::fixtureCounts();
+        $this->assertSame($c['products'] + $c['variants'] + $c['assets'], $forced['counts']['unchanged']);
         $list = $this->json($this->http('GET', '/admin/api/import-sources', ['browser' => 'admin']));
         $this->assertSame($forced['id'], $list['items'][0]['last_run']['id']);
         $this->assertSame('manual_run', $list['items'][0]['last_run']['trigger']);
@@ -113,7 +114,7 @@ final class SourcesTest extends NodeTestCase
         ]]), 201);
         $test = $this->json($this->http('POST', '/admin/api/import-sources/' . $src['id'] . '/test', ['browser' => 'admin']));
         $this->assertTrue($test['ok'], Json::encode($test));
-        $this->assertCount(29, $test['files']);
+        $this->assertCount(count(glob(self::fixtures('kestrel/images/*.png'))) + 2, $test['files'], 'products.csv, assets.csv and the images');
         $this->expectKestrel($this->runSource($src['id']));
         $this->http('PATCH', '/admin/api/import-sources/' . $src['id'], ['browser' => 'admin', 'json' => ['credentials' => ['secret_access_key' => 'wrong']]]);
         $bad = $this->json($this->http('POST', '/admin/api/import-sources/' . $src['id'] . '/test', ['browser' => 'admin']));
@@ -162,7 +163,7 @@ final class SourcesTest extends NodeTestCase
         $job = $this->importKestrel($token);
         $this->assertSame('succeeded', $job['status']);
         $keys = array_column($s3->list('b/'), 'key');
-        $this->assertCount(35 * 4, $keys, 'originals and renditions are in the bucket');
+        $this->assertCount(self::fixtureCounts()['assets'] * 4, $keys, 'originals and renditions are in the bucket');
         // Serving works from a cold local cache.
         $this->rmrf($this->dir . '/data/cache');
         [, $id, $secret] = $this->retailerClient();
