@@ -1,7 +1,7 @@
 Open Brand Exchange · Portal for web hosting (node-php)
-Copyright 2026 Richard Lindhout and contributors
+Copyright 2026 Open Brand Exchange Foundation (in formation) and contributors
 
-An initiative of Richard Lindhout · Open Brand Exchange Foundation (in formation)
+Open Brand Exchange Foundation (in formation)
 Contact: hello@openbrandexchange.com · Security reports: security@openbrandexchange.com
 
 This program is free software: you can redistribute it and/or modify it under
@@ -23,7 +23,8 @@ This product includes:
   THIRD-PARTY-LICENSES.txt).
 - Fixtures of the Open Brand Exchange specification (tests/fixtures/spec, not
   part of the release zip), CC-BY-4.0, "Open Brand Exchange specification,
-  © Richard Lindhout and contributors", https://github.com/openbrandexchange/spec.
+  © Open Brand Exchange Foundation (in formation) and contributors",
+  https://github.com/openbrandexchange/spec.
 - PHP packages in vendor/ (release zip and Docker image), all under the MIT
   licence: phpseclib/phpseclib, paragonie/constant_time_encoding and
   paragonie/random_compat. Their licence files are in vendor/<package>/.

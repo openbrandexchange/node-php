@@ -173,7 +173,7 @@ AGPL-3.0-only, see [LICENSE](LICENSE) and [NOTICE](NOTICE). The specification is
 lives in [openbrandexchange/spec](https://github.com/openbrandexchange/spec); the web interface
 ([admin-ui](https://github.com/openbrandexchange/admin-ui)) is Apache-2.0.
 
-An initiative of Richard Lindhout · Open Brand Exchange Foundation (in formation) ·
+Open Brand Exchange Foundation (in formation) ·
 hello@openbrandexchange.com. Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
 
 *Works with Open Brand Exchange.*

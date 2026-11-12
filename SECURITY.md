@@ -28,4 +28,4 @@ Problems in the web interface itself belong to [openbrandexchange/admin-ui](http
 
 How the portal protects data is described in [docs/security.md](docs/security.md).
 
-This project is an initiative of Richard Lindhout and will be transferred to the Open Brand Exchange Foundation (in formation).
+This project is published by the Open Brand Exchange Foundation (in formation).
