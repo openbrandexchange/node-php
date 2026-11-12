@@ -17,6 +17,7 @@ Materials and care as terms with names: this release implements Open Brand Excha
 - `materials`: `part`, the fibre's `material` and its `qualifier` are terms `{"code", "name"}`, with `name` per language (`null` for the part `main` and for codes without a name). A fibre is `{"material": {...}, "percentage": 95, "qualifier": {...} | null}`; `fiber` and the flags `recycled` / `organic` are gone.
 - `care`: every entry has `code`, `category` (`washing`, `bleaching`, `drying`, `ironing`, `professional_care` or `null`), `symbol` (for example `1_D_30`, or `null`), `name` and `text` (only the brand's own extra text).
 - `OBX-Version: 0.3`; the discovery document says `obx_version` `0.3`.
+- Every `/changes` cursor issued before the upgrade is answered with `410 cursor_expired` (protocol.md §6.4): restart without a cursor and take the snapshot in the 0.3 shapes.
 - The Ingest API and the admin API take and return the same shapes; `name`, `category` and `symbol` may be left out on writes. The 0.2 shapes (`"part": "main"`, `"fiber": "cotton"`, the flags) are refused with `validation_failed`.
 
 ### Upgrading

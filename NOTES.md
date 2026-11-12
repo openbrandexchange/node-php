@@ -300,6 +300,15 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     flags true, `recycled` wins: 0.3 has one qualifier per fibre). Every visible article whose
     materials or care changed shape gets one upsert entry and a new `updated_at`, since its
     representation changed for consumers; variants and assets get none.
+63. **Cursors from before 0.3 expire (protocol.md §6.4) through a cursor epoch.** Every
+    `/changes` cursor (live, snapshot, the export manifest's `changes_cursor`) is sealed with the
+    epoch in `obx_settings` `cursor_epoch` (0 when the row is absent, as on every 0.1/0.2 node).
+    `Feed::page` answers a cursor from another epoch with `410 cursor_expired` before reading it.
+    Schema 5 sets the epoch to 1 (a fixed value, not an increment, so re-running a half-applied
+    migration expires nothing more); a later incompatible upgrade sets 2. A separate settings row
+    rather than a key in `state`, so the long-running worker never writes an old copy over it.
+    The change entries of note 62 stay: they cost little and keep a consumer correct that kept
+    its data and restarted from a snapshot.
 
 ## Known limitations (tracked)
 
