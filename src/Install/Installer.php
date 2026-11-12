@@ -106,6 +106,7 @@ final class Installer
             ['label' => $this->t('chk_folder', ['folder' => 'config/']), 'ok' => is_writable(dirname($this->config->configFile())), 'required' => true, 'hint' => $this->t('hint_config')],
             ['label' => $this->t('chk_gd'), 'ok' => \Obx\Node\Images\Renderer::available(), 'required' => false, 'hint' => $this->t('hint_gd')],
             ['label' => $this->t('chk_zip'), 'ok' => class_exists(\ZipArchive::class), 'required' => false, 'hint' => $this->t('hint_zip')],
+            ['label' => $this->t('chk_xlsx'), 'ok' => \Obx\Node\Import\Xlsx::available(), 'required' => false, 'hint' => $this->t('hint_xlsx')],
             ['label' => $this->t('chk_curl'), 'ok' => function_exists('curl_init'), 'required' => false, 'hint' => $this->t('hint_curl')],
             ['label' => $this->t('chk_upload', ['mb' => (string) round($upload / 1048576)]), 'ok' => $upload >= 100 * 1048576, 'required' => false, 'hint' => $this->t('hint_upload')],
         ];

@@ -19,6 +19,8 @@
   "hint_gd": "Brez GD spletni vmesnik naredi spletne različice in sličice v brskalniku.",
   "chk_zip": "zip (nalaganje in uvoz datotek zip)",
   "hint_zip": "Brez zip naložite preglednico in slike ločeno.",
+  "chk_xlsx": "zlib in XMLReader (uvozi iz Excela)",
+  "hint_xlsx": "Brez njiju preglednico shranite kot CSV UTF-8 in uvozite to datoteko.",
   "chk_curl": "curl (načrtovani uvozi in spletni kavlji)",
   "hint_curl": "Vklopite curl, da lahko uvoze pridobite s spletnega naslova ali iz vedra (bucket).",
   "chk_upload": "Nalaganje do 100 MB (zdaj {mb} MB)",

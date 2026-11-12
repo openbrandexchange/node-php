@@ -14,7 +14,7 @@ use phpseclib3\Net\SFTP;
 
 /**
  * Downloads a scheduled import source into a staging directory:
- * input/package.zip or input/products.csv (+ images), or input/tree/<files> for folders.
+ * input/package.zip, input/products.csv or input/products.xlsx (+ images), or input/tree/<files> for folders.
  * Returns a fingerprint of the remote state so unchanged sources are skipped.
  */
 final class Fetcher
@@ -61,6 +61,12 @@ final class Fetcher
         };
     }
 
+    /** products.xlsx and assets.xlsx take the place of the CSV files in a folder (import-format.md §5.1). */
+    private static function isWorkbookName(string $name): bool
+    {
+        return in_array(strtolower(basename($name)), ['products.xlsx', 'assets.xlsx'], true);
+    }
+
     // ================================================================ https
 
     /** @return array<string, string> */
@@ -78,8 +84,13 @@ final class Fetcher
             throw new ApiError('service_unavailable', 'The web address answered HTTP ' . $r['status'] . '.');
         }
         $head = (string) file_get_contents($tmp, false, null, 0, 4);
-        rename($tmp, $head === "PK\x03\x04" ? $in . '/package.zip' : $in . '/products.csv');
-        $hashes = [hash_file('sha256', $head === "PK\x03\x04" ? $in . '/package.zip' : $in . '/products.csv')];
+        // An address whose path ends in .xlsx is a products workbook (import-format.md §5.1);
+        // otherwise the first bytes tell a package zip from a CSV.
+        $target = \Obx\Node\Import\Xlsx::isWorkbook(basename((string) parse_url((string) $this->config['url'], PHP_URL_PATH)))
+            ? $in . '/products.xlsx'
+            : ($head === "PK\x03\x04" ? $in . '/package.zip' : $in . '/products.csv');
+        rename($tmp, $target);
+        $hashes = [hash_file('sha256', $target)];
         $images = [];
         if (!empty($this->config['images_url'])) {
             @mkdir($in . '/images', 0770, true);
@@ -155,7 +166,7 @@ final class Fetcher
         if ($root === '') {
             $root = '.';
         }
-        if (preg_match('/\.(zip|csv)$/i', $root) && $sftp->is_file($root)) {
+        if (preg_match('/\.(zip|csv|xlsx)$/i', $root) && $sftp->is_file($root)) {
             $st = $sftp->stat($root);
             return [['path' => $root, 'rel' => basename($root), 'size' => (int) ($st['size'] ?? 0), 'mtime' => (int) ($st['mtime'] ?? 0)]];
         }
@@ -177,7 +188,7 @@ final class Fetcher
                 $type = (int) ($st['type'] ?? 0);
                 if ($type === 2) { // directory
                     $walk($dir . '/' . $name, $rel . $name . '/', $depth + 1);
-                } elseif ($type === 1 && (str_ends_with(strtolower($name), '.csv') || Formats::isImageName($name))) {
+                } elseif ($type === 1 && (str_ends_with(strtolower($name), '.csv') || self::isWorkbookName($name) || Formats::isImageName($name))) {
                     $out[] = ['path' => $dir . '/' . $name, 'rel' => $rel . $name, 'size' => (int) ($st['size'] ?? 0), 'mtime' => (int) ($st['mtime'] ?? 0)];
                 }
             }
@@ -207,6 +218,8 @@ final class Fetcher
                 $target = $in . '/package.zip';
             } elseif (count($files) === 1 && str_ends_with(strtolower($f['rel']), '.csv')) {
                 $target = $in . '/products.csv';
+            } elseif (count($files) === 1 && preg_match('/\.xlsx$/i', (string) $this->config['path'])) {
+                $target = $in . '/products.xlsx'; // the path names the workbook itself
             } else {
                 $target = $in . '/tree/' . \Obx\Node\Zip\ZipWriter::sanitize($f['rel']);
             }
@@ -247,7 +260,7 @@ final class Fetcher
         $objects = $s3->list($prefix, self::MAX_FILES);
         return array_values(array_filter($objects, static function ($o) {
             $name = basename($o['key']);
-            return !str_ends_with($o['key'], '/') && !SafeZip::ignored($o['key']) && (str_ends_with(strtolower($name), '.csv') || str_ends_with(strtolower($name), '.zip') || Formats::isImageName($name));
+            return !str_ends_with($o['key'], '/') && !SafeZip::ignored($o['key']) && (str_ends_with(strtolower($name), '.csv') || str_ends_with(strtolower($name), '.zip') || self::isWorkbookName($name) || Formats::isImageName($name));
         }));
     }
 

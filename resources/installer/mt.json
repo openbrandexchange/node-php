@@ -19,6 +19,8 @@
   "hint_gd": "Mingħajr GD, l-interfaċċa tal-web tagħmel il-verżjonijiet tal-web u ż-żgħar fil-browser.",
   "chk_zip": "zip (tlugħ u importazzjoni ta' fajls zip)",
   "hint_zip": "Mingħajr zip, tella' l-ispreadsheet u l-istampi separatament.",
+  "chk_xlsx": "zlib u XMLReader (importazzjonijiet minn Excel)",
+  "hint_xlsx": "Mingħajrhom, issejvja l-iskeda bħala CSV UTF-8 u importaha.",
   "chk_curl": "curl (importazzjonijiet skedati u webhooks)",
   "hint_curl": "Ixgħel curl biex l-importazzjonijiet jinġiebu minn indirizz tal-web jew minn bucket.",
   "chk_upload": "Tlugħ sa 100 MB (issa {mb} MB)",

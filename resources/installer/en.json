@@ -19,6 +19,8 @@
   "hint_gd": "Without GD the web interface makes the web and thumbnail versions in the browser.",
   "chk_zip": "zip (zip uploads and imports)",
   "hint_zip": "Without it, upload the spreadsheet and the images separately.",
+  "chk_xlsx": "zlib and XMLReader (Excel imports)",
+  "hint_xlsx": "Without them, save the spreadsheet as CSV UTF-8 and import that.",
   "chk_curl": "curl (scheduled imports and webhooks)",
   "hint_curl": "Switch on curl to fetch imports from a web address or a bucket.",
   "chk_upload": "Uploads up to 100 MB (now {mb} MB)",

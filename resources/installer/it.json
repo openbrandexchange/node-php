@@ -19,6 +19,8 @@
   "hint_gd": "Senza GD l'interfaccia web crea le versioni web e le miniature nel browser.",
   "chk_zip": "zip (caricamenti e importazioni zip)",
   "hint_zip": "Senza zip, carica il foglio di calcolo e le immagini separatamente.",
+  "chk_xlsx": "zlib e XMLReader (importazioni Excel)",
+  "hint_xlsx": "Senza di esse, salvi il foglio di calcolo come CSV UTF-8 e importi quello.",
   "chk_curl": "curl (importazioni pianificate e webhook)",
   "hint_curl": "Attiva curl per scaricare importazioni da un indirizzo web o da un bucket.",
   "chk_upload": "Caricamenti fino a 100 MB (ora {mb} MB)",

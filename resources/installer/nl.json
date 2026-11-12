@@ -19,6 +19,8 @@
   "hint_gd": "Zonder GD maakt de webinterface de web- en miniatuurversies in de browser.",
   "chk_zip": "zip (zip-uploads en imports)",
   "hint_zip": "Zonder zip upload je de spreadsheet en de beelden los.",
+  "chk_xlsx": "zlib en XMLReader (Excel-imports)",
+  "hint_xlsx": "Zonder deze extensies sla je de spreadsheet op als CSV UTF-8 en importeer je die.",
   "chk_curl": "curl (geplande imports en webhooks)",
   "hint_curl": "Zet curl aan om imports van een webadres of bucket op te halen.",
   "chk_upload": "Uploads tot 100 MB (nu {mb} MB)",

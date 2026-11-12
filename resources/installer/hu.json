@@ -19,6 +19,8 @@
   "hint_gd": "GD nélkül a webes felület a böngészőben készíti el a webes és bélyegkép-változatokat.",
   "chk_zip": "zip (zip-feltöltés és -importálás)",
   "hint_zip": "Zip nélkül a táblázatot és a képeket külön töltse fel.",
+  "chk_xlsx": "zlib és XMLReader (Excel-importálás)",
+  "hint_xlsx": "Nélkülük mentse a táblázatot CSV UTF-8 formátumban, és azt importálja.",
   "chk_curl": "curl (ütemezett importálás és webhookok)",
   "hint_curl": "Kapcsolja be a curlt, hogy az importok webcímről vagy bucketből letölthetők legyenek.",
   "chk_upload": "Feltöltés legfeljebb 100 MB-ig (most {mb} MB)",

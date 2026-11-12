@@ -79,7 +79,7 @@ TXT;
             $out('✗ File storage: ' . Support\Log::scrub($e->getMessage()));
             $failed = true;
         }
-        foreach (['gd' => 'image versions on the server', 'zip' => 'zip uploads and downloads', 'curl' => 'scheduled imports and webhooks'] as $ext => $what) {
+        foreach (['gd' => 'image versions on the server', 'zip' => 'zip uploads and downloads', 'curl' => 'scheduled imports and webhooks', 'zlib' => 'Excel imports', 'xmlreader' => 'Excel imports'] as $ext => $what) {
             $out((extension_loaded($ext) ? '✓ ' : '! ') . 'PHP extension ' . $ext . ' (' . $what . ')' . (extension_loaded($ext) ? '' : ': missing'));
         }
         $out('  Setup: ' . ($app->settings->setupDone() ? 'done' : 'not done yet'));

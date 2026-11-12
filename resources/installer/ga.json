@@ -19,6 +19,8 @@
   "hint_gd": "Gan GD, déanann an comhéadan gréasáin na leaganacha gréasáin agus mionsamhla sa bhrabhsálaí.",
   "chk_zip": "zip (uaslódálacha agus iompórtálacha zip)",
   "hint_zip": "Gan zip, uaslódáil an scarbhileog agus na híomhánna ar leith.",
+  "chk_xlsx": "zlib agus XMLReader (iompórtálacha Excel)",
+  "hint_xlsx": "Gan iad, sábháil an scarbhileog mar CSV UTF-8 agus iompórtáil é sin.",
   "chk_curl": "curl (iompórtálacha sceidealaithe agus crúcaí gréasáin)",
   "hint_curl": "Cas air curl chun iompórtálacha a fháil ó sheoladh gréasáin nó ó bhuicéad.",
   "chk_upload": "Uaslódálacha suas le 100 MB (anois {mb} MB)",

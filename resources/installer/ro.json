@@ -19,6 +19,8 @@
   "hint_gd": "Fără GD, interfața web creează versiunile web și miniaturile în browser.",
   "chk_zip": "zip (încărcări și importuri zip)",
   "hint_zip": "Fără zip, încărcați separat foaia de calcul și imaginile.",
+  "chk_xlsx": "zlib și XMLReader (importuri Excel)",
+  "hint_xlsx": "Fără ele, salvați foaia de calcul ca CSV UTF-8 și importați-o.",
   "chk_curl": "curl (importuri programate și webhookuri)",
   "hint_curl": "Activați curl pentru a prelua importuri de la o adresă web sau dintr-un bucket.",
   "chk_upload": "Încărcări de până la 100 MB (acum {mb} MB)",

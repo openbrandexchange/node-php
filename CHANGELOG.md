@@ -2,6 +2,16 @@
 
 All notable changes to the PHP edition of the Open Brand Exchange portal ("Portal for web hosting"). The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [semantic versioning](https://semver.org/): while it is 0.x, a minor version may change behaviour, and the upgrade notes say what to do.
 
+## [Unreleased]
+
+### For brands
+
+- **Excel workbooks** (`.xlsx`) can be imported wherever a `products.csv` or `assets.csv` can: the admin upload, the Ingest API's `csv` and `assets_csv` parts, package zips and scheduled folders (as `products.xlsx` / `assets.xlsx`) and web addresses that end in `.xlsx`. The conversion follows the specification's import format §5 exactly (sheet choice, stored values only, EANs typed as numbers keep every digit, dates, Excel row numbers and a `row 12, column ean (C): ` locator in errors), so the spec's templates can be uploaded as they are. Workbooks with macros, external links or data connections are refused; the four new error codes are `workbook_invalid`, `workbook_unsafe`, `workbook_sheet_missing` and `workbook_too_large`. Other spreadsheet files (`.xlsm`, `.xls`, `.ods`, …) get `415 unsupported_media_type`.
+
+### Hosting
+
+- Workbooks are read in pure PHP with the zlib and xmlreader extensions (the zip extension is not needed). The installer and `php bin/obx check` show whether they are there.
+
 ## [0.2.0] - 2026-11-12
 
 Article data for fashion, shoes, bags and luggage: this release implements Open Brand Exchange specification 0.2.0 (OBX Protocol 0.2, [proposal 0002](https://github.com/openbrandexchange/spec/blob/main/docs/proposals/0002-product-data.md)) and passes the conformance suite of obx-go 0.2.0, including P-CAT-5, P-CAT-6, I-IMP-7 and I-IMP-8, on SQLite and MySQL, with server-made and with client-made image versions. Everything new is optional: retailers' software written for 0.1 keeps working.

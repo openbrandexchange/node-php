@@ -42,15 +42,34 @@ final class Csv
             fclose($fh);
             throw new ApiError('import_invalid', 'The CSV file has no header row.');
         }
-        $raw = array_map(static fn ($h) => trim((string) $h), $header);
+        $records = (static function () use ($fh, $delimiter): \Generator {
+            $n = 0;
+            while (($values = fgetcsv($fh, 0, $delimiter, '"', '')) !== false) {
+                if ($values === [null]) {
+                    continue;
+                }
+                yield ++$n => $values;
+            }
+            fclose($fh);
+        })();
+        return self::table($header, $records) + ['delimiter' => $delimiter];
+    }
+
+    /**
+     * The rows of a file after its header row, with the CSV rules of §1.1 (trimmed cells, empty
+     * rows skipped, the first non-empty value of a repeated column). Also used for the rows of an
+     * Excel workbook (§5), keyed by their Excel row number.
+     *
+     * @param array<int, string|null> $header
+     * @param iterable<int, array<int, string|null>> $records row number => cells
+     * @return array{headers: list<string>, raw_headers: list<string>, rows: list<array{row: int, values: array<string, string>}>}
+     */
+    public static function table(array $header, iterable $records): array
+    {
+        $raw = array_values(array_map(static fn ($h) => trim((string) $h), $header));
         $headers = array_map([self::class, 'normalizeHeader'], $raw);
         $rows = [];
-        $n = 0;
-        while (($values = fgetcsv($fh, 0, $delimiter, '"', '')) !== false) {
-            if ($values === [null]) {
-                continue;
-            }
-            $n++;
+        foreach ($records as $n => $values) {
             $assoc = [];
             $empty = true;
             foreach ($headers as $i => $h) {
@@ -68,10 +87,9 @@ final class Csv
             if ($empty) {
                 continue;
             }
-            $rows[] = ['row' => $n, 'values' => $assoc];
+            $rows[] = ['row' => (int) $n, 'values' => $assoc];
         }
-        fclose($fh);
-        return ['headers' => $headers, 'raw_headers' => $raw, 'rows' => $rows, 'delimiter' => $delimiter];
+        return ['headers' => $headers, 'raw_headers' => $raw, 'rows' => $rows];
     }
 
     public static function detectDelimiter(string $line): string

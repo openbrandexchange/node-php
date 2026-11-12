@@ -19,6 +19,8 @@
   "hint_gd": "Bez GD-a web-sučelje izrađuje web-verzije i sličice u pregledniku.",
   "chk_zip": "zip (prijenos i uvoz zip datoteka)",
   "hint_zip": "Bez zipa prenesite tablicu i slike zasebno.",
+  "chk_xlsx": "zlib i XMLReader (uvoz iz Excela)",
+  "hint_xlsx": "Bez njih spremite tablicu kao CSV UTF-8 i uvezite tu datoteku.",
   "chk_curl": "curl (zakazani uvozi i webhookovi)",
   "hint_curl": "Uključite curl kako biste uvoze preuzimali s web-adrese ili iz bucketa.",
   "chk_upload": "Prijenos do 100 MB (sada {mb} MB)",

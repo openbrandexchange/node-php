@@ -36,6 +36,22 @@ final class MultipartTest extends TestCase
         }
     }
 
+    /** A part without a file name is a field, except an Excel workbook (import-format.md §5.1). */
+    public function testAWorkbookPartWithoutAFileNameIsAFile(): void
+    {
+        $b = 'b';
+        $body = "--$b\r\nContent-Disposition: form-data; name=\"csv\"\r\nContent-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\nPK\x03\x04data\r\n"
+            . "--$b\r\nContent-Disposition: form-data; name=\"assets_csv\"\r\nContent-Type: text/csv\r\n\r\nfile\r\n--$b--\r\n";
+        $in = fopen('php://memory', 'w+b');
+        fwrite($in, $body);
+        rewind($in);
+        [$fields, $files] = Multipart::parse($in, 'multipart/form-data; boundary=' . $b, sys_get_temp_dir() . '/obx-mp-test', 100000);
+        $this->assertSame(['assets_csv' => 'file'], $fields);
+        $this->assertSame('', $files['csv'][0]['name']);
+        $this->assertSame("PK\x03\x04data", file_get_contents($files['csv'][0]['tmp']));
+        unlink($files['csv'][0]['tmp']);
+    }
+
     public function testLimitsAndMalformedBodies(): void
     {
         $in = fopen('php://memory', 'w+b');

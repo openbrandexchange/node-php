@@ -109,7 +109,7 @@ Everything else about hosting (Docker, nginx, Cloud Run, custom domains, HTTPS, 
 Create an upload key in the admin under *Automatic upload → Access keys* (it starts with
 `obxi_`), then pick what fits: a **scheduled import** from a web address, an SFTP folder or an
 S3-compatible bucket (no code; *Mirror* also takes articles offline that disappeared, but refuses
-when more than half would disappear); the **`obx` tool** (`obx push --csv products.csv --images
+when more than half would disappear; an Excel workbook works wherever a CSV does); the **`obx` tool** (`obx push --csv products.csv --images
 ./images`, `obx watch ./outbox`); or **direct HTTP** from n8n, Make, Zapier or your PIM. Every
 call is safe to repeat. Details: [docs/automation.md](docs/automation.md) and the
 specification's [import format](https://github.com/openbrandexchange/spec/blob/main/docs/import-format.md)
@@ -167,7 +167,8 @@ Secrets are random and stored hashed (argon2id passwords, SHA-256 tokens) or enc
 (AES-256-GCM for webhook secrets and import credentials); sessions use HttpOnly SameSite cookies
 with CSRF tokens; content links are signed and expire; outbound requests only reach public
 addresses (link-local and cloud-metadata addresses are always refused, and the checked address
-is pinned for the connection); zip imports are checked for unsafe paths and sizes; CSV exports
+is pinned for the connection); zip imports and Excel workbooks are checked for unsafe paths, macros
+and sizes; CSV exports
 are formula-safe; strict security headers; CORS only on the discovery document. The details are
 in [docs/security.md](docs/security.md). **Report vulnerabilities privately to
 security@openbrandexchange.com** ([SECURITY.md](SECURITY.md)).

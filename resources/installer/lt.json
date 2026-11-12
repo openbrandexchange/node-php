@@ -19,6 +19,8 @@
   "hint_gd": "Be GD žiniatinklio sąsaja internetines ir miniatiūrų versijas sukuria naršyklėje.",
   "chk_zip": "zip (zip failų įkėlimas ir importas)",
   "hint_zip": "Be zip lentelę ir nuotraukas įkelkite atskirai.",
+  "chk_xlsx": "zlib ir XMLReader (Excel importas)",
+  "hint_xlsx": "Be jų išsaugokite skaičiuoklę kaip CSV UTF-8 ir importuokite ją.",
   "chk_curl": "curl (suplanuoti importai ir žiniatinklio kabliukai)",
   "hint_curl": "Įjunkite curl, kad importus būtų galima gauti iš žiniatinklio adreso ar bucket.",
   "chk_upload": "Įkėlimas iki 100 MB (dabar {mb} MB)",

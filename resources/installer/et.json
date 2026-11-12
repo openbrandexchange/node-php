@@ -19,6 +19,8 @@
   "hint_gd": "Ilma GD-ta teeb veebiliides veebi- ja pisipildiversioonid brauseris.",
   "chk_zip": "zip (zip-failide üleslaadimine ja import)",
   "hint_zip": "Ilma zipita laadige tabel ja pildid üles eraldi.",
+  "chk_xlsx": "zlib ja XMLReader (Exceli import)",
+  "hint_xlsx": "Ilma nendeta salvestage arvutustabel CSV UTF-8 vormingus ja importige see.",
   "chk_curl": "curl (ajastatud impordid ja veebihaagid)",
   "hint_curl": "Lülitage curl sisse, et importe veebiaadressilt või bucketist tuua.",
   "chk_upload": "Üleslaadimine kuni 100 MB (praegu {mb} MB)",

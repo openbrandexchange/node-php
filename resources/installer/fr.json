@@ -19,6 +19,8 @@
   "hint_gd": "Sans GD, l'interface web crée les versions web et miniatures dans le navigateur.",
   "chk_zip": "zip (envois et imports de fichiers zip)",
   "hint_zip": "Sans zip, envoyez le tableur et les images séparément.",
+  "chk_xlsx": "zlib et XMLReader (imports Excel)",
+  "hint_xlsx": "Sans elles, enregistrez le tableur au format CSV UTF-8 et importez ce fichier.",
   "chk_curl": "curl (imports programmés et webhooks)",
   "hint_curl": "Activez curl pour récupérer des imports depuis une adresse web ou un bucket.",
   "chk_upload": "Envois jusqu'à 100 Mo (actuellement {mb} Mo)",

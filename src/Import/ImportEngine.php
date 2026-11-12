@@ -64,6 +64,13 @@ final class ImportEngine
 
     private function issue(string $file, ?int $row, ?string $column, string $severity, string $code, string $detail, ?string $value = null): void
     {
+        // A workbook's rows are imported as products.csv / assets.csv; their errors name the
+        // workbook and start with the cell's locator (import-format.md §5.5).
+        $role = $file === 'products.csv' ? 'products' : ($file === 'assets.csv' ? 'assets' : null);
+        if ($role !== null && isset($this->workbooks[$role])) {
+            $file = $role . '.xlsx';
+            $detail = $this->locator($role, $row, $column) . $detail;
+        }
         $this->errors[] = [
             'file' => mb_substr($file, 0, 255, 'UTF-8'),
             'row' => $row,
@@ -75,6 +82,76 @@ final class ImportEngine
         ];
     }
 
+    /** @var array<string, array{raw: list<string>, headers: list<string>}> role => header of the workbook read as that file */
+    private array $workbooks = [];
+
+    /** The §5.5 locator for an error about a workbook's row and/or column. */
+    private function locator(string $role, ?int $row, ?string $column): string
+    {
+        $wb = $this->workbooks[$role];
+        $index = null;
+        if ($column !== null && $column !== '') {
+            foreach ([$wb['raw'], $wb['headers']] as $names) {
+                $i = array_search($column, $names, true);
+                if ($i !== false) {
+                    $index = (int) $i;
+                    break;
+                }
+            }
+            if ($index === null) {
+                foreach ($wb['headers'] as $i => $h) {
+                    if (explode(':', $h, 2)[0] === $column) {
+                        $index = $i;
+                        break;
+                    }
+                }
+            }
+        }
+        return Xlsx::locator($row, $index !== null ? $wb['raw'][$index] : null, $index !== null ? $index + 1 : null);
+    }
+
+    /**
+     * Reads products.csv / assets.csv, or the workbook that takes its place: converted to rows
+     * (import-format.md §5) and then read with the CSV rules. A workbook that cannot be imported
+     * is one error, and nothing of that file is imported.
+     *
+     * @param array{path: string, xlsx: bool}|null $source
+     * @return array{headers: list<string>, raw_headers: list<string>, rows: list<array{row: int, values: array<string, string>}>}|null
+     */
+    private function readTable(?array $source, string $role): ?array
+    {
+        if ($source === null) {
+            return null;
+        }
+        if (!$source['xlsx']) {
+            return Csv::read($source['path']);
+        }
+        $file = $role . '.xlsx';
+        if (!Xlsx::available()) {
+            $this->issue($file, null, null, 'error', 'unsupported_media_type', 'This server cannot read Excel workbooks (the PHP zlib or xmlreader extension is missing). Save the sheet as CSV UTF-8 and import that.');
+            return null;
+        }
+        if ((int) @filesize($source['path']) > $this->maxBytes) {
+            $this->issue($file, null, null, 'error', 'payload_too_large', 'The workbook is larger than the upload limit (' . $this->maxBytes . ' bytes).');
+            return null;
+        }
+        try {
+            $wb = Xlsx::convert($source['path'], $role);
+        } catch (WorkbookError $e) {
+            $this->issue($file, null, null, 'error', $e->obxError, ucfirst($e->getMessage()) . '.');
+            return null;
+        }
+        foreach ([...$wb['errors'], ...$wb['warnings']] as $e) {
+            $this->errors[] = $e;
+        }
+        if ($wb['header'] === []) {
+            throw new ApiError('import_invalid', $file . ': row 1 of the sheet "' . $wb['sheet'] . '" is empty; a header row is required.');
+        }
+        $table = Csv::table($wb['header'], $wb['records']);
+        $this->workbooks[$role] = ['raw' => array_map([Xlsx::class, 'trim'], $wb['header']), 'headers' => $table['headers']];
+        return $table;
+    }
+
     // ================================================================ entry
 
     /** Runs the import from a staging directory ("input/" inside). */
@@ -83,11 +160,11 @@ final class ImportEngine
         $in = $staging . '/input';
         $work = $staging . '/work';
         @mkdir($work, 0770, true);
-        [$productsCsv, $assetsCsv, $images] = $this->collect($in, $work);
+        [$productsSource, $assetsSource, $images] = $this->collect($in, $work);
         $manifest = is_file($in . '/manifest.json') ? (array) Json::decode((string) file_get_contents($in . '/manifest.json'), []) : [];
 
-        $products = $productsCsv !== null ? Csv::read($productsCsv) : null;
-        $assetsRows = $assetsCsv !== null ? Csv::read($assetsCsv) : null;
+        $products = $this->readTable($productsSource, 'products');
+        $assetsRows = $this->readTable($assetsSource, 'assets');
         $this->counts['rows'] = $products !== null ? count($products['rows']) : 0;
 
         $plan = $products !== null ? $this->planProducts($products) : [];
@@ -119,19 +196,30 @@ final class ImportEngine
     }
 
     /**
-     * Finds products.csv, assets.csv and images among the staged inputs.
+     * Finds products.csv, assets.csv (or the workbooks products.xlsx, assets.xlsx that take their
+     * place, import-format.md §5.1) and images among the staged inputs.
      *
-     * @return array{0: ?string, 1: ?string, 2: list<array{name: string, path: string}>}
+     * @return array{0: ?array{path: string, xlsx: bool}, 1: ?array{path: string, xlsx: bool}, 2: list<array{name: string, path: string}>}
      */
     private function collect(string $in, string $work): array
     {
-        $productsCsv = is_file($in . '/products.csv') ? $in . '/products.csv' : null;
-        $assetsCsv = is_file($in . '/assets.csv') ? $in . '/assets.csv' : null;
+        $direct = static function (string $role) use ($in): ?array {
+            if (is_file($in . '/' . $role . '.csv')) {
+                return ['path' => $in . '/' . $role . '.csv', 'xlsx' => false];
+            }
+            if (is_file($in . '/' . $role . '.xlsx')) {
+                return ['path' => $in . '/' . $role . '.xlsx', 'xlsx' => true];
+            }
+            return null;
+        };
+        $productsSrc = $direct('products');
+        $assetsSrc = $direct('assets');
         $images = [];
         $maxTotal = $this->maxBytes * 10;
 
-        $fromEntries = function (array $entries, bool $csvAllowed) use (&$productsCsv, &$assetsCsv, &$images): void {
+        $fromEntries = function (array $entries, bool $csvAllowed) use (&$productsSrc, &$assetsSrc, &$images): void {
             $csvCandidates = [];
+            $workbooks = [];
             foreach ($entries as $e) {
                 $base = basename($e['name']);
                 $lower = strtolower($base);
@@ -141,33 +229,63 @@ final class ImportEngine
                     }
                     continue;
                 }
+                if ($lower === 'products.xlsx' || $lower === 'assets.xlsx') {
+                    if ($csvAllowed) {
+                        $workbooks[] = $e;
+                    }
+                    continue;
+                }
                 if (Formats::isImageName($base)) {
                     $images[] = ['name' => $base, 'path' => $e['path']];
                 }
             }
-            if (!$csvAllowed || $csvCandidates === []) {
+            if (!$csvAllowed || ($csvCandidates === [] && $workbooks === [])) {
                 return;
             }
-            usort($csvCandidates, static fn ($a, $b) => substr_count($a['name'], '/') <=> substr_count($b['name'], '/') ?: strcmp($a['name'], $b['name']));
+            $order = static fn ($a, $b) => substr_count($a['name'], '/') <=> substr_count($b['name'], '/') ?: strcmp($a['name'], $b['name']);
+            usort($csvCandidates, $order);
+            usort($workbooks, $order);
+            $has = static function (array $list, string $file): ?array {
+                foreach ($list as $c) {
+                    if (strtolower(basename($c['name'])) === $file) {
+                        return $c;
+                    }
+                }
+                return null;
+            };
+            foreach (['products', 'assets'] as $role) {
+                if ($has($csvCandidates, $role . '.csv') !== null && $has($workbooks, $role . '.xlsx') !== null) {
+                    throw new ApiError('import_invalid', 'The import has both ' . $role . '.csv and ' . $role . '.xlsx; keep one of them.');
+                }
+            }
             $others = [];
             foreach ($csvCandidates as $c) {
                 $lower = strtolower(basename($c['name']));
-                if ($lower === 'products.csv' && $productsCsv === null) {
-                    $productsCsv = $c['path'];
-                } elseif ($lower === 'assets.csv' && $assetsCsv === null) {
-                    $assetsCsv = $c['path'];
+                if ($lower === 'products.csv' && $productsSrc === null) {
+                    $productsSrc = ['path' => $c['path'], 'xlsx' => false];
+                } elseif ($lower === 'assets.csv' && $assetsSrc === null) {
+                    $assetsSrc = ['path' => $c['path'], 'xlsx' => false];
                 } elseif ($lower !== 'products.csv' && $lower !== 'assets.csv') {
                     $others[] = $c;
                 }
             }
-            if ($productsCsv === null && count($others) === 1) {
-                $productsCsv = $others[0]['path'];
+            $productsWorkbook = $has($workbooks, 'products.xlsx');
+            $assetsWorkbook = $has($workbooks, 'assets.xlsx');
+            if ($productsWorkbook !== null && $productsSrc === null) {
+                $productsSrc = ['path' => $productsWorkbook['path'], 'xlsx' => true];
+            }
+            if ($assetsWorkbook !== null && $assetsSrc === null) {
+                $assetsSrc = ['path' => $assetsWorkbook['path'], 'xlsx' => true];
+            }
+            // The "only *.csv" fallback of §3; it does not extend to workbooks.
+            if ($productsSrc === null && count($others) === 1) {
+                $productsSrc = ['path' => $others[0]['path'], 'xlsx' => false];
             }
         };
 
         if (is_file($in . '/package.zip')) {
             $entries = SafeZip::entries($in . '/package.zip', $maxTotal);
-            $wanted = array_filter($entries, static fn ($n) => str_ends_with(strtolower($n), '.csv') || Formats::isImageName(basename($n)));
+            $wanted = array_filter($entries, static fn ($n) => str_ends_with(strtolower($n), '.csv') || in_array(strtolower(basename($n)), ['products.xlsx', 'assets.xlsx'], true) || Formats::isImageName(basename($n)));
             $fromEntries(SafeZip::extractMany($in . '/package.zip', $wanted, $work . '/package', $this->maxBytes), true);
         }
         if (is_dir($in . '/tree')) {
@@ -195,7 +313,7 @@ final class ImportEngine
                 $images[] = ['name' => basename((string) $d['name']), 'path' => $path];
             }
         }
-        return [$productsCsv, $assetsCsv, $images];
+        return [$productsSrc, $assetsSrc, $images];
     }
 
     // ================================================================ products

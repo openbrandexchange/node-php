@@ -90,7 +90,9 @@ final class Multipart
                     $type = trim(substr($line, 13));
                 }
             }
-            $isFile = $filename !== null;
+            // A part without a file name is a form field, except an Excel workbook, which is
+            // known by its content type (import-format.md §5.1) and kept as a file.
+            $isFile = $filename !== null || \Obx\Node\Import\Xlsx::isWorkbook('', $type);
             $fh = null;
             $tmp = null;
             $value = '';

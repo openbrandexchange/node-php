@@ -23,6 +23,12 @@ final class Importer
     {
     }
 
+    /** The upload limit for one file of an import (a CSV, a workbook, an image). */
+    public function maxCsvBytes(): int
+    {
+        return max(26214400, (int) $this->app->config->get('max_upload_bytes'));
+    }
+
     public function stagingDir(string $runId): string
     {
         return $this->app->config->dataDir() . '/imports/' . $runId;
@@ -65,6 +71,28 @@ final class Importer
      */
     public function queueFromRequest(Request $req, array $options, ?array $brands, string $trigger, string $ownerType, string $ownerId, ?string $idemKey): array
     {
+        // A workbook takes the place of products.csv / assets.csv (import-format.md §5.1): the
+        // file name decides, or the content type of a part without a name.
+        $workbook = [];
+        foreach (['csv' => 'products', 'assets_csv' => 'assets'] as $field => $role) {
+            $f = $req->files[$field][0] ?? null;
+            if ($f === null) {
+                continue;
+            }
+            $name = (string) $f['name'];
+            $type = (string) $f['type'];
+            if (Xlsx::isWorkbook($name, $type)) {
+                if (!Xlsx::available()) {
+                    throw new ApiError('unsupported_media_type', 'This server cannot read Excel workbooks (the PHP zlib or xmlreader extension is missing). Save the sheet as CSV UTF-8 and upload that.');
+                }
+                if ((int) $f['size'] > $this->maxCsvBytes()) {
+                    throw new ApiError('payload_too_large', 'The workbook is larger than the upload limit (' . $this->maxCsvBytes() . ' bytes).');
+                }
+                $workbook[$field] = $role . '.xlsx';
+            } elseif (Xlsx::isOtherSpreadsheet($name, $type)) {
+                throw new ApiError('unsupported_media_type', 'Save the sheet as an Excel Workbook (.xlsx) or as CSV UTF-8 and upload that; ' . ($name !== '' ? '"' . $name . '"' : 'this file') . ' cannot be imported.');
+            }
+        }
         $runId = Ids::new('imp');
         $dir = $this->stagingDir($runId) . '/input';
         @mkdir($dir . '/images', 0770, true);
@@ -80,7 +108,7 @@ final class Importer
                     copy($f['tmp'], $target);
                 }
             }
-            $files[] = ['name' => $f['name'], 'bytes' => (int) $f['size'], 'sha256' => (string) hash_file('sha256', $target)];
+            $files[] = ['name' => (string) $f['name'] !== '' ? $f['name'] : basename($target), 'bytes' => (int) $f['size'], 'sha256' => (string) hash_file('sha256', $target)];
         };
         $text = function (string $field, string $target, string $label) use ($req, &$files): bool {
             $v = $req->post[$field] ?? null;
@@ -97,13 +125,13 @@ final class Importer
             $any = true;
         }
         if (isset($req->files['csv'][0])) {
-            $take($req->files['csv'][0], $dir . '/products.csv');
+            $take($req->files['csv'][0], $dir . '/' . ($workbook['csv'] ?? 'products.csv'));
             $any = true;
         } elseif ($text('csv', $dir . '/products.csv', 'products.csv')) {
             $any = true;
         }
         if (isset($req->files['assets_csv'][0])) {
-            $take($req->files['assets_csv'][0], $dir . '/assets.csv');
+            $take($req->files['assets_csv'][0], $dir . '/' . ($workbook['assets_csv'] ?? 'assets.csv'));
             $any = true;
         } elseif ($text('assets_csv', $dir . '/assets.csv', 'assets.csv')) {
             $any = true;

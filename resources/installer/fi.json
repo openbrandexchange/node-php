@@ -19,6 +19,8 @@
   "hint_gd": "Ilman GD:tä verkkokäyttöliittymä tekee verkko- ja pikkukuvaversiot selaimessa.",
   "chk_zip": "zip (zip-lataukset ja tuonnit)",
   "hint_zip": "Ilman zipiä ladatkaa taulukko ja kuvat erikseen.",
+  "chk_xlsx": "zlib ja XMLReader (Excel-tuonnit)",
+  "hint_xlsx": "Ilman niitä tallenna laskentataulukko CSV UTF-8 -muodossa ja tuo se.",
   "chk_curl": "curl (ajastetut tuonnit ja webhookit)",
   "hint_curl": "Ottakaa curl käyttöön, jotta tuonnit voidaan hakea verkko-osoitteesta tai bucketista.",
   "chk_upload": "Lataukset enintään 100 Mt (nyt {mb} Mt)",

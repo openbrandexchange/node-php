@@ -19,6 +19,8 @@
   "hint_gd": "Bez GD interfejs WWW tworzy wersje internetowe i miniatury w przeglądarce.",
   "chk_zip": "zip (przesyłanie i import plików zip)",
   "hint_zip": "Bez zip prześlij arkusz i zdjęcia osobno.",
+  "chk_xlsx": "zlib i XMLReader (import z Excela)",
+  "hint_xlsx": "Bez nich zapisz arkusz jako CSV UTF-8 i zaimportuj ten plik.",
   "chk_curl": "curl (zaplanowane importy i webhooki)",
   "hint_curl": "Włącz curl, aby pobierać importy z adresu internetowego lub bucketu.",
   "chk_upload": "Przesyłanie do 100 MB (teraz {mb} MB)",

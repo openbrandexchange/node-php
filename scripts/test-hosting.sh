@@ -67,7 +67,7 @@ for v in "${versions[@]}"; do
     curl -fsS "$base/install?lang=fr" | grep -q 'Installez votre espace revendeurs' || fail "installer language switch"
 
     grep -q 'class="bad"' <<<"$page" && fail "a required server check failed: $(grep -o '<li class="bad">[^<]*' <<<"$page")"
-    for check in 'GD with JPEG' 'zip (zip uploads' 'curl (scheduled'; do
+    for check in 'GD with JPEG' 'zip (zip uploads' 'curl (scheduled' 'zlib and XMLReader'; do
       grep -q "<li class=\"ok\">$check" <<<"$page" || fail "server check '$check' not ok"
     done
     code=$(docker exec "$name" cat /var/www/html/data/SETUP-CODE.txt | grep -oE '[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}')
@@ -115,6 +115,16 @@ for v in "${versions[@]}"; do
     products=$(curl "${admin[@]}" "$base/admin/api/catalog/products" | json "len(d['items'])")
     [ "$products" = "$want_products" ] || fail "expected $want_products products, got $products"
 
+    # The products template as an Excel workbook (dry run): read without ext-zip, no errors.
+    job=$(curl -fsS -H "Authorization: Bearer $token" -F "csv=@$here/tests/fixtures/spec/imports/xlsx/products-template.xlsx;type=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" -F 'options={"dry_run":true}' "$base/obx/v1/ingest/imports" | json "d['id']")
+    for _ in $(seq 1 60); do
+      st=$(curl -fsS -H "Authorization: Bearer $token" "$base/obx/v1/ingest/jobs/$job" | json "d['status']")
+      [ "$st" = succeeded ] && break; [ "$st" = failed ] && fail "workbook import failed"; sleep 1
+    done
+    [ "$st" = succeeded ] || fail "workbook import did not finish (status $st)"
+    errs=$(curl -fsS -H "Authorization: Bearer $token" "$base/obx/v1/ingest/jobs/$job" | json "d['import_run']['counts']['errors']")
+    [ "$errs" = 0 ] || fail "workbook import has $errs errors"
+
     # A background zip of everything (a download job), without cron.
     dj=$(curl "${admin[@]}" "$base/admin/api/portal/download-jobs" -d '{"source":"filter","filter":{},"variant":"web"}' | json "d['id']")
     for _ in $(seq 1 90); do
@@ -149,7 +159,7 @@ for v in "${versions[@]}"; do
     if docker logs "$name" 2>&1 | grep -E 'PHP (Warning|Notice|Deprecated|Fatal|Parse)|obx ERROR'; then
       fail "PHP reported problems (above)"
     fi
-    echo "   ok: installer, private folders, setup, import, zip job and scheduled import without cron, clean log"
+    echo "   ok: installer, private folders, setup, import, Excel import, zip job and scheduled import without cron, clean log"
     docker rm -f "$name" >/dev/null
   done
 done

@@ -19,6 +19,8 @@
   "hint_gd": "Uden GD laver webgrænsefladen web- og miniatureversionerne i browseren.",
   "chk_zip": "zip (zip-upload og import)",
   "hint_zip": "Uden zip uploader I regnearket og billederne hver for sig.",
+  "chk_xlsx": "zlib og XMLReader (Excel-import)",
+  "hint_xlsx": "Uden dem skal du gemme regnearket som CSV UTF-8 og importere det.",
   "chk_curl": "curl (planlagte importer og webhooks)",
   "hint_curl": "Slå curl til for at hente importer fra en webadresse eller en bucket.",
   "chk_upload": "Upload op til 100 MB (nu {mb} MB)",

@@ -19,6 +19,8 @@
   "hint_gd": "Bez GD vytváří webové rozhraní webové verze a náhledy v prohlížeči.",
   "chk_zip": "zip (nahrávání a importy zip)",
   "hint_zip": "Bez zip nahrajte tabulku a obrázky zvlášť.",
+  "chk_xlsx": "zlib a XMLReader (importy z Excelu)",
+  "hint_xlsx": "Bez nich uložte tabulku jako CSV UTF-8 a importujte ji.",
   "chk_curl": "curl (plánované importy a webhooky)",
   "hint_curl": "Zapněte curl, aby šlo stahovat importy z webové adresy nebo bucketu.",
   "chk_upload": "Nahrávání až 100 MB (nyní {mb} MB)",

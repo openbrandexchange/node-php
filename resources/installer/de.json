@@ -19,6 +19,8 @@
   "hint_gd": "Ohne GD erstellt die Weboberfläche die Web- und Vorschauversionen im Browser.",
   "chk_zip": "zip (Zip-Uploads und Importe)",
   "hint_zip": "Ohne zip laden Sie die Tabelle und die Bilder getrennt hoch.",
+  "chk_xlsx": "zlib und XMLReader (Excel-Importe)",
+  "hint_xlsx": "Ohne sie speichern Sie die Tabelle als CSV UTF-8 und importieren diese.",
   "chk_curl": "curl (geplante Importe und Webhooks)",
   "hint_curl": "Aktivieren Sie curl, um Importe von einer Webadresse oder einem Bucket abzurufen.",
   "chk_upload": "Uploads bis 100 MB (derzeit {mb} MB)",

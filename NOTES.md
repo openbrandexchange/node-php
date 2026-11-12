@@ -227,6 +227,43 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     `yes`/`no`, `strap_length_cm` as `min-max` (one number when both are equal), numbers with `.`.
     Importing the file again changes nothing.
 
+## Excel import (import-format.md §5)
+
+53. **Pure PHP zip reading for workbooks.** ext-zip is only suggested (packages need it), so a
+    workbook is read by `XlsxPackage`: the end of central directory (zip64 too) and the central
+    directory with `fopen`/`fseek`, entries inflated with `inflate_init`/`inflate_add` (zlib) in
+    8 KiB steps into memory, counting the bytes actually inflated against the declared size and
+    the 256 MiB total, and checking CRC-32. Nothing is written to disk. Only the parts §5.6 names
+    are ever inflated.
+54. **The order of §5.6 is the reference's order** (spec `tools/xlsx.mjs`): signature, zip,
+    declared sizes, `[Content_Types].xml` parsed, unsafe names and content types, structure,
+    external relationships, sheet, cells in reading order (an unreadable cell and a cell outside
+    the limits: whichever comes first), conversion. Cells outside the limits are kept as
+    coordinates only (at most 100 000; more is certainly too large), so a sheet full of values
+    below row 100 001 does not fill memory.
+55. **XMLReader** (`LIBXML_NONET`, no `LIBXML_NOENT`/`DTDLOAD`) with a `DOCTYPE` node refused as
+    soon as it is read; a libxml error is `workbook_invalid`. Self-closing elements are handled as
+    open + close, so `<c r="A1"/>` and `<v/>` read like the reference's SAX events.
+56. **The rows go to the CSV import directly** (`Csv::table`, shared with `Csv::read`), keyed by
+    Excel row number, so every CSV rule (trimming, empty rows, repeated columns) is the same code
+    and every row error already has Excel's number. `ImportEngine::issue` renames the file to
+    `products.xlsx` / `assets.xlsx` and puts the §5.5 locator in front of the detail (the column is
+    found by its header as written, then its normalised name, then the name before `:`).
+57. **A workbook that cannot be imported** is one ImportRowError (row and column null) and the run
+    goes on and succeeds, as I-IMP-10 asks; only an empty row 1 (no header, as an empty CSV) and
+    `products.csv` together with `products.xlsx` in one package or folder fail the run with
+    `import_invalid`. A file staged directly (upload) wins over one in a package, as for CSV.
+58. **Uploads**: the name decides (`.xlsx`, any case); a multipart part without a file name is kept
+    as a file when its content type is the xlsx type (our own multipart parser; PHP's form parsing
+    is off). `.xlsm`, `.xls`, `.xlsb`, `.xltx`, `.xltm`, `.ods`, `.numbers` (and their content types
+    for nameless parts) are `415 unsupported_media_type`, as is any workbook on a PHP without zlib or
+    xmlreader. A web address source whose path ends in `.xlsx` is a products workbook; an SFTP path
+    that names an `.xlsx` file too. In folders only `products.xlsx` and `assets.xlsx` count.
+59. **Beyond the reference, deliberately:** a `<v>` with an exponent of 10 000 or more is not a number
+    (`workbook_invalid`; the reference would build a string of that many zeros), a date serial at or
+    after 10000-01-01 is a conversion error (Excel's last date is 9999-12-31), and CDATA in a cell
+    counts as text.
+
 ## Known limitations (tracked)
 
 Each is a deliberate choice for 0.1.0 with its reason; none is reachable as a broken screen.

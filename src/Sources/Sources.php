@@ -227,7 +227,7 @@ final class Sources
         if ($kind === 'https_url') {
             $url = $c['url'] ?? null;
             if (!is_string($url) || !preg_match('#^https?://#i', $url) || filter_var($url, FILTER_VALIDATE_URL) === false) {
-                throw ApiError::validation('/config/url', 'The https:// address of your products.csv or zip.');
+                throw ApiError::validation('/config/url', 'The https:// address of your products.csv, products.xlsx or zip.');
             }
             $this->app->http->check($url);
             $images = $c['images_url'] ?? null;

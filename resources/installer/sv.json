@@ -19,6 +19,8 @@
   "hint_gd": "Utan GD skapar webbgränssnittet webb- och miniatyrversionerna i webbläsaren.",
   "chk_zip": "zip (zip-uppladdning och import)",
   "hint_zip": "Utan zip laddar ni upp kalkylbladet och bilderna var för sig.",
+  "chk_xlsx": "zlib och XMLReader (Excel-importer)",
+  "hint_xlsx": "Utan dem sparar du kalkylbladet som CSV UTF-8 och importerar det.",
   "chk_curl": "curl (schemalagda importer och webhooks)",
   "hint_curl": "Aktivera curl för att hämta importer från en webbadress eller en bucket.",
   "chk_upload": "Uppladdning upp till 100 MB (nu {mb} MB)",

@@ -19,6 +19,8 @@
   "hint_gd": "Bez GD tīmekļa saskarne tīmekļa un sīktēlu versijas izveido pārlūkā.",
   "chk_zip": "zip (zip augšupielāde un imports)",
   "hint_zip": "Bez zip augšupielādējiet tabulu un attēlus atsevišķi.",
+  "chk_xlsx": "zlib un XMLReader (Excel imports)",
+  "hint_xlsx": "Bez tiem saglabājiet izklājlapu kā CSV UTF-8 un importējiet to.",
   "chk_curl": "curl (plānoti importi un tīmekļa āķi)",
   "hint_curl": "Ieslēdziet curl, lai importus varētu iegūt no tīmekļa adreses vai bucket.",
   "chk_upload": "Augšupielāde līdz 100 MB (tagad {mb} MB)",
