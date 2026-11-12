@@ -9,7 +9,7 @@ COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-interaction --no-progress --optimize-autoloader --no-scripts \
       --ignore-platform-req=ext-gd --ignore-platform-req=ext-zip --ignore-platform-req=ext-pcntl
 
-FROM php:8.3-apache
+FROM php:8.5-apache
 ARG VERSION=dev
 LABEL org.opencontainers.image.title="Open Brand Exchange · Portal for web hosting" \
       org.opencontainers.image.description="Brand portal for retailers with the OBX Protocol and OBX Ingest API (PHP edition)" \
