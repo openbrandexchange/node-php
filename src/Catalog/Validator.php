@@ -216,7 +216,14 @@ final class Validator
         return [$model, $status];
     }
 
-    /** @return list<array<string, mixed>>|null */
+    /**
+     * Materials (protocol.md §5.9.1): parts with fibres, part, material and qualifier as terms
+     * {code, name}. The name may be left out; a code in the vocabulary gets the vocabulary's
+     * name, another code the name it was given (or null). The 0.1 material keys
+     * recycled_<material> / organic_<material> become the material with that qualifier.
+     *
+     * @return list<array<string, mixed>>|null
+     */
     public function materials(mixed $v, string $p): ?array
     {
         if ($v === null) {
@@ -228,15 +235,12 @@ final class Validator
         }
         $out = [];
         foreach ($v as $i => $part) {
-            if (!is_array($part)) {
+            if (!Json::isObject($part)) {
                 $this->err($p . '/' . $i, 'Must be an object.');
                 continue;
             }
-            $name = $part['part'] ?? null;
-            if (!is_string($name) || !preg_match('/^[a-z][a-z0-9_]{0,63}$/', $name)) {
-                $this->err($p . '/' . $i . '/part', 'Part keys are lowercase, e.g. "main" or "lining".');
-                continue;
-            }
+            $this->unknown($part, ['part', 'fibers'], 'materials.');
+            $term = $this->term($part['part'] ?? null, $p . '/' . $i . '/part', 'materials.part.', 'Part codes are lowercase, e.g. {"code": "main"} or {"code": "lining"}.');
             $fibers = $part['fibers'] ?? null;
             if (!is_array($fibers) || $fibers === [] || !array_is_list($fibers)) {
                 $this->err($p . '/' . $i . '/fibers', 'At least one fibre is required.');
@@ -244,31 +248,47 @@ final class Validator
             }
             $fo = [];
             foreach ($fibers as $j => $f) {
-                $fk = is_array($f) ? ($f['fiber'] ?? null) : null;
-                $pct = is_array($f) ? ($f['percentage'] ?? null) : null;
-                if (!is_string($fk) || !preg_match('/^[a-z][a-z0-9_]{0,63}$/', $fk)) {
-                    $this->err($p . '/' . $i . '/fibers/' . $j . '/fiber', 'Fibre keys are lowercase, e.g. "cotton".');
+                $fp = $p . '/' . $i . '/fibers/' . $j;
+                if (!Json::isObject($f)) {
+                    $this->err($fp, 'Must be an object with material, percentage and qualifier.');
                     continue;
                 }
+                $this->unknown($f, ['material', 'percentage', 'qualifier'], 'materials.fibers.');
+                $material = $this->term($f['material'] ?? null, $fp . '/material', 'materials.fibers.material.', 'Material codes are lowercase, e.g. {"code": "cotton"}.');
+                $qualifier = ($f['qualifier'] ?? null) === null ? null
+                    : $this->term($f['qualifier'], $fp . '/qualifier', 'materials.fibers.qualifier.', 'A qualifier is null or a lowercase code, e.g. {"code": "recycled"}.');
+                $pct = $f['percentage'] ?? null;
                 if (!is_int($pct) && !is_float($pct) || $pct <= 0 || $pct > 100) {
-                    $this->err($p . '/' . $i . '/fibers/' . $j . '/percentage', 'A number above 0 and at most 100.');
+                    $this->err($fp . '/percentage', 'A number above 0 and at most 100.');
                     continue;
                 }
-                $this->unknown($f, ['fiber', 'percentage', 'recycled', 'organic'], 'materials.fibers.');
-                foreach (['recycled', 'organic'] as $flag) {
-                    if (array_key_exists($flag, $f) && $f[$flag] !== null && !is_bool($f[$flag])) {
-                        $this->err($p . '/' . $i . '/fibers/' . $j . '/' . $flag, 'true or false.');
-                        continue 2;
-                    }
+                if ($material === null || ($f['qualifier'] ?? null) !== null && $qualifier === null) {
+                    continue;
                 }
-                // 0.2: the 0.1 keys recycled_<fibre> / organic_<fibre> become the fibre with the
-                // flag; a flag is stored only when true (docs/ingest.md §3.4).
-                $fo[] = ArticleData::normalizeFiber(['fiber' => $fk, 'percentage' => self::number($pct),
-                    'recycled' => $f['recycled'] ?? false, 'organic' => $f['organic'] ?? false]);
+                $fo[] = ArticleData::fibre($material, $pct, $qualifier);
             }
-            $out[] = ['part' => $name, 'fibers' => $fo];
+            if ($term !== null) {
+                $out[] = ['part' => ArticleData::term('parts', $term['code'], $term['name']), 'fibers' => $fo];
+            }
         }
         return $out;
+    }
+
+    /**
+     * A term on a write path: {code, name?}; name is a LocalizedText or null.
+     *
+     * @return array{code: string, name: array<string, string>|null}|null null when invalid
+     */
+    private function term(mixed $v, string $p, string $base, string $hint): ?array
+    {
+        if (!Json::isObject($v) || !is_string($v['code'] ?? null) || !preg_match(ArticleData::KEY, $v['code'])) {
+            $this->err(Json::isObject($v) ? $p . '/code' : $p, $hint);
+            return null;
+        }
+        $this->unknown($v, ['code', 'name'], $base);
+        $errors = count($this->errors);
+        $name = $this->localized($v['name'] ?? null, $p . '/name');
+        return count($this->errors) > $errors ? null : ['code' => $v['code'], 'name' => $name];
     }
 
     public static function number(int|float $n): int|float
@@ -482,12 +502,28 @@ final class Validator
         }
         $out = [];
         foreach ($v as $i => $item) {
-            $code = is_array($item) ? ($item['code'] ?? null) : null;
-            if (!is_string($code) || !preg_match('/^[a-z][a-z0-9_]{0,63}$/', $code)) {
-                $this->err($p . '/' . $i . '/code', 'Care codes are lowercase keys, e.g. "wash_30".');
+            $ip = $p . '/' . $i;
+            $code = Json::isObject($item) ? ($item['code'] ?? null) : null;
+            if (!is_string($code) || !preg_match(ArticleData::KEY, $code)) {
+                $this->err($ip . '/code', 'Care codes are lowercase keys, e.g. "wash_30".');
                 continue;
             }
-            $out[] = ['code' => $code, 'text' => $this->localized($item['text'] ?? null, $p . '/' . $i . '/text')];
+            $this->unknown($item, ['code', 'category', 'symbol', 'name', 'text'], 'care.');
+            $errors = count($this->errors);
+            $category = $item['category'] ?? null;
+            if ($category !== null && !in_array($category, ArticleData::CARE_CATEGORIES, true)) {
+                $this->err($ip . '/category', 'One of ' . implode(', ', ArticleData::CARE_CATEGORIES) . ' or null.');
+            }
+            $symbol = $item['symbol'] ?? null;
+            if ($symbol !== null && (!is_string($symbol) || !preg_match(ArticleData::CARE_SYMBOL, $symbol))) {
+                $this->err($ip . '/symbol', 'A symbol code such as 1_C_40, or null.');
+            }
+            $name = $this->localized($item['name'] ?? null, $ip . '/name');
+            $text = $this->localized($item['text'] ?? null, $ip . '/text');
+            if (count($this->errors) > $errors) {
+                continue;
+            }
+            $out[] = ArticleData::careEntry($code, $category, $symbol, $name, $text);
         }
         return $out;
     }

@@ -184,6 +184,12 @@ final class Schema
             4 => [
                 [\Obx\Node\Catalog\ArticleDataUpgrade::class, 'run'],
             ],
+            // 0.3.0: materials and care as terms with names (spec 0.3, proposal 0004). Stored
+            // in the write model too; products written by 0.1 or 0.2 get the 0.3 shapes and,
+            // where the representation changed, a change entry.
+            5 => [
+                [\Obx\Node\Catalog\ArticleDataUpgrade::class, 'run'],
+            ],
         ];
     }
 

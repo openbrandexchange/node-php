@@ -2,6 +2,28 @@
 
 All notable changes to the PHP edition of the Open Brand Exchange portal ("Portal for web hosting"). The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [semantic versioning](https://semver.org/): while it is 0.x, a minor version may change behaviour, and the upgrade notes say what to do.
 
+## [0.3.0] - 2026-11-12
+
+Materials and care as terms with names: this release implements Open Brand Exchange specification 0.3.0 (OBX Protocol 0.3, [proposal 0004](https://github.com/openbrandexchange/spec/blob/main/docs/proposals/0004-terms-with-names.md)). **Breaking for retailers' software** that reads `materials` or `care` (allowed before 1.0); everything else is unchanged.
+
+### For brands
+
+- Materials take any qualifier in brackets, one per fibre: `100% cotton (organic)`, `outer: 100% polyester (recycled)`, and new `100% merino_wool (regenerative)`. Two qualifiers on one fibre skip the row with an error in the column `materials`. The 0.1 spelling `recycled_polyester` / `organic_cotton` still works and means the same.
+- You keep sending codes only (`cotton`, `lining`, `wash_30`); the portal adds the names in English, Dutch, German and French, and for care the symbol group and the GINETEX symbol code, from the specification's vocabularies. For a code outside the vocabularies the Ingest API and the admin keep the name (and for care the category and symbol) you send.
+- Care codes outside the vocabulary are still kept, with a warning in imports.
+
+### For retailers' software
+
+- `materials`: `part`, the fibre's `material` and its `qualifier` are terms `{"code", "name"}`, with `name` per language (`null` for the part `main` and for codes without a name). A fibre is `{"material": {...}, "percentage": 95, "qualifier": {...} | null}`; `fiber` and the flags `recycled` / `organic` are gone.
+- `care`: every entry has `code`, `category` (`washing`, `bleaching`, `drying`, `ironing`, `professional_care` or `null`), `symbol` (for example `1_D_30`, or `null`), `name` and `text` (only the brand's own extra text).
+- `OBX-Version: 0.3`; the discovery document says `obx_version` `0.3`.
+- The Ingest API and the admin API take and return the same shapes; `name`, `category` and `symbol` may be left out on writes. The 0.2 shapes (`"part": "main"`, `"fiber": "cotton"`, the flags) are refused with `validation_failed`.
+
+### Upgrading
+
+- Upload the new files (or pull the new image) and open the portal: database schema 5 rewrites the stored materials and care of every article once into the 0.3 form (`recycled: true` becomes the qualifier `recycled`, names from the vocabularies). Every visible article with materials or care gets one change entry, so retailers' software fetches the new form; sizes and images are not sent again. With tens of thousands of articles run `php bin/obx migrate` from the command line. Sending the same spreadsheet again afterwards changes nothing. Make a backup first (`php bin/obx backup`), as for every upgrade.
+- Retailers' software must read `part.code`, `fibers[].material.code` and `fibers[].qualifier.code` instead of `part`, `fiber` and the flags before it syncs from a 0.3 portal.
+
 ## [0.2.1] - 2026-11-12
 
 Excel workbooks next to CSV files: this release implements the Excel import of the specification's import format §5 (spec 0.2.0 plus the clarified §5 of spec commit 9219d68). Nothing changes for retailers' software.

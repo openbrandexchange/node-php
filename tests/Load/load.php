@@ -98,7 +98,7 @@ function seed(string $root, string $out, int $products): void
                 'item_type' => $types[$p % 8],
                 'target_group' => ['women', 'men', 'unisex', 'kids'][$p % 4],
                 'season' => ['SS27', 'AW27', 'SS28'][$p % 3],
-                'materials' => [['part' => 'main', 'fibers' => [['fiber' => 'cotton', 'percentage' => 100]]]],
+                'materials' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100]]]],
                 'care' => [['code' => 'wash_30']],
             ], $ctx);
             $pair = [$colors[$p % 6], $colors[($p + 1) % 6]];

@@ -28,7 +28,7 @@ final class ProtocolTest extends NodeTestCase
         $doc = $this->json($res);
         $this->assertSame('*', $res->getHeader('Access-Control-Allow-Origin'));
         $this->assertSame('http://localhost/obx/v1', $doc['api_base']);
-        $this->assertSame('0.2', $doc['obx_version']);
+        $this->assertSame('0.3', $doc['obx_version']);
         $this->assertSame(['nl', 'en'], $doc['languages']);
         $this->assertSame('Kestrel Outfitters', $doc['publisher']['name']);
         foreach (['changes', 'products', 'by_gtin', 'renditions', 'exports', 'webhooks', 'usage', 'ingest', 'portal'] as $cap) {

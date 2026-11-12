@@ -45,9 +45,10 @@ final class Representation
             'target_group' => $in['target_group'] ?? null,
             'season' => $in['season'] ?? null,
             'collection' => $in['collection'] ?? null,
-            // 0.2 (protocol.md §5.9): every article data property is present, null when not
-            // stated; fibres are always normalised (no recycled_*/organic_* keys).
-            'materials' => ArticleData::normalizeMaterials($in['materials'] ?? null),
+            // protocol.md §5.9: every article data property is present, null when not stated.
+            // materials and care are stored in their 0.3 shape, with the names, categories and
+            // symbols of the vocabulary filled in by the Validator.
+            'materials' => $in['materials'] ?? null,
             'contains_animal_origin' => $in['contains_animal_origin'] ?? null,
             'footwear_materials' => $in['footwear_materials'] ?? null,
             'care' => $in['care'] ?? null,

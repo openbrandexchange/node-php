@@ -10,15 +10,21 @@ use Obx\Node\Support\Clock;
 use Obx\Node\Support\Json;
 
 /**
- * Schema 4 (0.2.0): brings products and variants written by 0.1 to the 0.2 stored model.
+ * Brings stored products and variants to the current stored model: schema 4 (0.2.0) for data
+ * written by 0.1, schema 5 (0.3.0) for data written by 0.1 or 0.2. Both run this same upgrade,
+ * which always writes the current (0.3) model.
  *
- * - The write model gets the 0.2 fields (null) and normalised fibres (recycled_polyester →
- *   polyester with recycled: true), so sending the same data again after the upgrade is
- *   "unchanged" (the ETag is computed over the canonical model).
- * - The protocol representation gets the 0.2 properties. When the only difference is that
- *   the new properties appear as null, the stored representation is replaced without a change
- *   entry (nothing a consumer knows changed). When a 0.1 fibre key was normalised, the content
- *   did change: a visible object gets an upsert entry and a new updated_at.
+ * - The write model gets the 0.2 fields (null), and materials and care in the 0.3 shape: part,
+ *   material and qualifier as terms {code, name} (a 0.2 part "lining" becomes {"code": "lining"},
+ *   a fibre {"fiber": "polyester", "recycled": true} or the 0.1 key recycled_polyester becomes
+ *   {"material": {"code": "polyester"}, "qualifier": {"code": "recycled"}}), care entries with
+ *   category, symbol and name, the names from the vocabularies. Sending the same data again
+ *   after the upgrade is "unchanged" (the ETag is computed over the canonical model).
+ * - The protocol representation gets the new properties. When the only difference is that
+ *   the 0.2 properties appear as null, the stored representation is replaced without a change
+ *   entry (nothing a consumer knows changed). When materials or care changed shape, the content
+ *   did change: a visible object gets an upsert entry and a new updated_at, so consumers fetch
+ *   the 0.3 form.
  *
  * Idempotent: running it again changes nothing. Works the same on SQLite and MySQL.
  */
@@ -64,10 +70,13 @@ final class ArticleDataUpgrade
         if (!is_array($stored)) {
             return;
         }
+        if ($kind === 'product' && array_key_exists('materials', $stored)) {
+            $stored['materials'] = ArticleData::materialsFromLegacy($stored['materials']);
+        }
         try {
             [$model] = $kind === 'product' ? (new Validator())->product($stored) : (new Validator())->variant($stored);
         } catch (ApiError) {
-            return; // not valid under 0.1 either; left as it is
+            return; // not valid under 0.1/0.2 either; left as it is
         }
         $set = [];
         $input = Json::encode($model);

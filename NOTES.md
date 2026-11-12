@@ -1,6 +1,6 @@
 # Implementation notes (node-php)
 
-Decisions taken where the spec (v0.1.0, and since 0.2.0 v0.2.0) was silent or ambiguous, and deliberate
+Decisions taken where the spec (v0.1.0, since 0.2.0 v0.2.0, since 0.3.0 v0.3.0) was silent or ambiguous, and deliberate
 extensions. Each is the simplest reading; the spec repository is the source of truth.
 
 ## Protocol and feed
@@ -150,7 +150,7 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     tables/indexes), run under a lock (SQLite `BEGIN IMMEDIATE`, MySQL `GET_LOCK`), and a database
     with a higher `schema_version` than the code is refused (`SchemaTooNew`). Schema 2 adds the
     audit log, schema 3 indexes found with the load test, schema 4 (0.2.0) brings stored articles
-    to the 0.2 model (note 48).
+    to the 0.2 model (note 48), schema 5 (0.3.0) materials and care to the 0.3 terms (note 62).
 39. **Node state writes** (`obx_settings.state`) read the stored state inside the write
     transaction; the worker clears its caches every pass. Before this, a worker started before
     first-run setup wrote its old copy back and undid `setup_done`.
@@ -274,6 +274,32 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     conversion warns once per such column with a value (`column C: `); a cell there is located as
     `row 3, column C: `. Header names (CSV and the sheet choice) count each run of white space and
     `-` as one `_`.
+
+## Materials and care as terms (0.3.0)
+
+60. **Names filled in on write.** The Validator stores materials and care in their 0.3 shape with
+    the names, categories and symbols already filled in: for a code in `resources/vocabularies/`
+    (a copy of the spec's `vocabularies/`, refreshed by `scripts/sync-spec.sh`) the vocabulary's
+    values, also over a name that was sent; for another code the name (category, symbol) that was
+    sent, or `null`. The representation is the stored model as it is, so the Ingest API, the
+    admin API and the protocol return the same objects, and sending a record back (with or
+    without names) is `unchanged`. A new vocabulary in a later release changes stored names only
+    through a migration, like schema 5. Names keep the vocabulary's language order (en, nl, de,
+    fr); names that were sent are sorted like every LocalizedText.
+61. **Write paths are strict about 0.3.** `"part": "main"`, `"fiber"` and the flags are refused
+    with `validation_failed` (the 0.2 shapes are not maintained); the 0.1 material keys
+    `recycled_<material>` / `organic_<material>` are accepted everywhere and the key wins over a
+    qualifier sent with it (ingest.md §3.4); with two prefixes (`organic_recycled_cotton`) the
+    first is the qualifier. An empty string as a name is `validation_failed` like in every
+    LocalizedText; a `null` language is left out. In an import, two qualifiers on one fibre are an
+    error that skips the row (import-format.md §1.4); any other code in brackets is the
+    qualifier, lowercased with `_`. The label warning `animal_origin_unknown` names the material
+    code, `fibre_percentages_not_100` the part code.
+62. **Upgrade of a 0.1 or 0.2 database (schema 5)** runs the upgrade of note 48 again, which now
+    first turns 0.1/0.2 materials into 0.3 (`recycled: true` → qualifier `recycled`; with both
+    flags true, `recycled` wins: 0.3 has one qualifier per fibre). Every visible article whose
+    materials or care changed shape gets one upsert entry and a new `updated_at`, since its
+    representation changed for consumers; variants and assets get none.
 
 ## Known limitations (tracked)
 

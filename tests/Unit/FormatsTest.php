@@ -68,17 +68,26 @@ final class FormatsTest extends TestCase
     public function testMaterialsGrammar(): void
     {
         $w = [];
+        $fibre = static fn (string $code, int|float $pct, ?string $q = null) => ['material' => ['code' => $code], 'percentage' => $pct, 'qualifier' => $q === null ? null : ['code' => $q]];
         $this->assertSame(
-            [['part' => 'outer', 'fibers' => [['fiber' => 'cotton', 'percentage' => 65], ['fiber' => 'polyamide', 'percentage' => 35]]], ['part' => 'lining', 'fibers' => [['fiber' => 'polyester', 'percentage' => 100]]]],
+            [['part' => ['code' => 'outer'], 'fibers' => [$fibre('cotton', 65), $fibre('polyamide', 35)]], ['part' => ['code' => 'lining'], 'fibers' => [$fibre('polyester', 100)]]],
             Formats::parseMaterials('outer: 65% cotton, 35% polyamide; lining: 100% polyester', $w)
         );
         $this->assertSame([], $w);
-        // 0.2: the 0.1 keys and the flags give the same fibre (import-format.md §1.4).
-        $this->assertSame([['part' => 'main', 'fibers' => [['fiber' => 'cotton', 'percentage' => 100, 'organic' => true]]]], Formats::parseMaterials('100% Organic Cotton', $w));
+        // The 0.1 keys and the qualifier give the same fibre (import-format.md §1.4).
+        $this->assertSame([['part' => ['code' => 'main'], 'fibers' => [$fibre('cotton', 100, 'organic')]]], Formats::parseMaterials('100% Organic Cotton', $w));
         $this->assertSame(Formats::parseMaterials('100% recycled_polyester', $w), Formats::parseMaterials('100% polyester (Recycled)', $w));
-        $this->assertSame([['part' => 'main', 'fibers' => [['fiber' => 'cotton', 'percentage' => 100, 'recycled' => true, 'organic' => true]]]], Formats::parseMaterials('100% cotton (organic) (recycled)', $w));
+        $this->assertSame([['part' => ['code' => 'main'], 'fibers' => [$fibre('merino_wool', 100, 'regenerative')]]], Formats::parseMaterials('100% Merino Wool (regenerative)', $w));
+        $this->assertSame([['part' => ['code' => 'main'], 'fibers' => [$fibre('cotton', 100, 'in_conversion')]]], Formats::parseMaterials('100% cotton (in conversion)', $w));
+        try {
+            Formats::parseMaterials('100% cotton (organic) (recycled)', $w);
+            $this->fail('two qualifiers on one fibre');
+        } catch (\InvalidArgumentException) {
+            $this->addToAssertionCount(1);
+        }
         $this->assertSame(12.5, Formats::parseMaterials('87,5% wool, 12.5% cashmere', $w)[0]['fibers'][1]['percentage']);
         $this->assertNull(Formats::parseMaterials('cotton', $w));
+        $this->assertNull(Formats::parseMaterials('100% cotton ()', $w));
         Formats::parseMaterials('main: 90% cotton', $w);
         $this->assertSame([], $w, 'a sum other than 100 is the label warning fibre_percentages_not_100, not a parse warning');
     }

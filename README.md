@@ -22,8 +22,9 @@ your automation work with any of them.
 - **Your admin**: brand profile and branding (logo, colour, welcome text), products and images,
   imports with clear error lists, retailers and their access requests, retailer accounts, API
   keys for retailers' software, automation tokens, webhooks and download statistics.
-- **An open API for retailers' software** (the OBX Protocol 0.2): a change feed, product lookups
-  by EAN, the article data (composition with recycled and organic fibres, the animal-origin
+- **An open API for retailers' software** (the OBX Protocol 0.3): a change feed, product lookups
+  by EAN, the article data (composition and care with their names in English, Dutch, German and
+  French, recycled, organic and regenerative fibres, the animal-origin
   statement, footwear materials, certifications, features, measurements per size), image
   downloads in *original*, *web*, *square* and *thumb* versions, bulk exports and signed webhooks.
 - **Label warnings**: imports and the Ingest API tell you when an article misses what its label

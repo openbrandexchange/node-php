@@ -15,17 +15,6 @@ final class Formats
 {
     public const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'tif', 'tiff'];
 
-    public const CARE_CODES = [
-        'wash_95', 'wash_70', 'wash_60', 'wash_60_mild', 'wash_50', 'wash_50_mild', 'wash_40', 'wash_40_mild', 'wash_40_very_mild',
-        'wash_30', 'wash_30_mild', 'wash_30_very_mild', 'hand_wash', 'do_not_wash',
-        'bleach_any', 'bleach_oxygen_only', 'do_not_bleach',
-        'tumble_dry_normal', 'tumble_dry_low', 'do_not_tumble_dry',
-        'line_dry', 'drip_line_dry', 'dry_flat', 'drip_dry_flat', 'line_dry_shade', 'drip_line_dry_shade', 'dry_flat_shade', 'drip_dry_flat_shade',
-        'iron_high', 'iron_medium', 'iron_low', 'do_not_iron',
-        'dry_clean_p', 'dry_clean_p_mild', 'dry_clean_p_very_mild', 'dry_clean_f', 'dry_clean_f_mild', 'dry_clean_f_very_mild', 'do_not_dry_clean',
-        'wet_clean_w', 'wet_clean_w_mild', 'wet_clean_w_very_mild', 'do_not_wet_clean',
-    ];
-
     public static function isImageName(string $name): bool
     {
         $ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
@@ -119,14 +108,16 @@ final class Formats
 
     /**
      * materials := part (";" part)*, part := [name ":"] fiber ("," fiber)*,
-     * fiber := number "%" key flag*, flag := "(recycled)" | "(organic)" (import-format.md §1.4).
-     * A flag sets recycled or organic on the fibre, and the 0.1 keys recycled_<fibre> and
-     * organic_<fibre> are normalised to the fibre with the flag, so both spellings give the
-     * same materials. Percentages that do not add up to 100 are reported as the label warning
-     * fibre_percentages_not_100 (rule 10), not here.
+     * fiber := number "%" material_code [qualifier], qualifier := "(" qualifier_code ")"
+     * (import-format.md §1.4). A qualifier sets that fibre's qualifier, and the 0.1 keys
+     * recycled_<material> and organic_<material> are normalised to the material with that
+     * qualifier, so both spellings give the same materials. The result is the write shape
+     * (terms without names; the Validator adds them). Percentages that do not add up to 100 are
+     * reported as the label warning fibre_percentages_not_100 (rule 10), not here.
      *
      * @param list<string> $warnings
      * @return list<array<string, mixed>>|null null when the text cannot be parsed
+     * @throws \InvalidArgumentException a fibre with more than one qualifier (validation_failed)
      */
     public static function parseMaterials(string $text, array &$warnings): ?array
     {
@@ -156,21 +147,27 @@ final class Formats
                 }
                 $pct = (float) str_replace(',', '.', $fm[1]);
                 $text = $fm[2];
-                $flags = ['recycled' => false, 'organic' => false];
-                while (preg_match('/\s*\((recycled|organic)\)\s*$/i', $text, $flag)) {
-                    $flags[strtolower($flag[1])] = true;
-                    $text = substr($text, 0, -strlen($flag[0]));
+                $qualifiers = [];
+                while (preg_match('/\s*\(([^()]*)\)\s*$/', $text, $q)) {
+                    array_unshift($qualifiers, self::key($q[1]));
+                    $text = substr($text, 0, -strlen($q[0]));
+                }
+                if (count($qualifiers) > 1) {
+                    throw new \InvalidArgumentException('"' . trim($f) . '" has more than one qualifier; a fibre has one, e.g. "100% cotton (organic)".');
                 }
                 $key = self::key($text);
-                if ($key === '' || $pct <= 0 || $pct > 100) {
+                if ($key === '' || $pct <= 0 || $pct > 100 || in_array('', $qualifiers, true)) {
                     return null;
                 }
-                $fibers[] = ArticleData::normalizeFiber(['fiber' => $key, 'percentage' => Validator::number($pct)] + $flags);
+                [$key, $fromKey] = ArticleData::splitMaterialKey($key);
+                $qualifier = $fromKey ?? $qualifiers[0] ?? null;
+                $fibers[] = ['material' => ['code' => $key], 'percentage' => Validator::number($pct),
+                    'qualifier' => $qualifier === null ? null : ['code' => $qualifier]];
             }
             if ($fibers === []) {
                 return null;
             }
-            $out[] = ['part' => $name, 'fibers' => $fibers];
+            $out[] = ['part' => ['code' => $name], 'fibers' => $fibers];
         }
         return $out === [] ? null : $out;
     }
