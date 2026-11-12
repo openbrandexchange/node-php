@@ -53,6 +53,6 @@ The first release. It implements Open Brand Exchange specification 0.1.0 (OBX Pr
 #### Added
 
 - The installer's *Open the setup wizard* link fills in the setup code (as `#code=`, never sent to the server).
-- Web interface admin-ui 0.1.1 (commit dabdcd0): the cron address under Settings, web version as the first download choice, download texts without an e-mail promise, a "Get started" step to set up e-mail while none is configured.
+- Web interface admin-ui 0.1.1 (commit d3ee574): the cron address under Settings, web version as the first download choice, download texts without an e-mail promise, a "Get started" step to set up e-mail while none is configured.
 
 [0.1.0]: https://github.com/openbrandexchange/node-php/releases/tag/v0.1.0

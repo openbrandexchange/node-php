@@ -8,7 +8,7 @@ extensions. Each is the simplest reading; the spec repository is the source of t
 1. **Upserts are filtered at read time.** Change entries store identity only; `data` is read when
    the feed is served, and an upsert whose object is no longer visible is left out
    (protocol.md §6.2). Conformance test I-REPLAY-2 reads the feed once after the whole batch and,
-   since spec 2053882, expects exactly that: `expected-changes.json` without the upserts of objects
+   since spec 42d627e, expects exactly that: `expected-changes.json` without the upserts of objects
    that are not visible after the last operation (every delete stays). Reading after each
    operation (I-REPLAY-1) returns exactly `expected-changes.json`. All nodes follow §6.2.
 2. **Ordering within a brand cascade**: brand, products (by external id), variants (by external
