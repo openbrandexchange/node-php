@@ -142,9 +142,10 @@ final class Csv
         if ($base === 'attr' || $base === 'feature') {
             return $base . ':' . strtolower((string) preg_replace('/[ \t\r\n-]+/', '_', $lang));
         }
-        $parts = explode('-', str_replace('_', '-', $lang));
-        $tag = strtolower($parts[0]) . (isset($parts[1]) ? '-' . strtoupper($parts[1]) : '');
-        return $base . ':' . $tag;
+        // A BCP 47 tag of language, optional script, optional region in canonical case
+        // (import-format.md §1.3: name:ZH_hant = name:zh-Hant); another form stays as written
+        // and is an unknown column.
+        return $base . ':' . (\Obx\Node\Catalog\Validator::canonicalLanguage($lang) ?? $lang);
     }
 
     /** Formula-injection-safe cell (docs/security.md §6). */

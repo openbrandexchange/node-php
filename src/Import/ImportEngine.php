@@ -375,6 +375,9 @@ final class ImportEngine
                 continue;
             }
             $ext = ($v['product_id'] ?? '') !== '' ? $v['product_id'] : $style;
+            if (!$this->gtinFreeForProduct($r, $ext)) {
+                continue;
+            }
             if (!isset($groups[$ext])) {
                 $groups[$ext] = ['ext' => $ext, 'first_row' => $r['row'], 'values' => [], 'rows' => []];
             }
@@ -402,6 +405,48 @@ final class ImportEngine
 
     /** @var array<string, true> feature columns with an unusable key */
     private array $ignoredColumns = [];
+
+    /** @var array<string, int> "<product ext>\0<variant ext>" => row that addressed it in this file */
+    private array $variantRows = [];
+
+    /**
+     * import-format.md §1.2.1: a GTIN that belongs to a variant of another product is
+     * gtin_conflict for the row (column gtin, value the GTIN); the whole row is skipped.
+     *
+     * @param array{row: int, values: array<string, string>} $r
+     */
+    private function gtinFreeForProduct(array $r, string $productExt): bool
+    {
+        $raw = $r['values']['gtin'] ?? '';
+        $g = (string) preg_replace('/\s+/', '', $raw);
+        if ($g === '' || !preg_match('/^(\d{8}|\d{12,14})$/', $g) || !Gtin::valid($g)) {
+            return true; // no GTIN, or one that buildVariant reports
+        }
+        $other = $this->app->db->one('SELECT v.external_id, p.external_id AS product_ext, p.style_number FROM obx_variants v JOIN obx_products p ON p.id = v.product_id WHERE v.gtin = ? AND p.external_id <> ?',
+            [str_pad($g, 14, '0', STR_PAD_LEFT), $productExt]);
+        if ($other === null) {
+            return true;
+        }
+        $this->issue('products.csv', $r['row'], 'gtin', 'error', 'gtin_conflict', 'This EAN belongs to variant "' . $other['external_id'] . '" of product ' . $other['style_number']
+            . '. Remove it there first (an empty gtin cell) to move it to this product.', $raw);
+        return false;
+    }
+
+    /**
+     * The default variant external id (import-format.md §1.2.1):
+     * <style_number>-<color_code>-<size>[-<size_length>], empty parts left out with their "-",
+     * control characters and "/" written as "_".
+     */
+    public static function defaultVariantId(string $style, string $color, ?string $size, ?string $sizeLength): string
+    {
+        $parts = [$style, $color];
+        foreach ([$size, $sizeLength] as $p) {
+            if ($p !== null && $p !== '') {
+                $parts[] = $p;
+            }
+        }
+        return (string) preg_replace('/[\x00-\x1F\x7F\/]/', '_', implode('-', $parts));
+    }
 
     /**
      * The article data cells of one row (import-format.md §1.6): a cell that does not follow
@@ -476,7 +521,7 @@ final class ImportEngine
             return true;
         }
         if (str_contains($h, ':')) {
-            return in_array($base, ['name', 'description', 'color_name'], true);
+            return in_array($base, ['name', 'description', 'color_name'], true) && preg_match(Validator::LANGUAGE_TAG, substr($h, strlen($base) + 1)) === 1;
         }
         return in_array($h, self::PRODUCT_COLS, true) || in_array($h, self::VARIANT_COLS, true);
     }
@@ -700,7 +745,7 @@ final class ImportEngine
             if (str_starts_with($col, $base . ':')) {
                 $tag = substr($col, strlen($base) + 1);
                 $text = is_array($v) ? $v[0] : $v;
-                if ($text !== '' && preg_match('/^[a-z]{2,3}(-[A-Z]{2})?$/', $tag)) {
+                if ($text !== '' && preg_match(Validator::LANGUAGE_TAG, $tag)) {
                     $out[$tag] = $text;
                 }
             }
@@ -753,7 +798,27 @@ final class ImportEngine
             $gtin = $g;
         }
         $size = ($v['size'] ?? '') !== '' ? $v['size'] : null;
-        $ext = ($v['variant_id'] ?? '') !== '' ? $v['variant_id'] : ($gtin ?? ($style . '-' . $color . ($size !== null ? '-' . $size : '')));
+        // Which variant this row is (import-format.md §1.2.1): variant_id; else the variant of
+        // this product that has the GTIN; else the default id. Never the GTIN itself.
+        $ext = ($v['variant_id'] ?? '') !== '' ? $v['variant_id'] : null;
+        if ($ext === null && $gtin !== null) {
+            $found = $this->app->db->value('SELECT v.external_id FROM obx_variants v JOIN obx_products p ON p.id = v.product_id WHERE p.external_id = ? AND v.gtin = ?',
+                [$productExt, str_pad($gtin, 14, '0', STR_PAD_LEFT)]);
+            $ext = is_string($found) ? $found : null;
+        }
+        if ($ext === null) {
+            $ext = self::defaultVariantId($style, $color, $size, ($v['size_length'] ?? '') !== '' ? $v['size_length'] : null);
+            if (mb_strlen($ext, 'UTF-8') > 200) {
+                $this->issue($file, $r['row'], 'variant_id', 'error', 'validation_failed', 'The variant id made from style number, colour and size is longer than 200 characters; give a variant_id.', $ext);
+                return null;
+            }
+        }
+        $seen = $productExt . "\0" . $ext;
+        if (isset($this->variantRows[$seen])) {
+            $this->issue($file, $r['row'], 'variant_id', 'error', 'validation_failed', 'Row ' . $this->variantRows[$seen] . ' already addresses this size (variant ' . $ext . '); give each a variant_id if they are different sizes.', $ext);
+            return null;
+        }
+        $this->variantRows[$seen] = $r['row'];
         $family = null;
         if (($v['color_family'] ?? '') !== '') {
             $family = ArticleData::parseColorFamily($v['color_family']);
@@ -1236,6 +1301,63 @@ final class ImportEngine
             }
             unset($parent);
         }
+        return self::keepExtensions($data, $stored);
+    }
+
+    /**
+     * Extension members (x-<vendor>-…) have no columns, so an import leaves the ones an object
+     * has untouched (import-format.md rule 2): those of the object and its colour, and those of
+     * the parts, fibres and terms of materials, care entries and certifications that the file
+     * states again with the same codes.
+     *
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $stored
+     * @return array<string, mixed>
+     */
+    private static function keepExtensions(array $data, array $stored): array
+    {
+        $data += Validator::extensions($stored);
+        if (is_array($data['color'] ?? null) && is_array($stored['color'] ?? null)) {
+            $data['color'] += Validator::extensions($stored['color']);
+        }
+        if (is_array($data['materials'] ?? null) && is_array($stored['materials'] ?? null)) {
+            foreach ($data['materials'] as $i => &$part) {
+                $old = $stored['materials'][$i] ?? null;
+                if (!is_array($old) || ($old['part']['code'] ?? null) !== ($part['part']['code'] ?? null)) {
+                    continue;
+                }
+                $part += Validator::extensions($old);
+                $part['part'] += Validator::extensions((array) $old['part']);
+                foreach ($part['fibers'] as $j => &$f) {
+                    $of = $old['fibers'][$j] ?? null;
+                    $code = ArticleData::splitMaterialKey((string) ($f['material']['code'] ?? ''))[0];
+                    if (!is_array($of) || ($of['material']['code'] ?? null) !== $code) {
+                        continue;
+                    }
+                    $f += Validator::extensions($of);
+                    $f['material'] += Validator::extensions((array) $of['material']);
+                }
+                unset($f);
+            }
+            unset($part);
+        }
+        foreach (['care' => 'code', 'certifications' => 'scheme'] as $list => $key) {
+            if (!is_array($data[$list] ?? null) || !is_array($stored[$list] ?? null)) {
+                continue;
+            }
+            $byKey = [];
+            foreach ($stored[$list] as $e) {
+                if (is_array($e) && is_string($e[$key] ?? null)) {
+                    $byKey[$e[$key]] ??= Validator::extensions($e);
+                }
+            }
+            foreach ($data[$list] as &$e) {
+                if (is_array($e) && is_string($e[$key] ?? null)) {
+                    $e += $byKey[$e[$key]] ?? [];
+                }
+            }
+            unset($e);
+        }
         return $data;
     }
 
@@ -1283,7 +1405,7 @@ final class ImportEngine
             // at the product's first row; never blocking.
             $stored = $w->load('product', $p['ext']);
             foreach (ArticleData::labelWarnings($stored !== null ? (array) Json::decode((string) $stored['input'], []) : []) as $lw) {
-                $this->issue($file, $p['row'], $lw['column'], 'warning', $lw['code'], $lw['detail']);
+                $this->issue($file, $p['row'], $lw['column'], 'warning', $lw['code'], $lw['detail'], $lw['value'] ?? null);
             }
             foreach ($p['variants'] as $v) {
                 try {
@@ -1451,7 +1573,7 @@ final class ImportEngine
             $stated = $data[$k] ?? null;
             $data[$k] = is_array($stated) ? array_replace($old, $stated) : $old;
         }
-        return $data;
+        return $data + Validator::extensions($stored);
     }
 }
 

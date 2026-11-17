@@ -284,7 +284,9 @@ final class ProtocolController extends Controller
         $path = '/obx/v1/assets/' . rawurlencode($id) . '/renditions/' . $name;
         $log = null;
         $admin = false;
-        if ($req->q('sig') !== null) {
+        // protocol.md §5.5: a valid Bearer token is served whatever the signature says; an
+        // expired or tampered signature without a token is 403 forbidden; neither is 401.
+        if ($req->q('sig') !== null && $req->bearer() === null) {
             $actor = $this->app->reader->verifySigned($path, $req->q('exp'), $req->q('act'), $req->q('sig'));
             if ($actor === null) {
                 throw new ApiError('forbidden', 'This link has expired or is not valid. Fetch the asset again for a fresh link.');
@@ -428,7 +430,7 @@ final class ProtocolController extends Controller
     {
         $id = (string) $req->params['id'];
         $db = $this->app->db;
-        if ($req->q('sig') !== null) {
+        if ($req->q('sig') !== null && $req->bearer() === null) {
             $path = $req->path;
             $actor = $this->app->reader->verifySigned($path, $req->q('exp'), $req->q('act'), $req->q('sig'));
             if ($actor === null || !str_starts_with($actor, 'c:')) {

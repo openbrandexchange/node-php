@@ -190,6 +190,11 @@ final class ProtocolTest extends NodeTestCase
         $this->assertSame($asset['renditions']['thumb']['sha256'], hash('sha256', $signed->content()));
         $tampered = $this->http('GET', str_replace('/thumb?', '/original?', substr($url, strlen('http://localhost'))));
         $this->assertProblem($tampered, 403, 'forbidden');
+        // protocol.md §5.5: a valid Bearer token is served whatever the signature says; neither
+        // a signature nor a token is 401.
+        $this->assertSame(200, $this->http('GET', str_replace('/thumb?', '/web?', substr($url, strlen('http://localhost'))), ['bearer' => $this->token])->status);
+        $this->assertProblem($this->http('GET', '/obx/v1/assets/' . $assetId . '/renditions/web'), 401, 'unauthorized');
+        $this->assertSame(200, $this->http('GET', '/obx/v1/assets/' . $assetId . '/renditions/web', ['bearer' => $this->token, 'query' => ['sig' => 'x', 'exp' => '1', 'act' => 'c:x']])->status);
     }
 
     public function testErrorsAreProblemJson(): void

@@ -51,7 +51,7 @@ final class Importer
             throw ApiError::validation('/options/mode', 'upsert or mirror.');
         }
         $lang = $o['default_language'] ?? null;
-        if ($lang !== null && (!is_string($lang) || !preg_match('/^[a-z]{2,3}(-[A-Z]{2})?$/', $lang))) {
+        if ($lang !== null && (!is_string($lang) || !preg_match(\Obx\Node\Catalog\Validator::LANGUAGE_TAG, $lang))) {
             throw ApiError::validation('/options/default_language', 'A language code such as nl or en.');
         }
         return [

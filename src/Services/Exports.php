@@ -41,9 +41,15 @@ final class Exports
     {
         $db = $this->app->db;
         $clientId = (string) $a['client']['id'];
+        $bodyHash = hash('sha256', Json::canonical($body));
         if ($idemKey !== null && $idemKey !== '') {
+            if (strlen($idemKey) > 200) {
+                throw new ApiError('invalid_request', 'An Idempotency-Key has 1 to 200 characters.');
+            }
             $prev = $db->one('SELECT * FROM obx_exports WHERE client_id = ? AND idem_key = ? AND created_ts > ?', [$clientId, $idemKey, Clock::time() - 86400]);
             if ($prev !== null) {
+                // protocol.md §8: the same body gives the same export, also while it runs.
+                \Obx\Node\Controllers\IngestController::sameBody($prev['idem_hash'] ?? null, $bodyHash);
                 return $this->json($prev);
             }
         }
@@ -86,6 +92,7 @@ final class Exports
                 'scopes' => $a['scopes'],
             ]),
             'idem_key' => $idemKey,
+            'idem_hash' => $idemKey !== null && $idemKey !== '' ? $bodyHash : null,
             'parts' => '[]',
             'counts' => null,
             'error' => null,

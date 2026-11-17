@@ -158,6 +158,23 @@ final class IngestTest extends NodeTestCase
         $this->assertSame(1, $job['summary']['created']);
         $results = $this->json($this->http('GET', '/obx/v1/ingest/jobs/' . $job['id'] . '/results', ['bearer' => $this->ingest]));
         $this->assertSame('created', $results['items'][0]['result']);
+        // The same key with another body is 409 idempotency_key_reused and writes nothing.
+        $other = Json::encode([['op' => 'upsert', 'kind' => 'product', 'external_id' => 'KO-7002', 'data' => ['style_number' => 'KO-7002', 'name' => ['en' => 'y']]]]);
+        $this->assertProblem($this->http('POST', '/obx/v1/ingest/batch', ['bearer' => $this->ingest, 'body' => $other, 'headers' => ['Content-Type' => 'application/json', 'Idempotency-Key' => 'k1']]), 409, 'idempotency_key_reused');
+        $this->assertNull($this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'KO-7002'"));
+        $sync = fn (string $body) => $this->http('POST', '/obx/v1/ingest/batch', ['bearer' => $this->ingest, 'body' => $body, 'headers' => ['Content-Type' => 'application/json', 'Idempotency-Key' => 'k2']]);
+        $this->assertSame($this->json($sync($other))['results'][0]['id'], $this->json($sync($other))['results'][0]['id']);
+        $this->assertProblem($this->http('POST', '/obx/v1/ingest/batch', ['bearer' => $this->ingest, 'body' => $other, 'headers' => ['Content-Type' => 'application/json', 'Idempotency-Key' => str_repeat('k', 201)]]), 400, 'invalid_request');
+        // Imports compare every part by its sha256.
+        $csv = function (string $text): array {
+            $path = $this->dir . '/i-' . bin2hex(random_bytes(3)) . '.csv';
+            file_put_contents($path, $text);
+            return ['csv' => [$this->upload($path, 'products.csv', 'text/csv')]];
+        };
+        $import = fn (array $files) => $this->http('POST', '/obx/v1/ingest/imports', ['bearer' => $this->ingest, 'files' => $files, 'headers' => ['Idempotency-Key' => 'imp-1']]);
+        $first = $this->json($import($csv("style_number,name:en\nKO-7003,One\n")), 202);
+        $this->assertSame($first['id'], $this->json($import($csv("style_number,name:en\nKO-7003,One\n")), 202)['id']);
+        $this->assertProblem($import($csv("style_number,name:en\nKO-7003,Two\n")), 409, 'idempotency_key_reused');
     }
 
     public function testBlobsDedupeChecksumAndMissingBlob(): void

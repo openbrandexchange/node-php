@@ -36,7 +36,9 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     true) and cached per original hash, so re-imports never render twice. Uploaded web/square/thumb
     files are ignored on such nodes (with a warning). Without GD the node reports
     `server_generated: false` and requires client renditions, validated for size and JPEG type.
-    Renditions ignore EXIF orientation and embedded colour profiles (GD); originals are byte-exact.
+    Renditions of a JPEG are turned upright by its EXIF orientation (read from the APP1 segment
+    in pure PHP, no exif extension; since 0.3.0); embedded colour profiles are ignored (GD);
+    originals are byte-exact.
 11. **Accepted originals**: JPEG, PNG, WebP (checked by file content). TIFF is not accepted because
     GD cannot read it.
 12. **Filename qualifiers** also recognise the two-part keys `size_chart`, `tilted_left` and
@@ -45,7 +47,9 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     in a file name (any case) means every colour (`color_code: null`), and the external id is
     `{style}_ALL_{position}`; the same id is used for assets.csv rows with an empty `color_code`
     unless `asset_id` is given. Only assets.csv can address a colour whose code really is `ALL`.
-14. **Materials** accept a decimal comma (`87,5% wool, 12,5% cashmere`).
+14. **Materials** take a decimal point only (since 0.3.0, import-format.md §1.4): `87,5% wool`
+    is `validation_failed` with a detail that starts with `materials: decimal comma`. Measurement
+    cells keep accepting a comma.
 15. **Product-level validation problems** in `products.csv` that make the product unusable (no name,
     empty brand column while the node has several brands, invalid care code) skip the product with its variants; field
     problems that can be corrected (bad country code, unparsable materials) are warnings and leave
@@ -215,8 +219,9 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     `warning_details`, also for an `unchanged` result; batches and the admin catalog API return
     the same IngestResult.
 51. **Validation in the Ingest API** (ingest.md §3.4) is the node's own, like the rest of the
-    Validator: unknown members (also inside `footwear_materials`, `measurements` and
-    certifications) are ignored with a warning, as for every other object; a registry feature
+    Validator: unknown members at any depth are ignored with a warning naming their JSON Pointer
+    (`Unknown member "/materials/0/fibers/1/grade" ignored.`), never a 422; extension members
+    (note 68) are kept; a registry feature
     outside its type or values, a list with duplicates, a measurement that is not a positive
     number, a strap whose `min` is above its `max`, a footwear material, colour family or
     certification scope outside its list, and a certification without `scheme` or `scope` are
@@ -291,8 +296,10 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     `recycled_<material>` / `organic_<material>` are accepted everywhere and the key's qualifier
     comes first in `qualifiers`, before those sent with it (ingest.md §3.4); with two prefixes
     (`organic_recycled_cotton`) both are qualifiers, in the order written. The draft's single
-    `"qualifier"` is refused with `validation_failed` (pointer `/materials/i/fibers/j/qualifier`)
-    rather than ignored, so a client written against the draft loses no data silently. An empty
+    `"qualifier"` is read as `qualifiers: [it]` (`null` = none; ignored when `qualifiers` is there
+    too) with one warning `qualifier_deprecated` per write in `warning_details`, pointer of the
+    first such fibre (ingest.md §3.1, I-MAT-1); only `qualifiers` is stored, so the draft form of
+    the stored list is `unchanged`. An empty
     string as a name is `validation_failed` like in every LocalizedText; a `null` language is
     left out. In an import every code in brackets is a qualifier, lowercased with `_`. The label warning `animal_origin_unknown` names the material
     code, `fibre_percentages_not_100` the part code.
@@ -343,12 +350,51 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     release zip. `LOCAL=1 scripts/conformance.sh` runs the suite the same way, with
     `PHP_CLI_SERVER_WORKERS=4` (the built-in server otherwise answers one request at a time) and `bin/obx worker`.
 
+## Before the release of 0.3.0 (spec e74ccb2)
+
+68. **Extension members** (`x-<vendor>-<name>`, protocol.md §2, ingest.md §3.1) are stored in the
+    write model of brands, products, variants, colours, assets, rights, provenance, the parts,
+    fibres and terms of materials, care entries, certifications, measurements and footwear
+    materials, sorted by name after the standard members, and returned as stored by the Ingest
+    GET, the protocol, `/changes` and export manifests (Representation appends them). Up to
+    64 KiB of serialised extensions per object (the spec asks for at least 8 KiB); more is
+    `422 validation_failed`. An import keeps those of the object, its colour, and of the parts,
+    fibres, care entries and certifications it states again with the same codes (by position and
+    code for fibres); a different composition drops the extensions of fibres it replaced.
+69. **Variant identity in imports** (import-format.md §1.2.1): `variant_id`, else the variant
+    of this product with the row's GTIN (as GTIN-14), else
+    `<style>-<color>-<size>[-<size_length>]` with control characters and `/` as `_`
+    (`ImportEngine::defaultVariantId`). A GTIN held by a variant of another product is checked
+    while planning, so the whole row is skipped (`gtin_conflict`, column `gtin`) before its
+    product part is written; two rows on one variant: the later is `validation_failed`
+    (column `variant_id`). Variants made by 0.2 (external id = GTIN) are found by step 2.
+70. **`percentage` may be `null`** (protocol.md §5.9.1): optional on write, always present in
+    responses; `fibre_percentages_not_100` only when every fibre of the part states one and the
+    sum is not 100, or when the stated ones exceed 100. The CSV export writes such a fibre as the
+    code alone (`outer: leather`). `material_unknown` (every item type, once per code, after the
+    label warnings) comes from the same `ArticleData::labelWarnings`, with the code as `value`
+    in imports and the pointer of the first fibre in `warning_details`.
+71. **Idempotency-Key** (1 to 200 characters, else `400 invalid_request`) compares the body:
+    `POST /batch` the sha256 of the raw body, `POST /imports` the sha256 of every part (form
+    fields and files, in order), `POST /exports` the sha256 of the canonical JSON body. Another
+    body within 24 hours is `409 idempotency_key_reused`; keys stored before schema 7 have no
+    hash and are replayed as before. The same export is returned also while it runs.
+72. **Signed URLs and tokens:** a request with a Bearer token is authenticated by the token even
+    when it carries a signature (protocol.md §5.5); a bad signature without a token is
+    `403 forbidden`. Rotating a client secret deletes its access tokens, so they answer
+    `401 invalid_token`; `access_revoked` stays for revoked clients and blocked retailers.
+    `limit` above the maximum was already clamped.
+73. **Language tags** are language, optional script, optional region (`zh-Hant`, `es-419`,
+    `sr-Latn-RS`) everywhere a tag is validated; `name:<lang>` columns are matched
+    case-insensitively with `_` read as `-` and stored in canonical case
+    (`Validator::canonicalLanguage`); another form is an unknown column.
+
 ## Known limitations (tracked)
 
 Each is a deliberate choice for 0.1.0 with its reason; none is reachable as a broken screen.
 
-- **Renditions ignore EXIF orientation and ICC profiles** (GD has no colour management); originals
-  are byte-exact and brands export sRGB in practice. Revisit when a host offers Imagick widely.
+- **Renditions ignore ICC profiles** (GD has no colour management); originals are byte-exact and
+  brands export sRGB in practice. Revisit when a host offers Imagick widely.
 - **TIFF originals are refused** (GD cannot read TIFF); the installer and import errors say so.
 - **Brand `logo_url` from the Ingest API is published as given**, not fetched and mirrored (a
   fetch would be one more SSRF surface for little gain; the admin upload path stores logos).

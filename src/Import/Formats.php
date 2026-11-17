@@ -108,7 +108,7 @@ final class Formats
 
     /**
      * materials := part (";" part)*, part := [name ":"] fiber ("," fiber)*,
-     * fiber := number "%" material_code qualifier*, qualifier := "(" qualifier_code ")"
+     * fiber := [number "%"] material_code qualifier*, qualifier := "(" qualifier_code ")"
      * (import-format.md §1.4). Each qualifier in brackets adds a code to the fibre's qualifiers,
      * in order, a repeated code once; the 0.1 keys recycled_<material> and organic_<material>
      * are normalised to the material with that qualifier first, so both spellings give the same
@@ -118,8 +118,12 @@ final class Formats
      *
      * @param list<string> $warnings
      * @return list<array<string, mixed>>|null null when the text cannot be parsed
-     * @throws \InvalidArgumentException brackets with more than one code, "(organic, recycled)"
-     *         (validation_failed)
+     * A fibre without a percentage has percentage null ("outer: leather"); a fibre of digits only
+     * is a decimal comma ("95,5% cotton") and an error whose detail starts with
+     * "materials: decimal comma".
+     *
+     * @throws \InvalidArgumentException brackets with more than one code, "(organic, recycled)",
+     *         or a decimal comma (validation_failed)
      */
     public static function parseMaterials(string $text, array &$warnings): ?array
     {
@@ -142,16 +146,19 @@ final class Formats
                 return null;
             }
             $fibers = [];
-            // Fibres are separated by commas; a comma between digits is a decimal comma ("87,5%").
-            foreach (preg_split('/(?<!\d),|,(?!\d)/', $partText) ?: [] as $f) {
+            // Fibres are separated by commas; a percentage has a decimal point, never a comma.
+            foreach (explode(',', $partText) as $f) {
                 $f = trim($f);
                 if ($f === '') {
                     continue;
                 }
-                if (!preg_match('/^(\d+(?:[.,]\d+)?)\s*%\s*(.+)$/u', $f, $fm)) {
+                if (preg_match('/^\d+$/', $f)) {
+                    throw new \InvalidArgumentException('materials: decimal comma in "' . trim($partText) . '"? The comma separates fibres; write percentages with a point, e.g. "95.5% polyester, 4.5% elastane".');
+                }
+                if (!preg_match('/^(?:(\d+(?:\.\d+)?)\s*%)?\s*([^\d%].*)$/su', $f, $fm)) {
                     return null;
                 }
-                $pct = (float) str_replace(',', '.', $fm[1]);
+                $pct = $fm[1] !== '' ? (float) $fm[1] : null;
                 $text = $fm[2];
                 $qualifiers = [];
                 while (preg_match('/\s*\(([^()]*)\)\s*$/', $text, $q)) {
@@ -159,12 +166,12 @@ final class Formats
                     $text = substr($text, 0, -strlen($q[0]));
                 }
                 $key = self::key($text);
-                if ($key === '' || $pct <= 0 || $pct > 100 || in_array('', $qualifiers, true)) {
+                if ($key === '' || $pct !== null && ($pct <= 0 || $pct > 100) || in_array('', $qualifiers, true)) {
                     return null;
                 }
                 [$key, $fromKey] = ArticleData::splitMaterialKey($key);
                 $codes = array_values(array_unique(array_merge($fromKey, $qualifiers)));
-                $fibers[] = ['material' => ['code' => $key], 'percentage' => Validator::number($pct),
+                $fibers[] = ['material' => ['code' => $key], 'percentage' => $pct === null ? null : Validator::number($pct),
                     'qualifiers' => array_map(static fn (string $q) => ['code' => $q], $codes)];
             }
             if ($fibers === []) {

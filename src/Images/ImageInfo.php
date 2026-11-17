@@ -50,6 +50,64 @@ final class ImageInfo
         return [(int) $info[0], (int) $info[1]];
     }
 
+    /**
+     * The EXIF orientation (1 to 8) of a JPEG, read from its APP1 segment without the exif
+     * extension; 1 when there is none or it cannot be read.
+     */
+    public static function exifOrientation(string $path): int
+    {
+        $f = @fopen($path, 'rb');
+        if ($f === false) {
+            return 1;
+        }
+        $head = (string) fread($f, 2);
+        if ($head !== "\xFF\xD8") {
+            fclose($f);
+            return 1;
+        }
+        for ($i = 0; $i < 64; $i++) {
+            $marker = (string) fread($f, 4);
+            if (strlen($marker) < 4 || $marker[0] !== "\xFF") {
+                break;
+            }
+            $type = ord($marker[1]);
+            $len = (int) unpack('n', substr($marker, 2, 2))[1];
+            if ($type === 0xDA || $len < 2) {
+                break; // start of scan: no metadata after this
+            }
+            $data = $len > 2 ? (string) fread($f, $len - 2) : '';
+            if ($type === 0xE1 && str_starts_with($data, "Exif\0\0")) {
+                fclose($f);
+                return self::tiffOrientation(substr($data, 6));
+            }
+        }
+        fclose($f);
+        return 1;
+    }
+
+    private static function tiffOrientation(string $tiff): int
+    {
+        if (strlen($tiff) < 8) {
+            return 1;
+        }
+        $le = substr($tiff, 0, 2) === 'II';
+        if (!$le && substr($tiff, 0, 2) !== 'MM') {
+            return 1;
+        }
+        $u16 = static fn (int $o): int => strlen($tiff) >= $o + 2 ? (int) unpack($le ? 'v' : 'n', substr($tiff, $o, 2))[1] : 0;
+        $u32 = static fn (int $o): int => strlen($tiff) >= $o + 4 ? (int) unpack($le ? 'V' : 'N', substr($tiff, $o, 4))[1] : 0;
+        $ifd = $u32(4);
+        $count = $u16($ifd);
+        for ($n = 0; $n < $count && $n < 512; $n++) {
+            $entry = $ifd + 2 + $n * 12;
+            if ($u16($entry) === 0x0112) {
+                $v = $u16($entry + 8);
+                return $v >= 1 && $v <= 8 ? $v : 1;
+            }
+        }
+        return 1;
+    }
+
     public static function extension(string $contentType): string
     {
         return match ($contentType) {

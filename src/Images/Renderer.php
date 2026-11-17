@@ -7,7 +7,7 @@ namespace Obx\Node\Images;
 /**
  * Server-side renditions with GD: web (longest side <= 2000 px), square (web centred on a white
  * square), thumb (longest side <= 600 px). Always JPEG, never upscaled, transparency flattened
- * on white. The original is never modified.
+ * on white, JPEGs turned upright by their EXIF orientation. The original is never modified.
  */
 final class Renderer
 {
@@ -61,6 +61,9 @@ final class Renderer
         if ($img === false) {
             throw new \RuntimeException('This image type cannot be converted on this server.');
         }
+        if ($contentType === 'image/jpeg') {
+            $img = self::orient($img, ImageInfo::exifOrientation($source));
+        }
         $w = imagesx($img);
         $h = imagesy($img);
         if (!is_dir($outDir)) {
@@ -86,9 +89,41 @@ final class Renderer
             imagecopyresampled($thumb, $web, 0, 0, 0, 0, $tw, $th, $ww, $wh);
         }
         $out['thumb'] = ['path' => self::save($thumb, $outDir, 'thumb'), 'width' => $tw, 'height' => $th];
-        if ($thumb !== $web) {
-        }
         return $out;
+    }
+
+    /**
+     * Turns a JPEG upright by its EXIF orientation (1 to 8), so the web, square and thumb
+     * versions show the photo as a camera or phone displays it; the original keeps its bytes.
+     */
+    public static function orient(\GdImage $img, int $orientation): \GdImage
+    {
+        $white = 0xFFFFFF;
+        $rotate = static fn (\GdImage $i, int $deg): \GdImage => imagerotate($i, $deg, $white) ?: $i;
+        switch ($orientation) {
+            case 2:
+                imageflip($img, IMG_FLIP_HORIZONTAL);
+                return $img;
+            case 3:
+                return $rotate($img, 180);
+            case 4:
+                imageflip($img, IMG_FLIP_VERTICAL);
+                return $img;
+            case 5:
+                $img = $rotate($img, 90);
+                imageflip($img, IMG_FLIP_VERTICAL);
+                return $img;
+            case 6:
+                return $rotate($img, 270);
+            case 7:
+                $img = $rotate($img, 270);
+                imageflip($img, IMG_FLIP_VERTICAL);
+                return $img;
+            case 8:
+                return $rotate($img, 90);
+            default:
+                return $img;
+        }
     }
 
     private static function resizeOnWhite(\GdImage $src, int $w, int $h, int $nw, int $nh): \GdImage

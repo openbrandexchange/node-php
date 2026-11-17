@@ -342,7 +342,10 @@ final class PortalTest extends NodeTestCase
     {
         [, $id, $secret] = $this->retailerClient(['name' => 'Export Shop']);
         $token = $this->accessToken($id, $secret);
-        $export = $this->json($this->http('POST', '/obx/v1/exports', ['bearer' => $token, 'json' => ['filter' => ['brand_ids' => [$this->kestrelId]], 'renditions' => ['web']]]), 202);
+        $export = $this->json($this->http('POST', '/obx/v1/exports', ['bearer' => $token, 'json' => ['filter' => ['brand_ids' => [$this->kestrelId]], 'renditions' => ['web']], 'headers' => ['Idempotency-Key' => 'exp-1']]), 202);
+        // Idempotency-Key: the same body is the same export; another body is 409.
+        $this->assertSame($export['id'], $this->json($this->http('POST', '/obx/v1/exports', ['bearer' => $token, 'json' => ['filter' => ['brand_ids' => [$this->kestrelId]], 'renditions' => ['web']], 'headers' => ['Idempotency-Key' => 'exp-1']]), 202)['id']);
+        $this->assertProblem($this->http('POST', '/obx/v1/exports', ['bearer' => $token, 'json' => ['renditions' => []], 'headers' => ['Idempotency-Key' => 'exp-1']]), 409, 'idempotency_key_reused');
         $done = $this->json($this->http('GET', '/obx/v1/exports/' . $export['id'], ['bearer' => $token]));
         $this->assertSame('succeeded', $done['status'], Json::encode($done));
         $manifest = $this->http('GET', substr($done['manifest_url'], strlen('http://localhost')))->content();

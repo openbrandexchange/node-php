@@ -162,14 +162,14 @@ final class AdminController extends Controller
                     throw ApiError::validation('/portal/languages', 'At least one language.');
                 }
                 foreach ($p['languages'] as $l) {
-                    if (!is_string($l) || !preg_match('/^[a-z]{2,3}(-[A-Z]{2})?$/', $l)) {
+                    if (!is_string($l) || !preg_match(\Obx\Node\Catalog\Validator::LANGUAGE_TAG, $l)) {
                         throw ApiError::validation('/portal/languages', 'Language codes such as nl or en.');
                     }
                 }
                 $s['portal']['languages'] = array_values(array_unique($p['languages']));
             }
             if (array_key_exists('default_language', $p)) {
-                if (!is_string($p['default_language']) || !preg_match('/^[a-z]{2,3}(-[A-Z]{2})?$/', $p['default_language'])) {
+                if (!is_string($p['default_language']) || !preg_match(\Obx\Node\Catalog\Validator::LANGUAGE_TAG, $p['default_language'])) {
                     throw ApiError::validation('/portal/default_language', 'A language code such as nl.');
                 }
                 $s['portal']['default_language'] = $p['default_language'];

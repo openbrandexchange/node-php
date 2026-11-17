@@ -252,15 +252,18 @@ final class IngestController extends Controller
     public function batch(Request $req): Response
     {
         $t = $this->token($req, 'ingest:write');
-        $key = $req->header('idempotency-key');
+        $key = self::idempotencyKey($req);
         $scopeKey = 'batch:' . $t['id'] . ':' . $key;
-        if ($key !== null && $key !== '') {
+        $raw = $req->body(64 * 1024 * 1024);
+        $bodyHash = hash('sha256', $raw);
+        if ($key !== null) {
             $prev = $this->app->db->one('SELECT * FROM obx_idempotency WHERE k = ? AND created_ts > ?', [hash('sha256', $scopeKey), time() - 86400]);
             if ($prev !== null) {
+                self::sameBody($prev['body_hash'] ?? null, $bodyHash);
                 return Response::json(Json::decode((string) $prev['response']), (int) $prev['status']);
             }
         }
-        $ops = Batch::parse($req->body(64 * 1024 * 1024), $req->contentType());
+        $ops = Batch::parse($raw, $req->contentType());
         if (count($ops) > Batch::MAX_OPERATIONS) {
             throw new ApiError('limit_exceeded', 'At most ' . Batch::MAX_OPERATIONS . ' operations per batch.');
         }
@@ -278,9 +281,9 @@ final class IngestController extends Controller
             $status = 200;
             $res = Response::json($body, 200);
         }
-        if ($key !== null && $key !== '') {
+        if ($key !== null) {
             try {
-                $this->app->db->insert('obx_idempotency', ['k' => hash('sha256', $scopeKey), 'status' => $status, 'response' => Json::encode($body), 'created_ts' => time()]);
+                $this->app->db->insert('obx_idempotency', ['k' => hash('sha256', $scopeKey), 'status' => $status, 'response' => Json::encode($body), 'created_ts' => time(), 'body_hash' => $bodyHash]);
             } catch (\PDOException) {
             }
         }
@@ -290,10 +293,13 @@ final class IngestController extends Controller
     public function import(Request $req): Response
     {
         $t = $this->token($req, 'ingest:write');
-        $key = $req->header('idempotency-key');
-        if ($key !== null && $key !== '') {
+        $key = self::idempotencyKey($req);
+        $bodyHash = null;
+        if ($key !== null) {
+            $bodyHash = self::importFingerprint($req);
             $prev = $this->app->jobs->byIdempotencyKey('import', 'ingest_token', (string) $t['id'], $key);
             if ($prev !== null) {
+                self::sameBody($prev['idem_hash'] ?? null, $bodyHash);
                 return Response::json($this->app->jobs->ingestJson($prev), 202);
             }
         }
@@ -302,7 +308,51 @@ final class IngestController extends Controller
             throw new ApiError('insufficient_scope', 'Mirror imports unpublish products and need the ingest:delete scope.');
         }
         $job = $this->app->importer->queueFromRequest($req, $options, $t['brand_external_ids'], 'api', 'ingest_token', (string) $t['id'], $key);
+        if ($bodyHash !== null) {
+            $this->app->db->update('obx_jobs', ['idem_hash' => $bodyHash], ['id' => $job['id']]);
+        }
         return Response::json($this->app->jobs->ingestJson($job), 202)->header('Location', $this->app->baseUrl() . '/obx/v1/ingest/jobs/' . $job['id']);
+    }
+
+    /**
+     * The Idempotency-Key header (1 to 200 characters), or null when none was sent.
+     */
+    public static function idempotencyKey(Request $req): ?string
+    {
+        $key = $req->header('idempotency-key');
+        if ($key === null || $key === '') {
+            return null;
+        }
+        if (strlen($key) > 200 || preg_match('/[\x00-\x1F\x7F]/', $key)) {
+            throw new ApiError('invalid_request', 'An Idempotency-Key has 1 to 200 characters.');
+        }
+        return $key;
+    }
+
+    /** The same key with another body is 409 idempotency_key_reused (a hash from before 0.3 is not compared). */
+    public static function sameBody(mixed $stored, string $hash): void
+    {
+        if (is_string($stored) && $stored !== '' && !hash_equals($stored, $hash)) {
+            throw new ApiError('idempotency_key_reused', 'This Idempotency-Key was used in the last 24 hours with a different request body. Use a new key for a different request.');
+        }
+    }
+
+    /** An import request compared by the sha256 of every part (ingest.md §5). */
+    private static function importFingerprint(Request $req): string
+    {
+        $parts = [];
+        foreach ($req->post as $name => $value) {
+            $parts[] = ['field', (string) $name, hash('sha256', is_string($value) ? $value : Json::encode($value))];
+        }
+        foreach ($req->files as $field => $list) {
+            foreach ($list as $f) {
+                $parts[] = ['file', (string) $field, (string) $f['name'], (string) (@hash_file('sha256', (string) $f['tmp']) ?: '')];
+            }
+        }
+        if ($parts === []) {
+            $parts[] = ['body', hash('sha256', $req->body(64 * 1024 * 1024))];
+        }
+        return hash('sha256', Json::encode($parts));
     }
 
     public function jobs(Request $req): Response

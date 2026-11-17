@@ -9,7 +9,8 @@ use Obx\Node\Support\Json;
 
 /**
  * Builds the protocol representation of stored objects (without updated_at and without
- * rendition URLs, which are added at read time). The hash of this representation decides
+ * rendition URLs, which are added at read time). Extension members (x-<vendor>-…) of the
+ * write model are returned as stored, after the standard properties (protocol.md §2). The hash of this representation decides
  * whether a write is visible in /changes.
  */
 final class Representation
@@ -25,7 +26,7 @@ final class Representation
             'logo_url' => $in['logo_url'] ?? null,
             'website' => $in['website'] ?? null,
             'description' => $in['description'] ?? null,
-        ];
+        ] + Validator::extensions($in);
     }
 
     /** @param array<string, mixed> $row @return array<string, mixed> */
@@ -58,7 +59,7 @@ final class Representation
             'features' => isset($in['features']) && $in['features'] !== [] ? $in['features'] : null,
             'attributes' => $in['attributes'] ?? null,
             'created_at' => $row['created_at'],
-        ];
+        ] + Validator::extensions($in);
     }
 
     /** @param array<string, mixed> $row @return array<string, mixed> */
@@ -79,12 +80,12 @@ final class Representation
                 'name' => $in['color']['name'] ?? null,
                 'supplier_color' => $in['color']['supplier_color'] ?? null,
                 'family' => $in['color']['family'] ?? null,
-            ],
+            ] + Validator::extensions((array) ($in['color'] ?? [])),
             'size' => $in['size'] ?? null,
             'size_length' => $in['size_length'] ?? null,
             'size_system' => $in['size_system'] ?? null,
             'measurements' => isset($in['measurements']) && $in['measurements'] !== [] ? $in['measurements'] : null,
-        ];
+        ] + Validator::extensions($in);
     }
 
     /**
@@ -136,7 +137,7 @@ final class Representation
             'rights' => self::rights($rights),
             'provenance' => self::provenance($in),
             'renditions' => $renditions,
-        ];
+        ] + Validator::extensions($in);
     }
 
     /**
@@ -156,7 +157,7 @@ final class Representation
             'expires_at' => $rights['expires_at'] ?? null,
             'credit' => $rights['credit'] ?? null,
             'model_release' => $rights['model_release'] ?? null,
-        ];
+        ] + Validator::extensions($rights);
     }
 
     /**
@@ -176,6 +177,6 @@ final class Representation
             'c2pa' => $prov['c2pa'] ?? 'none',
             'c2pa_manifest_url' => $prov['c2pa_manifest_url'] ?? null,
             'generator' => $prov['generator'] ?? null,
-        ];
+        ] + Validator::extensions($prov);
     }
 }

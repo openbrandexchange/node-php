@@ -97,12 +97,12 @@ final class SessionController extends Controller
             throw ApiError::validation('/company/name', 'Enter your company name.');
         }
         $default = $company['default_language'] ?? null;
-        if (!is_string($default) || !preg_match('/^[a-z]{2,3}(-[A-Z]{2})?$/', $default)) {
+        if (!is_string($default) || !preg_match(\Obx\Node\Catalog\Validator::LANGUAGE_TAG, $default)) {
             throw ApiError::validation('/company/default_language', 'Choose the main language of your product texts.');
         }
         $langs = [$default];
         foreach ((array) ($company['languages'] ?? []) as $l) {
-            if (!is_string($l) || !preg_match('/^[a-z]{2,3}(-[A-Z]{2})?$/', $l)) {
+            if (!is_string($l) || !preg_match(\Obx\Node\Catalog\Validator::LANGUAGE_TAG, $l)) {
                 throw ApiError::validation('/company/languages', 'Language codes such as nl or en.');
             }
             $langs[] = $l;
@@ -279,7 +279,7 @@ final class SessionController extends Controller
             $set['name'] = trim($in['name']);
         }
         if (array_key_exists('language', $in)) {
-            if (!is_string($in['language']) || !preg_match('/^[a-z]{2,3}(-[A-Z]{2})?$/', $in['language'])) {
+            if (!is_string($in['language']) || !preg_match(\Obx\Node\Catalog\Validator::LANGUAGE_TAG, $in['language'])) {
                 throw ApiError::validation('/language', 'A language code such as nl.');
             }
             $set['language'] = Lang::ui($in['language']);

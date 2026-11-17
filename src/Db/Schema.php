@@ -202,6 +202,13 @@ final class Schema
                 'ALTER TABLE obx_products ADD COLUMN qualifiers {text}',
                 [\Obx\Node\Catalog\ArticleDataUpgrade::class, 'run'],
             ],
+            // 0.3.0: Idempotency-Key compares the request body (ingest.md §5, protocol.md §8): the
+            // sha256 of the body (for imports of every part) is kept with the key.
+            7 => [
+                'ALTER TABLE obx_idempotency ADD COLUMN body_hash {id}',
+                'ALTER TABLE obx_jobs ADD COLUMN idem_hash {id}',
+                'ALTER TABLE obx_exports ADD COLUMN idem_hash {id}',
+            ],
         ];
     }
 

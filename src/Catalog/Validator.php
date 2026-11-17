@@ -25,6 +25,35 @@ final class Validator
     private array $errors = [];
     /** @var list<string> */
     public array $warnings = [];
+    /** @var list<array{code: string, pointer: string, detail: string}> warnings with a stable code (IngestResult.warning_details) */
+    public array $details = [];
+
+    /** Extension members (protocol.md §2): x-<vendor>-<name>, any JSON value. */
+    /** LocalizedText keys (schemas/Common.json): language, optional script, optional region. */
+    public const LANGUAGE_TAG = '/^[a-z]{2,3}(-[A-Z][a-z]{3})?(-([A-Z]{2}|[0-9]{3}))?$/';
+
+    /**
+     * A language tag as written in a file (name:ZH_hant) in canonical case (zh-Hant), or null
+     * when it is not language[-script][-region] (import-format.md §1.3).
+     */
+    public static function canonicalLanguage(string $tag): ?string
+    {
+        $parts = explode('-', str_replace('_', '-', trim($tag)));
+        $out = [strtolower(array_shift($parts))];
+        foreach ($parts as $i => $part) {
+            if (strlen($part) === 4 && ctype_alpha($part) && $i === 0) {
+                $out[] = ucfirst(strtolower($part));
+            } else {
+                $out[] = ctype_alpha($part) ? strtoupper($part) : $part;
+            }
+        }
+        $t = implode('-', $out);
+        return preg_match(self::LANGUAGE_TAG, $t) ? $t : null;
+    }
+
+    public const EXTENSION = '/^x-[a-z0-9]+-[a-z0-9_-]+$/';
+    /** Extension members per object, serialised (the spec asks for at least 8 KiB). */
+    public const EXTENSION_MAX_BYTES = 65536;
 
     public static function externalId(string $raw): string
     {
@@ -51,14 +80,52 @@ final class Validator
         throw new ApiError($code, $detail, $this->errors);
     }
 
-    /** @param array<string, mixed> $data */
-    private function unknown(array $data, array $known, string $base = ''): void
+    /**
+     * The members of an object that are not in $known (ingest.md §3.1): extension members
+     * (x-<vendor>-<name>) are returned to be stored as given, sorted by name; every other
+     * unknown member is ignored with a warning naming its JSON Pointer. Never an error, except
+     * for more than EXTENSION_MAX_BYTES of extensions on one object.
+     *
+     * @param array<string, mixed> $data
+     * @param list<string> $known
+     * @return array<string, mixed> the extension members
+     */
+    private function unknown(array $data, array $known, string $pointer): array
     {
-        foreach (array_keys($data) as $k) {
-            if (!in_array($k, $known, true)) {
-                $this->warnings[] = 'Unknown field "' . $base . $k . '" ignored.';
+        $ext = [];
+        foreach ($data as $k => $v) {
+            $k = (string) $k;
+            if (in_array($k, $known, true)) {
+                continue;
+            }
+            if (preg_match(self::EXTENSION, $k)) {
+                $ext[$k] = $v;
+                continue;
+            }
+            $this->warnings[] = 'Unknown member "' . $pointer . '/' . str_replace(['~', '/'], ['~0', '~1'], $k) . '" ignored.';
+        }
+        if ($ext === []) {
+            return [];
+        }
+        ksort($ext, SORT_STRING);
+        if (strlen(Json::encode($ext)) > self::EXTENSION_MAX_BYTES) {
+            $this->err($pointer === '' ? '/' : $pointer, 'At most ' . (self::EXTENSION_MAX_BYTES / 1024) . ' KiB of x- extension members per object.');
+            return [];
+        }
+        return $ext;
+    }
+
+    /** The extension members of a stored object, sorted. @param array<mixed> $a @return array<string, mixed> */
+    public static function extensions(array $a): array
+    {
+        $ext = [];
+        foreach ($a as $k => $v) {
+            if (is_string($k) && preg_match(self::EXTENSION, $k)) {
+                $ext[$k] = $v;
             }
         }
+        ksort($ext, SORT_STRING);
+        return $ext;
     }
 
     private function str(array $d, string $k, string $p, int $max, bool $required = false, ?string $pattern = null): ?string
@@ -121,8 +188,8 @@ final class Validator
         $out = [];
         foreach ($v as $lang => $text) {
             $lang = (string) $lang;
-            if (!preg_match('/^[a-z]{2,3}(-[A-Z]{2})?$/', $lang)) {
-                $this->err($pointer . '/' . $lang, 'Language keys are BCP 47 tags such as "en" or "nl-BE".');
+            if (!preg_match(self::LANGUAGE_TAG, $lang)) {
+                $this->err($pointer . '/' . $lang, 'Language keys are BCP 47 tags in canonical case: language, optional script, optional region, such as "en", "nl-BE", "zh-Hant" or "es-419".');
                 continue;
             }
             if ($text === null) {
@@ -166,13 +233,13 @@ final class Validator
     public function brand(mixed $data): array
     {
         $d = $this->object($data);
-        $this->unknown($d, ['name', 'logo_url', 'website', 'description', 'status']);
+        $ext = $this->unknown($d, ['name', 'logo_url', 'website', 'description', 'status'], '');
         $model = [
             'name' => $this->str($d, 'name', '', 200, true),
             'logo_url' => $this->url($d, 'logo_url', ''),
             'website' => $this->url($d, 'website', ''),
             'description' => $this->localized($d['description'] ?? null, '/description'),
-        ];
+        ] + $ext;
         $status = $this->status($d, '');
         $this->finish();
         return [$model, $status];
@@ -187,7 +254,7 @@ final class Validator
         $known = ['brand_external_id', 'style_number', 'name', 'description', 'item_type', 'item_subtype', 'gpc_brick', 'target_group',
             'season', 'collection', 'materials', 'contains_animal_origin', 'footwear_materials', 'care', 'country_of_origin',
             'certifications', 'dpp_url', 'features', 'attributes', 'status'];
-        $this->unknown($d, $known);
+        $ext = $this->unknown($d, $known, '');
         $key = '/^[a-z][a-z0-9_]{0,63}$/';
         // The canonical stored model (key order = protocol order, docs/protocol.md §5.2).
         $model = [
@@ -210,7 +277,7 @@ final class Validator
             'dpp_url' => $this->url($d, 'dpp_url', ''),
             'features' => $this->features($d['features'] ?? null, '/features'),
             'attributes' => $this->attributes($d['attributes'] ?? null, '/attributes'),
-        ];
+        ] + $ext;
         $status = $this->status($d, '');
         $this->finish();
         return [$model, $status];
@@ -221,7 +288,9 @@ final class Validator
      * terms {code, name}; qualifiers a list ([] or left out when none, repeats dropped). The name may be left out; a code in the vocabulary gets the vocabulary's
      * name, another code the name it was given (or null). The 0.1 material keys
      * recycled_<material> / organic_<material> become the material with that qualifier (first in
-     * the list). The 0.3 draft's single "qualifier" is refused (validation_failed).
+     * the list). The draft's single "qualifier" is read as a list of one (warning
+     * qualifier_deprecated). percentage may be left out or null (not stated). Extension members
+     * of parts, fibres and terms are kept.
      *
      * @return list<array<string, mixed>>|null
      */
@@ -240,8 +309,8 @@ final class Validator
                 $this->err($p . '/' . $i, 'Must be an object.');
                 continue;
             }
-            $this->unknown($part, ['part', 'fibers'], 'materials.');
-            $term = $this->term($part['part'] ?? null, $p . '/' . $i . '/part', 'materials.part.', 'Part codes are lowercase, e.g. {"code": "main"} or {"code": "lining"}.');
+            $partExt = $this->unknown($part, ['part', 'fibers'], $p . '/' . $i);
+            $term = $this->term($part['part'] ?? null, $p . '/' . $i . '/part', 'Part codes are lowercase, e.g. {"code": "main"} or {"code": "lining"}.');
             $fibers = $part['fibers'] ?? null;
             if (!is_array($fibers) || $fibers === [] || !array_is_list($fibers)) {
                 $this->err($p . '/' . $i . '/fibers', 'At least one fibre is required.');
@@ -254,36 +323,47 @@ final class Validator
                     $this->err($fp, 'Must be an object with material, percentage and qualifiers.');
                     continue;
                 }
-                $this->unknown($f, ['material', 'percentage', 'qualifiers', 'qualifier'], 'materials.fibers.');
-                $material = $this->term($f['material'] ?? null, $fp . '/material', 'materials.fibers.material.', 'Material codes are lowercase, e.g. {"code": "cotton"}.');
+                $fibreExt = $this->unknown($f, ['material', 'percentage', 'qualifiers', 'qualifier'], $fp);
+                $material = $this->term($f['material'] ?? null, $fp . '/material', 'Material codes are lowercase, e.g. {"code": "cotton"}.');
                 $errors = count($this->errors);
-                if (array_key_exists('qualifier', $f)) {
-                    $this->err($fp . '/qualifier', 'Since 0.3 a fibre has a list "qualifiers", e.g. [{"code": "recycled"}, {"code": "post_consumer"}] ([] or left out when there is none).');
-                }
                 $qualifiers = [];
                 $qv = $f['qualifiers'] ?? null;
+                if (array_key_exists('qualifier', $f)) {
+                    // The draft single qualifier (ingest.md §3.1): a list of one when there is
+                    // no "qualifiers", ignored when there is; once per write, never an error.
+                    if (!array_key_exists('qualifiers', $f)) {
+                        $qv = $f['qualifier'] === null ? [] : [$f['qualifier']];
+                    }
+                    if (!in_array('qualifier_deprecated', array_column($this->details, 'code'), true)) {
+                        $detail = 'A fibre has the list "qualifiers" since 0.3; the single "qualifier" was read as '
+                            . (array_key_exists('qualifiers', $f) ? 'nothing, because "qualifiers" is there too.' : 'a list of one.') . ' Send "qualifiers".';
+                        $this->details[] = ['code' => 'qualifier_deprecated', 'pointer' => $fp . '/qualifier', 'detail' => $detail];
+                        $this->warnings[] = 'qualifier_deprecated: ' . $detail;
+                    }
+                }
                 if ($qv !== null && (!is_array($qv) || !array_is_list($qv))) {
                     $this->err($fp . '/qualifiers', 'A list of qualifiers, e.g. [{"code": "recycled"}], or [] when there is none.');
                 } else {
                     foreach ($qv ?? [] as $k => $q) {
-                        $t = $this->term($q, $fp . '/qualifiers/' . $k, 'materials.fibers.qualifiers.', 'A qualifier is a lowercase code, e.g. {"code": "recycled"}.');
+                        $qp = array_key_exists('qualifiers', $f) ? $fp . '/qualifiers/' . $k : $fp . '/qualifier';
+                        $t = $this->term($q, $qp, 'A qualifier is a lowercase code, e.g. {"code": "recycled"}.');
                         if ($t !== null) {
                             $qualifiers[] = $t;
                         }
                     }
                 }
                 $pct = $f['percentage'] ?? null;
-                if (!is_int($pct) && !is_float($pct) || $pct <= 0 || $pct > 100) {
-                    $this->err($fp . '/percentage', 'A number above 0 and at most 100.');
+                if ($pct !== null && (!is_int($pct) && !is_float($pct) || $pct <= 0 || $pct > 100)) {
+                    $this->err($fp . '/percentage', 'A number above 0 and at most 100, or null when not stated.');
                     continue;
                 }
                 if ($material === null || count($this->errors) > $errors) {
                     continue;
                 }
-                $fo[] = ArticleData::fibre($material, $pct, $qualifiers);
+                $fo[] = ArticleData::fibre($material, $pct, $qualifiers) + $fibreExt;
             }
             if ($term !== null) {
-                $out[] = ['part' => ArticleData::term('parts', $term['code'], $term['name']), 'fibers' => $fo];
+                $out[] = ['part' => ArticleData::term('parts', $term['code'], $term['name'], Validator::extensions($term)), 'fibers' => $fo] + $partExt;
             }
         }
         return $out;
@@ -292,18 +372,18 @@ final class Validator
     /**
      * A term on a write path: {code, name?}; name is a LocalizedText or null.
      *
-     * @return array{code: string, name: array<string, string>|null}|null null when invalid
+     * @return array<string, mixed>|null {code, name, x-…} or null when invalid
      */
-    private function term(mixed $v, string $p, string $base, string $hint): ?array
+    private function term(mixed $v, string $p, string $hint): ?array
     {
         if (!Json::isObject($v) || !is_string($v['code'] ?? null) || !preg_match(ArticleData::KEY, $v['code'])) {
             $this->err(Json::isObject($v) ? $p . '/code' : $p, $hint);
             return null;
         }
-        $this->unknown($v, ['code', 'name'], $base);
+        $ext = $this->unknown($v, ['code', 'name'], $p);
         $errors = count($this->errors);
         $name = $this->localized($v['name'] ?? null, $p . '/name');
-        return count($this->errors) > $errors ? null : ['code' => $v['code'], 'name' => $name];
+        return count($this->errors) > $errors ? null : ['code' => $v['code'], 'name' => $name] + $ext;
     }
 
     public static function number(int|float $n): int|float
@@ -326,7 +406,7 @@ final class Validator
      * Footwear materials (Directive 94/11/EC): all three parts, null when not stated; an object
      * with no part stated is stored as null.
      *
-     * @return array{upper: ?string, lining_and_sock: ?string, outer_sole: ?string}|null
+     * @return array<string, mixed>|null
      */
     private function footwear(mixed $v, string $p): ?array
     {
@@ -337,7 +417,7 @@ final class Validator
             $this->err($p, 'An object with upper, lining_and_sock and outer_sole.');
             return null;
         }
-        $this->unknown($v, ArticleData::FOOTWEAR_PARTS, 'footwear_materials.');
+        $ext = $this->unknown($v, ArticleData::FOOTWEAR_PARTS, $p);
         $out = [];
         foreach (ArticleData::FOOTWEAR_PARTS as $part) {
             $val = $v[$part] ?? null;
@@ -347,10 +427,10 @@ final class Validator
             }
             $out[$part] = $val;
         }
-        return array_filter($out, static fn ($x) => $x !== null) === [] ? null : $out;
+        return array_filter($out, static fn ($x) => $x !== null) === [] && $ext === [] ? null : $out + $ext;
     }
 
-    /** @return list<array{scheme: string, licence_number: ?string, scope: string}>|null an empty list is null */
+    /** @return list<array<string, mixed>>|null an empty list is null */
     private function certifications(mixed $v, string $p): ?array
     {
         if ($v === null) {
@@ -366,7 +446,7 @@ final class Validator
                 $this->err($p . '/' . $i, 'An object with scheme, licence_number and scope.');
                 continue;
             }
-            $this->unknown($c, ['scheme', 'licence_number', 'scope'], 'certifications.');
+            $cext = $this->unknown($c, ['scheme', 'licence_number', 'scope'], $p . '/' . $i);
             $scheme = $c['scheme'] ?? null;
             if (!is_string($scheme) || !preg_match(ArticleData::KEY, $scheme)) {
                 $this->err($p . '/' . $i . '/scheme', 'A scheme key such as gots or oeko_tex_standard_100.');
@@ -378,7 +458,7 @@ final class Validator
                 $this->err($p . '/' . $i . '/scope', 'Either "product" or "material".');
                 continue;
             }
-            $out[] = ['scheme' => $scheme, 'licence_number' => $licence, 'scope' => $scope];
+            $out[] = ['scheme' => $scheme, 'licence_number' => $licence, 'scope' => $scope] + $cext;
         }
         return $out === [] ? null : $out;
     }
@@ -476,7 +556,7 @@ final class Validator
             $this->err($p, 'An object of measurements, e.g. {"weight_kg": 2.6}.');
             return null;
         }
-        $this->unknown($v, ArticleData::MEASUREMENTS, 'measurements.');
+        $ext = $this->unknown($v, ArticleData::MEASUREMENTS, $p);
         $positive = static fn ($x) => (is_int($x) || is_float($x)) && $x > 0 && !is_infinite((float) $x);
         $out = [];
         foreach (ArticleData::MEASUREMENTS as $k) {
@@ -502,10 +582,10 @@ final class Validator
             }
             $out[$k] = self::number($val);
         }
-        return $out === [] ? null : $out;
+        return $out === [] && $ext === [] ? null : $out + $ext;
     }
 
-    /** @return list<array{code: string, text: ?array}>|null */
+    /** @return list<array<string, mixed>>|null care entries {code, category, symbol, name, text, x-…} */
     public function care(mixed $v, string $p): ?array
     {
         if ($v === null) {
@@ -523,7 +603,7 @@ final class Validator
                 $this->err($ip . '/code', 'Care codes are lowercase keys, e.g. "wash_30".');
                 continue;
             }
-            $this->unknown($item, ['code', 'category', 'symbol', 'name', 'text'], 'care.');
+            $careExt = $this->unknown($item, ['code', 'category', 'symbol', 'name', 'text'], $ip);
             $errors = count($this->errors);
             $category = $item['category'] ?? null;
             if ($category !== null && !in_array($category, ArticleData::CARE_CATEGORIES, true)) {
@@ -538,7 +618,7 @@ final class Validator
             if (count($this->errors) > $errors) {
                 continue;
             }
-            $out[] = ArticleData::careEntry($code, $category, $symbol, $name, $text);
+            $out[] = ArticleData::careEntry($code, $category, $symbol, $name, $text) + $careExt;
         }
         return $out;
     }
@@ -581,7 +661,7 @@ final class Validator
     public function variant(mixed $data): array
     {
         $d = $this->object($data);
-        $this->unknown($d, ['product_external_id', 'gtin', 'sku', 'color', 'size', 'size_length', 'size_system', 'measurements', 'status']);
+        $ext = $this->unknown($d, ['product_external_id', 'gtin', 'sku', 'color', 'size', 'size_length', 'size_system', 'measurements', 'status'], '');
         $gtin = null;
         if (array_key_exists('gtin', $d) && $d['gtin'] !== null && $d['gtin'] !== '') {
             $g = is_int($d['gtin']) ? (string) $d['gtin'] : $d['gtin'];
@@ -598,7 +678,7 @@ final class Validator
         if (!is_array($color) || array_is_list($color) && $color !== []) {
             $this->err('/color', 'Required: an object with at least "code".');
         } else {
-            $this->unknown($color, ['code', 'name', 'supplier_color', 'family'], 'color.');
+            $colorExt = $this->unknown($color, ['code', 'name', 'supplier_color', 'family'], '/color');
             $family = $color['family'] ?? null;
             if ($family !== null && (!is_string($family) || !in_array($family, ArticleData::COLOR_FAMILIES, true))) {
                 $this->err('/color/family', 'One of ' . implode(', ', ArticleData::COLOR_FAMILIES) . ' or null.');
@@ -609,7 +689,7 @@ final class Validator
                 'name' => $this->localized($color['name'] ?? null, '/color/name'),
                 'supplier_color' => $this->str($color, 'supplier_color', '/color', 200),
                 'family' => $family,
-            ];
+            ] + $colorExt;
         }
         $model = [
             'product_external_id' => $this->str($d, 'product_external_id', '', 200, true, '/^[^\x00-\x1F\x7F\/]+$/'),
@@ -620,7 +700,7 @@ final class Validator
             'size_length' => $this->str($d, 'size_length', '', 64),
             'size_system' => $this->str($d, 'size_system', '', 16),
             'measurements' => $this->measurements($d['measurements'] ?? null, '/measurements'),
-        ];
+        ] + $ext;
         $status = $this->status($d, '');
         $this->finish();
         return [$model, $status];
@@ -636,7 +716,7 @@ final class Validator
         $d = $this->object($data);
         $known = ['product_external_id', 'color_code', 'variant_external_ids', 'media_type', 'role', 'view', 'position',
             'filename', 'alt_text', 'rights', 'provenance', 'files', 'status'];
-        $this->unknown($d, $known);
+        $ext = $this->unknown($d, $known, '');
         if (isset($d['media_type']) && $d['media_type'] !== 'image') {
             $this->err('/media_type', 'Only "image" is supported.');
         }
@@ -683,7 +763,7 @@ final class Validator
             'alt_text' => $this->localized($d['alt_text'] ?? null, '/alt_text'),
             'rights' => $this->rights($d['rights'] ?? null, '/rights'),
             'provenance' => $this->provenance($d['provenance'] ?? null, '/provenance'),
-        ];
+        ] + $ext;
         $files = null;
         if (array_key_exists('files', $d) && $d['files'] !== null) {
             $files = $this->files($d['files'], '/files');
@@ -703,7 +783,7 @@ final class Validator
             $this->err($p, 'Must be an object.');
             return null;
         }
-        $this->unknown($v, ['license', 'license_text', 'channels', 'territories', 'embargo_until', 'expires_at', 'credit', 'model_release'], 'rights.');
+        $ext = $this->unknown($v, ['license', 'license_text', 'channels', 'territories', 'embargo_until', 'expires_at', 'credit', 'model_release'], $p);
         $out = [];
         if (array_key_exists('license', $v)) {
             if (!in_array($v['license'], ['retailer-use', 'custom'], true)) {
@@ -767,7 +847,7 @@ final class Validator
             }
         }
         ksort($out);
-        return $out;
+        return $out + $ext;
     }
 
     /** @return array<string, mixed>|null */
@@ -780,7 +860,7 @@ final class Validator
             $this->err($p, 'Must be an object.');
             return null;
         }
-        $this->unknown($v, ['ai_generated', 'ai_edited', 'source', 'c2pa', 'c2pa_manifest_url', 'generator'], 'provenance.');
+        $ext = $this->unknown($v, ['ai_generated', 'ai_edited', 'source', 'c2pa', 'c2pa_manifest_url', 'generator'], $p);
         $out = [];
         foreach (['ai_generated', 'ai_edited'] as $k) {
             if (array_key_exists($k, $v)) {
@@ -812,7 +892,7 @@ final class Validator
             $out['generator'] = $this->str($v, 'generator', $p, 200);
         }
         ksort($out);
-        return $out;
+        return $out + $ext;
     }
 
     /** @return array<string, array{sha256: string, width: ?int, height: ?int}> */

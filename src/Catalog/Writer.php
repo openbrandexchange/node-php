@@ -71,7 +71,7 @@ final class Writer
             default => throw new ApiError('not_found', 'Unknown object kind.'),
         };
         $ctx['op'] ??= 'upsert';
-        return $this->db->tx(fn () => $this->write($kind, $ext, $model, $status, $files, $ctx, $v->warnings));
+        return $this->db->tx(fn () => $this->write($kind, $ext, $model, $status, $files, $ctx, $v->warnings, false, $v->details));
     }
 
     /**
@@ -110,7 +110,7 @@ final class Writer
                 })(),
                 default => throw new ApiError('not_found', 'Unknown object kind.'),
             };
-            return $this->write($kind, $ext, $model, $status ?? (string) $row['status'], $files, $ctx, $v->warnings);
+            return $this->write($kind, $ext, $model, $status ?? (string) $row['status'], $files, $ctx, $v->warnings, false, $v->details);
         });
     }
 
@@ -275,9 +275,10 @@ final class Writer
      * @param array<string, array<string, mixed>>|null $files
      * @param array<string, mixed> $ctx
      * @param list<string> $warnings
+     * @param list<array{code: string, pointer: string, detail: string}> $validatorDetails coded warnings of the Validator (qualifier_deprecated)
      * @return array<string, mixed>
      */
-    private function write(string $kind, string $ext, array $model, ?string $status, ?array $files, array $ctx, array $warnings, bool $fileOnly = false): array
+    private function write(string $kind, string $ext, array $model, ?string $status, ?array $files, array $ctx, array $warnings, bool $fileOnly = false, array $validatorDetails = []): array
     {
         $row = $this->load($kind, $ext);
         $this->checkIfMatch($row, $ctx);
@@ -286,7 +287,7 @@ final class Writer
         $sync = [];
         $touch = [];
         // Label completeness (docs/ingest.md §3.4): reported, never blocking.
-        $details = [];
+        $details = $validatorDetails;
         if ($kind === 'product' && !$fileOnly) {
             foreach (ArticleData::labelWarnings($model) as $lw) {
                 $warnings[] = $lw['code'] . ': ' . $lw['detail'];
@@ -320,9 +321,13 @@ final class Writer
                 $this->checkRestriction($this->brandExternalIdOf('product', $product), $ctx);
                 $gtin14 = $model['gtin'] !== null ? str_pad((string) $model['gtin'], 14, '0', STR_PAD_LEFT) : null;
                 if ($gtin14 !== null) {
-                    $other = $this->db->one('SELECT external_id FROM obx_variants WHERE gtin = ? AND external_id <> ?', [$gtin14, $ext]);
+                    $other = $this->db->one('SELECT v.external_id, p.external_id AS product_ext, p.style_number FROM obx_variants v LEFT JOIN obx_products p ON p.id = v.product_id WHERE v.gtin = ? AND v.external_id <> ?', [$gtin14, $ext]);
                     if ($other !== null) {
-                        throw new ApiError('gtin_conflict', 'GTIN ' . $model['gtin'] . ' already belongs to variant "' . $other['external_id'] . '".', [['pointer' => '/gtin', 'detail' => 'Already used by another variant.', 'obx_error' => 'gtin_conflict']]);
+                        // ingest.md §3.4: the detail names the variant that has the GTIN and its product.
+                        $holder = 'variant "' . $other['external_id'] . '" of product "' . ($other['product_ext'] ?? '?') . '"'
+                            . (($other['style_number'] ?? null) !== null && $other['style_number'] !== $other['product_ext'] ? ' (style number ' . $other['style_number'] . ')' : '');
+                        $detail = 'GTIN ' . $model['gtin'] . ' already belongs to ' . $holder . '.';
+                        throw new ApiError('gtin_conflict', $detail, [['pointer' => '/gtin', 'detail' => $detail, 'obx_error' => 'gtin_conflict']]);
                     }
                 }
                 $set['product_id'] = $product['id'];

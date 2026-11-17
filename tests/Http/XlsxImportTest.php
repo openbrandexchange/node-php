@@ -206,7 +206,8 @@ final class XlsxImportTest extends NodeTestCase
         $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $client, 'query' => ['cursor' => $cursor]]));
         $seen = array_map(static fn ($e) => $e['type'] . ' ' . $e['op'] . ' ' . $e['external_id'], $page['changes']);
         $this->assertContains('product upsert KX-9001', $seen, Json::encode($seen));
-        $this->assertContains('variant upsert 02000901000022', $seen, 'a zero-padded GTIN keeps its leading zero (the variant id is the GTIN)');
+        $gtins = array_map(static fn ($e) => $e['data']['gtin_original'] ?? null, array_values(array_filter($page['changes'], static fn ($e) => $e['type'] === 'variant')));
+        $this->assertContains('02000901000022', $gtins, 'a zero-padded GTIN keeps its leading zero');
         $this->assertNotContains('product upsert KX-9005', $seen, 'the #N/A row is skipped');
     }
 

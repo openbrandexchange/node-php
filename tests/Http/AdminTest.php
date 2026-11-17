@@ -210,7 +210,10 @@ final class AdminTest extends NodeTestCase
                 $clientRow = $c;
             }
         }
+        $before = $this->accessToken($id, $secret);
         $rot = $this->json($this->http('POST', '/admin/api/api-clients/' . $clientRow['id'] . '/rotate', ['browser' => 'admin']));
+        // Rotating the secret is not a revocation (protocol.md §4.3): old tokens are invalid_token.
+        $this->assertProblem($this->http('GET', '/obx/v1/grant', ['bearer' => $before]), 401, 'invalid_token');
         $res = $this->http('POST', '/obx/v1/oauth/token', ['basic' => [$id, $secret], 'post' => ['grant_type' => 'client_credentials']]);
         $this->assertSame(401, $res->status);
         $token = $this->accessToken($id, $rot['client_secret']);

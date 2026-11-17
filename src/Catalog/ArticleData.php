@@ -92,13 +92,14 @@ final class ArticleData
      *
      * @param 'parts'|'materials'|'qualifiers' $vocabulary
      * @param array<string, string>|null $given
-     * @return array{code: string, name: array<string, string>|null}
+     * @param array<string, mixed> $ext extension members of the term (kept as given)
+     * @return array<string, mixed> {code, name, x-…}
      */
-    public static function term(string $vocabulary, string $code, ?array $given = null): array
+    public static function term(string $vocabulary, string $code, ?array $given = null, array $ext = []): array
     {
         $known = self::vocabulary($vocabulary)[$code] ?? null;
         $name = $known !== null ? ($known['name'] ?? null) : $given;
-        return ['code' => $code, 'name' => self::cleanName($name)];
+        return ['code' => $code, 'name' => self::cleanName($name)] + $ext;
     }
 
     /**
@@ -168,9 +169,9 @@ final class ArticleData
      *
      * @param array<string, mixed> $material {code, name?}
      * @param list<array<string, mixed>> $qualifiers [{code, name?}, ...]
-     * @return array{material: array{code: string, name: array<string, string>|null}, percentage: int|float, qualifiers: list<array{code: string, name: array<string, string>|null}>}
+     * @return array{material: array<string, mixed>, percentage: int|float|null, qualifiers: list<array<string, mixed>>}
      */
-    public static function fibre(array $material, int|float $percentage, array $qualifiers = []): array
+    public static function fibre(array $material, int|float|null $percentage, array $qualifiers = []): array
     {
         [$code, $fromKey] = self::splitMaterialKey((string) ($material['code'] ?? ''));
         $given = array_merge(array_map(static fn (string $q) => ['code' => $q], $fromKey), $qualifiers);
@@ -178,12 +179,12 @@ final class ArticleData
         foreach ($given as $q) {
             $qc = (string) ($q['code'] ?? '');
             if ($qc !== '' && !isset($terms[$qc])) {
-                $terms[$qc] = self::term('qualifiers', $qc, is_array($q['name'] ?? null) ? $q['name'] : null);
+                $terms[$qc] = self::term('qualifiers', $qc, is_array($q['name'] ?? null) ? $q['name'] : null, Validator::extensions($q));
             }
         }
         return [
-            'material' => self::term('materials', $code, is_array($material['name'] ?? null) ? $material['name'] : null),
-            'percentage' => self::number($percentage),
+            'material' => self::term('materials', $code, is_array($material['name'] ?? null) ? $material['name'] : null, Validator::extensions($material)),
+            'percentage' => $percentage === null ? null : self::number($percentage),
             'qualifiers' => array_values($terms),
         ];
     }
@@ -278,7 +279,7 @@ final class ArticleData
      * fibre_percentages_not_100 (once per part). They never block a write or publishing.
      *
      * @param array<string, mixed> $product the stored product write model
-     * @return list<array{code: string, column: string, pointer: string, detail: string}>
+     * @return list<array{code: string, column: string, pointer: string, detail: string, value?: string}>
      */
     public static function labelWarnings(array $product): array
     {
@@ -302,12 +303,18 @@ final class ArticleData
                     }
                 }
             }
+            // Every fibre states a percentage and the sum is not 100, or the stated ones exceed
+            // 100; a part with a fibre without a percentage is otherwise not checked.
             foreach ($materials as $i => $part) {
                 $sum = 0.0;
+                $all = true;
                 foreach ((array) ($part['fibers'] ?? []) as $f) {
+                    if (($f['percentage'] ?? null) === null) {
+                        $all = false;
+                    }
                     $sum += (float) ($f['percentage'] ?? 0);
                 }
-                if (abs($sum - 100) > 0.01) {
+                if ($all ? abs($sum - 100) > 0.01 : $sum > 100.01) {
                     $out[] = ['code' => 'fibre_percentages_not_100', 'column' => 'materials', 'pointer' => '/materials/' . $i,
                         'detail' => 'The percentages of ' . ($part['part']['code'] ?? 'main') . ' add up to ' . self::number($sum) . ', not 100.'];
                 }
@@ -318,6 +325,20 @@ final class ArticleData
             if ($missing !== []) {
                 $out[] = ['code' => 'footwear_materials_missing', 'column' => 'footwear_materials', 'pointer' => '/footwear_materials',
                     'detail' => 'The footwear materials of ' . implode(', ', $missing) . ' are missing; they must be on the label of footwear (Directive 94/11/EC).'];
+            }
+        }
+        // material_unknown (import-format.md §1.4): every item type, once per code, after the
+        // label warnings, in the order the codes first appear.
+        $seen = [];
+        foreach ($materials as $i => $part) {
+            foreach ((array) ($part['fibers'] ?? []) as $j => $f) {
+                $code = (string) ($f['material']['code'] ?? '');
+                if ($code === '' || isset($seen[$code]) || isset(self::vocabulary('materials')[$code])) {
+                    continue;
+                }
+                $seen[$code] = true;
+                $out[] = ['code' => 'material_unknown', 'column' => 'materials', 'pointer' => '/materials/' . $i . '/fibers/' . $j . '/material/code', 'value' => $code,
+                    'detail' => 'The material code "' . $code . '" is not in the vocabulary of the specification; it is kept as written, without a name. Check the spelling (English codes, e.g. cotton, polyester).'];
             }
         }
         return $out;
@@ -651,7 +672,7 @@ final class ArticleData
         foreach ($materials as $m) {
             $fibers = [];
             foreach ((array) $m['fibers'] as $f) {
-                $s = self::formatNumber($f['percentage']) . '% ' . $f['material']['code'];
+                $s = ($f['percentage'] ?? null) === null ? $f['material']['code'] : self::formatNumber($f['percentage']) . '% ' . $f['material']['code'];
                 foreach ((array) ($f['qualifiers'] ?? []) as $q) {
                     $s .= ' (' . $q['code'] . ')';
                 }

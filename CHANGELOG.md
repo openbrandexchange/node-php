@@ -6,21 +6,29 @@ All notable changes to the PHP edition of the Open Brand Exchange portal ("Porta
 
 Materials and care as terms with names: this release implements Open Brand Exchange specification 0.3.0 (OBX Protocol 0.3, [proposal 0004](https://github.com/openbrandexchange/spec/blob/main/docs/proposals/0004-terms-with-names.md)). **Breaking for retailers' software** that reads `materials` or `care` (allowed before 1.0); everything else is unchanged.
 
-It follows the final 0.3.0 of the specification (spec commit 5737aa2: several qualifiers per fibre, the portal filter on qualifiers) and passes the conformance suite of obx-go 90b91df on SQLite and MySQL 8.4.
+It follows the final 0.3.0 of the specification (spec commit e74ccb2: several qualifiers per fibre, the portal filter on qualifiers, stable variant ids, percentages that may be left out, extension members, and one behaviour for `limit`, signed URLs, secret rotation and `Idempotency-Key`).
 
 ### For brands
 
 - Materials take qualifiers in brackets, one code per bracket and as many as a fibre needs: `100% cotton (organic)`, `outer: 100% polyester (recycled) (post_consumer)`, `100% cotton (organic) (regenerative)`. New codes with names: `in_conversion`, `pre_consumer`, `post_consumer` (next to `organic`, `recycled`, `regenerative`); any other code is kept too. Two codes in one bracket (`(organic, recycled)`) skip the row with an error in the column `materials`; a repeated code counts once. The 0.1 spelling `recycled_polyester` / `organic_cotton` still works and means the same. The article data CSV writes the qualifiers the same way, so it imports back unchanged.
 - You keep sending codes only (`cotton`, `lining`, `wash_30`); the portal adds the names in English, Dutch, German and French, and for care the symbol group and the GINETEX symbol code, from the specification's vocabularies. For a code outside the vocabularies the Ingest API and the admin keep the name (and for care the category and symbol) you send.
 - Care codes outside the vocabulary are still kept, with a warning in imports.
+- **Stable size ids.** A row without `variant_id` finds its size by its EAN within the product, else by `<style>-<colour>-<size>[-<size_length>]` (for example `KO-1001-NVY-M`, `KO-1004-IND-30-32`); the EAN is no longer the id. An EAN that arrives later or is corrected updates the same size. An EAN of another product's size is an error for that row (`gtin_conflict`); two rows on one size: the later one is an error. Sizes made by earlier versions keep their ids. The CSV export always fills `variant_id`.
+- **A material without a percentage** (`outer: leather`) is allowed; the sum check only applies when every fibre has one, or when the stated ones exceed 100. Percentages take a decimal point: `95,5% cotton` is now an error (`materials: decimal comma`).
+- New warning `material_unknown` for a material code outside the vocabulary (`katoen`, `co`): the code is kept as written.
+- Language columns take a script or a numeric region: `name:zh-Hant`, `name:es-419` (any case, `_` or `-`).
 
 ### For retailers' software
 
 - `materials`: `part`, the fibre's `material` and each of its `qualifiers` are terms `{"code", "name"}`, with `name` per language (`null` for the part `main` and for codes without a name). A fibre is `{"material": {...}, "percentage": 95, "qualifiers": [{...}, ...]}`, `[]` when it has none, in the brand's order without repeats; `fiber` and the flags `recycled` / `organic` are gone.
 - `care`: every entry has `code`, `category` (`washing`, `bleaching`, `drying`, `ironing`, `professional_care` or `null`), `symbol` (for example `1_D_30`, or `null`), `name` and `text` (only the brand's own extra text).
 - `OBX-Version: 0.3`; the discovery document says `obx_version` `0.3`.
+- A fibre's `percentage` is `null` when the brand states none. Size external ids from imports are `<style>-<colour>-<size>[-<size_length>]`; keep your link on the variant `id`, and treat the GTIN as a value that may arrive or change.
+- Extension members `x-<vendor>-<name>` that a brand writes (on products, variants, colours, assets, rights, provenance, materials, care, certifications, measurements) are stored and returned everywhere; other unknown members are ignored with a warning naming their JSON Pointer, never a 422.
+- A signed URL that expired or was changed is `403 forbidden`; with a valid Bearer token the file is served whatever the signature says; without either `401`. Tokens from before a secret rotation are `401 invalid_token` (`access_revoked` only when access was taken away).
+- `Idempotency-Key` on `POST /batch`, `/imports` and `/exports`: the same body replays the first answer (an export also while it runs); another body is `409 idempotency_key_reused`.
 - Every `/changes` cursor issued before the upgrade is answered with `410 cursor_expired` (protocol.md §6.4): restart without a cursor and take the snapshot in the 0.3 shapes.
-- The Ingest API and the admin API take and return the same shapes; `name`, `category` and `symbol` may be left out on writes, and so may `qualifiers` (= none). The 0.2 shapes (`"part": "main"`, `"fiber": "cotton"`, the flags) and a single `"qualifier"` are refused with `validation_failed`.
+- The Ingest API and the admin API take and return the same shapes; `name`, `category` and `symbol` may be left out on writes, and so may `qualifiers` (= none) and `percentage` (= not stated). The 0.2 shapes (`"part": "main"`, `"fiber": "cotton"`, the flags) are refused with `validation_failed`; the draft single `"qualifier"` is read as a list of one with the warning `qualifier_deprecated`. `gtin_conflict` names the size that has the GTIN and its product.
 
 ### For retailers
 
@@ -29,6 +37,7 @@ It follows the final 0.3.0 of the specification (spec commit 5737aa2: several qu
 ### Hosting and development
 
 - **Run it locally without Docker:** `composer dev` (`php bin/dev`) starts the portal with PHP's built-in web server and SQLite, loads the Kestrel demo catalog and prints the address and the admin and retailer logins. `LOCAL=1 scripts/conformance.sh ../obx-go` runs the conformance suite with local PHP and Go (SQLite, or MySQL with `DB=mysql MYSQL_DSN=…`).
+- Image versions of JPEG photos are turned upright by their EXIF orientation (phone photos no longer appear on their side).
 - Runs on PHP 8.5 without deprecation notices (no-op `curl_close()` / `imagedestroy()` calls removed); `bin/obx` reads its arguments from `$_SERVER['argv']`.
 - The hosting docs name the current image tags (`ghcr.io/openbrandexchange/node-php:0.3`, `:0.3.0`, `:latest`) instead of `:0.1`, and give a realistic first-time estimate (half a day to a day for a real portal).
 
@@ -36,6 +45,7 @@ It follows the final 0.3.0 of the specification (spec commit 5737aa2: several qu
 
 - Upload the new files (or pull the new image) and open the portal: database schemas 5 and 6 rewrite the stored materials and care of every article once into the 0.3 form (`recycled: true` becomes the qualifier `recycled`, names from the vocabularies) and add the qualifier column for the portal filter. Every visible article with materials or care gets one change entry, so retailers' software fetches the new form; sizes and images are not sent again. With tens of thousands of articles run `php bin/obx migrate` from the command line. Sending the same spreadsheet again afterwards changes nothing. Make a backup first (`php bin/obx backup`), as for every upgrade.
 - Retailers' software must read `part.code`, `fibers[].material.code` and `fibers[].qualifiers[].code` instead of `part`, `fiber` and the flags before it syncs from a 0.3 portal.
+- Database schema 7 keeps the request hash with every `Idempotency-Key`.
 - A portal that already ran a pre-release build of 0.3 (one `qualifier` per fibre) gets schema 6 only: every visible article with materials gets one change entry with the list `qualifiers`.
 
 ## [0.2.1] - 2026-11-12

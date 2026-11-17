@@ -91,8 +91,18 @@ final class FormatsTest extends TestCase
                 $this->assertStringContainsString('one code per bracket', $e->getMessage());
             }
         }
-        $this->assertSame(12.5, Formats::parseMaterials('87,5% wool, 12.5% cashmere', $w)[0]['fibers'][1]['percentage']);
-        $this->assertNull(Formats::parseMaterials('cotton', $w));
+        $this->assertSame([87.5, 12.5], array_column(Formats::parseMaterials('87.5% wool, 12.5% cashmere', $w)[0]['fibers'], 'percentage'));
+        try {
+            Formats::parseMaterials('87,5% wool, 12,5% cashmere', $w);
+            $this->fail('a decimal comma');
+        } catch (\InvalidArgumentException $e) {
+            $this->assertStringStartsWith('materials: decimal comma', $e->getMessage());
+        }
+        // A fibre without a percentage (import-format.md §1.4).
+        $this->assertSame([null, 60, null], array_merge(...array_map(static fn ($p) => array_column($p['fibers'], 'percentage'), Formats::parseMaterials('outer: leather; lining: 60% cotton, polyester', $w))));
+        $this->assertSame(null, Formats::parseMaterials('cotton', $w)[0]['fibers'][0]['percentage'], 'a material alone has no percentage');
+        $this->assertNull(Formats::parseMaterials('100%', $w));
+        $this->assertNull(Formats::parseMaterials('120% cotton', $w));
         $this->assertNull(Formats::parseMaterials('100% cotton ()', $w));
         Formats::parseMaterials('main: 90% cotton', $w);
         $this->assertSame([], $w, 'a sum other than 100 is the label warning fibre_percentages_not_100, not a parse warning');
@@ -162,5 +172,35 @@ final class FormatsTest extends TestCase
         $this->assertTrue(SafeZip::ignored('__MACOSX/images/._a.jpg'));
         $this->assertTrue(SafeZip::ignored('x/.DS_Store'));
         $this->assertFalse(SafeZip::ignored('x/a.jpg'));
+    }
+
+    public function testExifOrientationTurnsRenditionsUpright(): void
+    {
+        if (!\Obx\Node\Images\Renderer::available()) {
+            $this->markTestSkipped('GD is not available');
+        }
+        $img = imagecreatetruecolor(40, 20);
+        ob_start();
+        imagejpeg($img);
+        $jpeg = (string) ob_get_clean();
+        // APP1 Exif with IFD0 Orientation = 6 (rotate 90 degrees clockwise), big-endian TIFF.
+        $tiff = "MM\x00\x2A\x00\x00\x00\x08" . "\x00\x01" . "\x01\x12\x00\x03\x00\x00\x00\x01\x00\x06\x00\x00" . "\x00\x00\x00\x00";
+        $app1 = "Exif\x00\x00" . $tiff;
+        $with = "\xFF\xD8\xFF\xE1" . pack('n', strlen($app1) + 2) . $app1 . substr($jpeg, 2);
+        $dir = sys_get_temp_dir() . '/obx-exif-' . bin2hex(random_bytes(4));
+        mkdir($dir);
+        file_put_contents($dir . '/in.jpg', $with);
+        $this->assertSame(6, \Obx\Node\Images\ImageInfo::exifOrientation($dir . '/in.jpg'));
+        file_put_contents($dir . '/plain.jpg', $jpeg);
+        $this->assertSame(1, \Obx\Node\Images\ImageInfo::exifOrientation($dir . '/plain.jpg'));
+        $out = \Obx\Node\Images\Renderer::render($dir . '/in.jpg', 'image/jpeg', $dir . '/out');
+        $this->assertSame([20, 40], [$out['web']['width'], $out['web']['height']]);
+        foreach (glob($dir . '/out/*') ?: [] as $f) {
+            unlink($f);
+        }
+        rmdir($dir . '/out');
+        unlink($dir . '/in.jpg');
+        unlink($dir . '/plain.jpg');
+        rmdir($dir);
     }
 }

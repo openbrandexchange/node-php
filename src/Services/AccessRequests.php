@@ -63,7 +63,7 @@ final class AccessRequests
             $errors[] = ['pointer' => '/message', 'detail' => 'At most 2000 characters.'];
         }
         $lang = is_array($c) ? ($c['language'] ?? null) : null;
-        if ($lang !== null && (!is_string($lang) || !preg_match('/^[a-z]{2,3}(-[A-Z]{2})?$/', $lang))) {
+        if ($lang !== null && (!is_string($lang) || !preg_match(\Obx\Node\Catalog\Validator::LANGUAGE_TAG, $lang))) {
             $errors[] = ['pointer' => '/contact/language', 'detail' => 'A language code such as nl or en.'];
         }
         if ($errors !== []) {
