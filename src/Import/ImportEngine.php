@@ -432,6 +432,20 @@ final class ImportEngine
         return false;
     }
 
+    /** @param array<string, string> $v a row's values */
+    private static function isVariantRow(array $v): bool
+    {
+        foreach (['gtin', 'variant_id', 'sku', 'color_code', 'size'] as $c) {
+            if (($v[$c] ?? '') !== '') {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** @var array<string, array{0: int, 1: string}> GTIN-14 => [row, variant] in this file */
+    private array $gtinRows = [];
+
     /**
      * The default variant external id (import-format.md §1.2.1):
      * <style_number>-<color_code>-<size>[-<size_length>], empty parts left out with their "-",
@@ -714,11 +728,19 @@ final class ImportEngine
             $this->issue($file, $row($col), $col, 'warning', 'validation_failed', $msg, $orig);
         }
         $variants = [];
+        $productRow = false;
         foreach ($g['rows'] as $r) {
             $v = $this->buildVariant($r, (string) $data['style_number'], $g['ext']);
             if ($v !== null) {
                 $variants[] = $v;
+            } elseif (!self::isVariantRow($r['values'])) {
+                $productRow = true;
             }
+        }
+        if ($variants === [] && !$productRow) {
+            // import-format.md §1.2.1: every variant row of this product was refused, so the
+            // product values on those rows are not written either.
+            return null;
         }
         return [
             'ext' => $g['ext'],
@@ -817,6 +839,15 @@ final class ImportEngine
         if (isset($this->variantRows[$seen])) {
             $this->issue($file, $r['row'], 'variant_id', 'error', 'validation_failed', 'Row ' . $this->variantRows[$seen] . ' already addresses this size (variant ' . $ext . '); give each a variant_id if they are different sizes.', $ext);
             return null;
+        }
+        if ($gtin !== null) {
+            $g14 = str_pad($gtin, 14, '0', STR_PAD_LEFT);
+            $was = $this->gtinRows[$g14] ?? null;
+            if ($was !== null && $was[1] !== $seen) {
+                $this->issue($file, $r['row'], 'gtin', 'error', 'gtin_conflict', 'This EAN is also used on row ' . $was[0] . ' (another size); an EAN belongs to one size.', $rawGtin);
+                return null;
+            }
+            $this->gtinRows[$g14] = [$r['row'], $seen];
         }
         $this->variantRows[$seen] = $r['row'];
         $family = null;

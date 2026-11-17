@@ -6,7 +6,7 @@ All notable changes to the PHP edition of the Open Brand Exchange portal ("Porta
 
 Materials and care as terms with names: this release implements Open Brand Exchange specification 0.3.0 (OBX Protocol 0.3, [proposal 0004](https://github.com/openbrandexchange/spec/blob/main/docs/proposals/0004-terms-with-names.md)). **Breaking for retailers' software** that reads `materials` or `care` (allowed before 1.0); everything else is unchanged.
 
-It follows the final 0.3.0 of the specification (spec commit e74ccb2: several qualifiers per fibre, the portal filter on qualifiers, stable variant ids, percentages that may be left out, extension members, and one behaviour for `limit`, signed URLs, secret rotation and `Idempotency-Key`).
+It follows the final 0.3.0 of the specification (spec commit e74ccb2: several qualifiers per fibre, the portal filter on qualifiers, stable variant ids, percentages that may be left out, extension members, and one behaviour for `limit`, signed URLs, secret rotation and `Idempotency-Key`). The conformance suite of obx-go fe9b626 says CONFORMANT on SQLite and on MySQL 8.4, with server-made and with client-made image versions; the web interface is admin-ui 5ad8f05.
 
 ### For brands
 

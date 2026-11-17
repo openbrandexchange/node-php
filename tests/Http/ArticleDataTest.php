@@ -262,6 +262,10 @@ final class ArticleDataTest extends NodeTestCase
             ['material' => ['code' => 'cotton'], 'percentage' => 45, 'qualifier' => ['code' => 'organic'], 'qualifiers' => [['code' => 'regenerative']]],
             ['material' => ['code' => 'elastane'], 'percentage' => 5, 'qualifier' => null],
         ]]]] + $body;
+        $asString = $draft;
+        $asString['materials'][0]['fibers'][0]['qualifier'] = 'recycled';
+        $this->json($put('product', 'KX-1', $asString));
+        $this->assertSame('unchanged', $this->json($put('product', 'KX-1', $draft))['result'], 'a plain string is the code');
         $res = $this->json($put('product', 'KX-1', $draft));
         $this->assertSame([['code' => 'qualifier_deprecated', 'pointer' => '/materials/0/fibers/0/qualifier']],
             array_map(static fn ($w) => ['code' => $w['code'], 'pointer' => $w['pointer']], array_values(array_filter($res['warning_details'], static fn ($w) => $w['code'] === 'qualifier_deprecated'))));
@@ -532,6 +536,14 @@ final class ArticleDataTest extends NodeTestCase
                 $ids = $now;
             }
         }
+        // The same EAN on two sizes of one file: the later row is gtin_conflict; a product whose
+        // size rows are all refused is not written.
+        $job = $this->importCsv($token, "brand,style_number,name:en,gtin,color_code,size\nKestrel,KL-8102,Twins,2000810201015,RED,S\nKestrel,KL-8102,Twins,2000810201015,RED,M\n");
+        $errors = array_values(array_filter($this->rowErrors($job), static fn ($e) => $e['severity'] === 'error'));
+        $this->assertSame([[2, 'gtin', 'gtin_conflict']], array_map(static fn ($e) => [$e['row'], $e['column'], $e['obx_error']], $errors));
+        $job = $this->importCsv($token, "brand,style_number,name:en,gtin,color_code,size\nKestrel,KL-8103,Nobody,2000810201015,RED,S\n");
+        $this->assertSame([0, 0, 1], [$job['import_run']['counts']['created'], $job['import_run']['counts']['unchanged'], $job['import_run']['counts']['errors']]);
+        $this->assertNull($this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'KL-8103'"));
         $this->assertSame('KL-8101-IND-32_34', \Obx\Node\Import\ImportEngine::defaultVariantId('KL-8101', 'IND', '32/34', null));
         $this->assertSame('KO-1005-COG-ONE SIZE', \Obx\Node\Import\ImportEngine::defaultVariantId('KO-1005', 'COG', 'ONE SIZE', ''));
         $this->assertSame('KX-1-RED-34', \Obx\Node\Import\ImportEngine::defaultVariantId('KX-1', 'RED', null, '34'));

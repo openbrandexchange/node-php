@@ -332,7 +332,8 @@ final class Validator
                     // The draft single qualifier (ingest.md §3.1): a list of one when there is
                     // no "qualifiers", ignored when there is; once per write, never an error.
                     if (!array_key_exists('qualifiers', $f)) {
-                        $qv = $f['qualifier'] === null ? [] : [$f['qualifier']];
+                        // A plain string is read as the code.
+                        $qv = $f['qualifier'] === null ? [] : [is_string($f['qualifier']) ? ['code' => $f['qualifier']] : $f['qualifier']];
                     }
                     if (!in_array('qualifier_deprecated', array_column($this->details, 'code'), true)) {
                         $detail = 'A fibre has the list "qualifiers" since 0.3; the single "qualifier" was read as '

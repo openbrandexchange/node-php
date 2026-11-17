@@ -367,7 +367,10 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     (`ImportEngine::defaultVariantId`). A GTIN held by a variant of another product is checked
     while planning, so the whole row is skipped (`gtin_conflict`, column `gtin`) before its
     product part is written; two rows on one variant: the later is `validation_failed`
-    (column `variant_id`). Variants made by 0.2 (external id = GTIN) are found by step 2.
+    (column `variant_id`). Variants made by 0.2 (external id = GTIN) are found by step 2. As in
+    obx-go (its NOTES 8): the same GTIN on two sizes of one file is `gtin_conflict` on `gtin` for
+    the later row, and a product whose size rows are all refused is not written either (only
+    rows without any size column write a product on their own).
 70. **`percentage` may be `null`** (protocol.md §5.9.1): optional on write, always present in
     responses; `fibre_percentages_not_100` only when every fibre of the part states one and the
     sum is not 100, or when the stated ones exceed 100. The CSV export writes such a fibre as the
@@ -383,7 +386,9 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     when it carries a signature (protocol.md §5.5); a bad signature without a token is
     `403 forbidden`. Rotating a client secret deletes its access tokens, so they answer
     `401 invalid_token`; `access_revoked` stays for revoked clients and blocked retailers.
-    `limit` above the maximum was already clamped.
+    `limit` above the maximum was already clamped. `scripts/conformance-operator.sh` is the
+    suite's operator hook (both conformance modes pass it): `rotate_client_secret` for P-AUTH-2
+    and `simulate_spec_upgrade` (raises the cursor epoch) for P-FEED-7; the admin API does the rest.
 73. **Language tags** are language, optional script, optional region (`zh-Hant`, `es-419`,
     `sr-Latn-RS`) everywhere a tag is validated; `name:<lang>` columns are matched
     case-insensitively with `_` read as `-` and stored in canonical case

@@ -60,7 +60,8 @@ if [ "${LOCAL:-}" = 1 ] || ! docker info >/dev/null 2>&1; then
   until curl -s -o /dev/null "http://127.0.0.1:$port/.well-known/obx"; do
     i=$((i+1)); [ $i -gt 60 ] && { echo "node did not start" >&2; cat "$work/server.log" >&2; exit 2; }; sleep 1
   done
-  "$work/obx-conformance" all --url "http://127.0.0.1:$port" --setup-code CONFORMANCE-1 "$@"
+  "$work/obx-conformance" all --url "http://127.0.0.1:$port" --setup-code CONFORMANCE-1 \
+    --operator-hook "$here/scripts/conformance-operator.sh" "$@"
   exit $?
 fi
 case "$db" in
@@ -98,4 +99,6 @@ i=0
 until docker exec obx-php-conformance curl -s -o /dev/null http://localhost:8080/.well-known/obx; do
   i=$((i+1)); [ $i -gt 60 ] && { echo "node did not start" >&2; docker logs obx-php-conformance >&2; exit 2; }; sleep 1
 done
-docker exec obx-php-conformance obx-conformance all --url http://localhost:8080 --setup-code CONFORMANCE-1 "$@"
+docker cp "$here/scripts/conformance-operator.sh" obx-php-conformance:/usr/local/bin/obx-operator
+docker exec -e OBX_ROOT=/var/www/html obx-php-conformance obx-conformance all --url http://localhost:8080 --setup-code CONFORMANCE-1 \
+  --operator-hook /usr/local/bin/obx-operator "$@"
