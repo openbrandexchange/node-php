@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
+# shellcheck disable=SC2016,SC2329 # PHP code in single quotes is meant literally; cleanup runs from trap
 # Operator hook for obx-conformance (--operator-hook, obx-go docs/conformance.md). It runs in the
 # node's environment (the same OBX_* settings) and offers the actions the suite cannot do through
 # the Node Admin API on its own:

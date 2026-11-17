@@ -1,4 +1,5 @@
 #!/usr/bin/env sh
+# shellcheck disable=SC2016,SC2329 # PHP code in single quotes is meant literally; cleanup runs from trap
 # Runs the official conformance suite (obx-conformance from obx-go) against a fresh node in the
 # Docker image built from this repository. The suite runs inside the node's container, so its
 # local webhook receiver is reachable.
