@@ -5,6 +5,7 @@ parameters:
         - src
         - tests
         - bin/obx
+        - bin/dev
     excludePaths:
         - tests/ui/*
         - tests/fixtures/*

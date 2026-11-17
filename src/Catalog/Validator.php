@@ -217,10 +217,11 @@ final class Validator
     }
 
     /**
-     * Materials (protocol.md §5.9.1): parts with fibres, part, material and qualifier as terms
-     * {code, name}. The name may be left out; a code in the vocabulary gets the vocabulary's
+     * Materials (protocol.md §5.9.1): parts with fibres, part, material and each qualifier as
+     * terms {code, name}; qualifiers a list ([] or left out when none, repeats dropped). The name may be left out; a code in the vocabulary gets the vocabulary's
      * name, another code the name it was given (or null). The 0.1 material keys
-     * recycled_<material> / organic_<material> become the material with that qualifier.
+     * recycled_<material> / organic_<material> become the material with that qualifier (first in
+     * the list). The 0.3 draft's single "qualifier" is refused (validation_failed).
      *
      * @return list<array<string, mixed>>|null
      */
@@ -250,22 +251,36 @@ final class Validator
             foreach ($fibers as $j => $f) {
                 $fp = $p . '/' . $i . '/fibers/' . $j;
                 if (!Json::isObject($f)) {
-                    $this->err($fp, 'Must be an object with material, percentage and qualifier.');
+                    $this->err($fp, 'Must be an object with material, percentage and qualifiers.');
                     continue;
                 }
-                $this->unknown($f, ['material', 'percentage', 'qualifier'], 'materials.fibers.');
+                $this->unknown($f, ['material', 'percentage', 'qualifiers', 'qualifier'], 'materials.fibers.');
                 $material = $this->term($f['material'] ?? null, $fp . '/material', 'materials.fibers.material.', 'Material codes are lowercase, e.g. {"code": "cotton"}.');
-                $qualifier = ($f['qualifier'] ?? null) === null ? null
-                    : $this->term($f['qualifier'], $fp . '/qualifier', 'materials.fibers.qualifier.', 'A qualifier is null or a lowercase code, e.g. {"code": "recycled"}.');
+                $errors = count($this->errors);
+                if (array_key_exists('qualifier', $f)) {
+                    $this->err($fp . '/qualifier', 'Since 0.3 a fibre has a list "qualifiers", e.g. [{"code": "recycled"}, {"code": "post_consumer"}] ([] or left out when there is none).');
+                }
+                $qualifiers = [];
+                $qv = $f['qualifiers'] ?? null;
+                if ($qv !== null && (!is_array($qv) || !array_is_list($qv))) {
+                    $this->err($fp . '/qualifiers', 'A list of qualifiers, e.g. [{"code": "recycled"}], or [] when there is none.');
+                } else {
+                    foreach ($qv ?? [] as $k => $q) {
+                        $t = $this->term($q, $fp . '/qualifiers/' . $k, 'materials.fibers.qualifiers.', 'A qualifier is a lowercase code, e.g. {"code": "recycled"}.');
+                        if ($t !== null) {
+                            $qualifiers[] = $t;
+                        }
+                    }
+                }
                 $pct = $f['percentage'] ?? null;
                 if (!is_int($pct) && !is_float($pct) || $pct <= 0 || $pct > 100) {
                     $this->err($fp . '/percentage', 'A number above 0 and at most 100.');
                     continue;
                 }
-                if ($material === null || ($f['qualifier'] ?? null) !== null && $qualifier === null) {
+                if ($material === null || count($this->errors) > $errors) {
                     continue;
                 }
-                $fo[] = ArticleData::fibre($material, $pct, $qualifier);
+                $fo[] = ArticleData::fibre($material, $pct, $qualifiers);
             }
             if ($term !== null) {
                 $out[] = ['part' => ArticleData::term('parts', $term['code'], $term['name']), 'fibers' => $fo];

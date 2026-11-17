@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Obx\Node\Controllers;
 
+use Obx\Node\Catalog\ArticleData;
 use Obx\Node\Catalog\Viewer;
 use Obx\Node\Catalog\Writer;
 use Obx\Node\Db\Db;
@@ -23,7 +24,7 @@ use Obx\Node\Support\Str;
  */
 final class PortalController extends Controller
 {
-    private const FILTERS = ['brand_id', 'item_type', 'color', 'season', 'collection', 'target_group'];
+    private const FILTERS = ['brand_id', 'item_type', 'color', 'season', 'collection', 'target_group', 'qualifier'];
 
     /** @return array{0: array<string, mixed>, 1: Viewer, 2: ?array<string, mixed>} session, viewer, retailer */
     private function viewer(Request $req): array
@@ -90,6 +91,18 @@ final class PortalController extends Controller
         if ($colors !== [] && $except !== 'color') {
             $where[] = 'EXISTS (SELECT 1 FROM obx_variants cv WHERE cv.product_id = p.id AND cv.visible = 1 AND cv.color_code IN (' . Db::in($colors) . '))';
             $params = array_merge($params, $colors);
+        }
+        // A product matches when any fibre of any part has any of the qualifier codes; the
+        // column holds the product's codes as "|code|code|" (ArticleData::qualifierColumn).
+        $qualifiers = array_values(array_unique(array_filter((array) ($f['qualifier'] ?? []), static fn ($x) => is_string($x) && $x !== '')));
+        if ($qualifiers !== [] && $except !== 'qualifier') {
+            // Stored codes are keys ([a-z0-9_]); another value matches nothing.
+            $codes = array_values(array_filter($qualifiers, static fn (string $c) => preg_match(ArticleData::KEY, $c) === 1));
+            $where[] = $codes === [] ? '1 = 0'
+                : '(' . implode(' OR ', array_fill(0, count($codes), "p.qualifiers LIKE ? ESCAPE '!'")) . ')';
+            foreach ($codes as $code) {
+                $params[] = '%|' . str_replace('_', '!_', $code) . '|%';
+            }
         }
         $since = $f['updated_since'] ?? null;
         if (is_string($since) && $since !== '') {
@@ -211,7 +224,7 @@ final class PortalController extends Controller
     {
         [, $v] = $this->viewer($req);
         $f = $this->filterFromQuery($req);
-        $out = ['brands' => [], 'item_types' => [], 'colors' => [], 'seasons' => [], 'collections' => [], 'target_groups' => []];
+        $out = ['brands' => [], 'item_types' => [], 'colors' => [], 'seasons' => [], 'collections' => [], 'target_groups' => [], 'qualifiers' => []];
         // Everything except the facet filters (visibility, brands the viewer may see, search, date).
         $base = $this->where(['q' => $f['q'] ?? null, 'updated_since' => $f['updated_since'] ?? null], $v);
         if ($base === null) {
@@ -221,7 +234,7 @@ final class PortalController extends Controller
         // pass over the matching articles and their colours (two queries), which stays fast on
         // large catalogs where one grouped query per facet did not (MySQL: 250 ms → 50 ms).
         $cols = ['brands' => 'brand_id', 'item_types' => 'item_type', 'seasons' => 'season', 'collections' => 'collection', 'target_groups' => 'target_group'];
-        $rows = $this->app->db->all('SELECT p.id, p.brand_id, p.item_type, p.season, p.collection, p.target_group FROM obx_products p WHERE ' . $base[0], $base[1]);
+        $rows = $this->app->db->all('SELECT p.id, p.brand_id, p.item_type, p.season, p.collection, p.target_group, p.qualifiers FROM obx_products p WHERE ' . $base[0], $base[1]);
         $colorsOf = [];
         if ($rows !== []) {
             $wanted = array_fill_keys(array_map(static fn ($r) => (string) $r['id'], $rows), true);
@@ -232,11 +245,11 @@ final class PortalController extends Controller
             }
         }
         $selected = [];
-        foreach (array_merge(array_values($cols), ['color']) as $key) {
+        foreach (array_merge(array_values($cols), ['color', 'qualifier']) as $key) {
             $vals = array_values(array_filter((array) ($f[$key] ?? []), static fn ($x) => is_string($x) && $x !== ''));
             $selected[$key] = $vals !== [] ? array_fill_keys($vals, true) : null;
         }
-        $counts = array_fill_keys(array_merge(array_values($cols), ['color']), []);
+        $counts = array_fill_keys(array_merge(array_values($cols), ['color', 'qualifier']), []);
         foreach ($rows as $r) {
             $id = (string) $r['id'];
             $pass = [];
@@ -245,6 +258,8 @@ final class PortalController extends Controller
             }
             $colors = $colorsOf[$id] ?? [];
             $pass['color'] = $selected['color'] === null || array_intersect_key($selected['color'], array_flip($colors)) !== [];
+            $quals = $r['qualifiers'] !== null ? array_values(array_filter(explode('|', (string) $r['qualifiers']), static fn ($x) => $x !== '')) : [];
+            $pass['qualifier'] = $selected['qualifier'] === null || array_intersect_key($selected['qualifier'], array_flip($quals)) !== [];
             $failing = array_keys(array_filter($pass, static fn (bool $ok) => !$ok));
             if (count($failing) > 1) {
                 continue; // fails two filters: counts nowhere
@@ -257,6 +272,11 @@ final class PortalController extends Controller
             if ($failing === [] || $failing === ['color']) {
                 foreach ($colors as $c) {
                     $counts['color'][$c] = ($counts['color'][$c] ?? 0) + 1;
+                }
+            }
+            if ($failing === [] || $failing === ['qualifier']) {
+                foreach ($quals as $q) {
+                    $counts['qualifier'][$q] = ($counts['qualifier'][$q] ?? 0) + 1;
                 }
             }
         }
@@ -286,7 +306,49 @@ final class PortalController extends Controller
             }
             $out['colors'][] = $item;
         }
+        // Qualifiers in the vocabulary's order, then other codes by code; the label is the
+        // vocabulary's name per language, for another code the name of one product's fibre.
+        $vocab = array_keys(ArticleData::vocabulary('qualifiers'));
+        $order = array_flip($vocab);
+        $codes = array_map('strval', array_keys($counts['qualifier']));
+        usort($codes, static fn (string $a, string $b) => [isset($order[$a]) ? 0 : 1, $order[$a] ?? 0, $a] <=> [isset($order[$b]) ? 0 : 1, $order[$b] ?? 0, $b]);
+        foreach ($codes as $code) {
+            $item = ['value' => $code, 'count' => $counts['qualifier'][$code]];
+            $label = $this->qualifierLabel($code, $base);
+            if ($label !== null) {
+                $item['label'] = $label;
+            }
+            $out['qualifiers'][] = $item;
+        }
         return Response::json($out);
+    }
+
+    /**
+     * The name of a qualifier code: the vocabulary's, or for another code the name that one of
+     * the viewer's products has for it (null when none has one).
+     *
+     * @param array{0: string, 1: list<mixed>} $base
+     * @return array<string, string>|null
+     */
+    private function qualifierLabel(string $code, array $base): ?array
+    {
+        $known = ArticleData::term('qualifiers', $code)['name'];
+        if ($known !== null || isset(ArticleData::vocabulary('qualifiers')[$code])) {
+            return $known;
+        }
+        $like = '%|' . str_replace('_', '!_', $code) . '|%'; // a stored code: [a-z0-9_]
+        foreach ($this->app->db->column("SELECT p.input FROM obx_products p WHERE p.qualifiers LIKE ? ESCAPE '!' AND " . $base[0] . ' LIMIT 20', array_merge([$like], $base[1])) as $input) {
+            foreach ((array) (Json::decode((string) $input, [])['materials'] ?? []) as $part) {
+                foreach ((array) ($part['fibers'] ?? []) as $fibre) {
+                    foreach ((array) ($fibre['qualifiers'] ?? []) as $q) {
+                        if (($q['code'] ?? null) === $code && is_array($q['name'] ?? null) && $q['name'] !== []) {
+                            return $q['name'];
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     public function product(Request $req): Response

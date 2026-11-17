@@ -11,13 +11,15 @@ use Obx\Node\Support\Json;
 
 /**
  * Brings stored products and variants to the current stored model: schema 4 (0.2.0) for data
- * written by 0.1, schema 5 (0.3.0) for data written by 0.1 or 0.2. Both run this same upgrade,
- * which always writes the current (0.3) model.
+ * written by 0.1, schema 5 (0.3.0) for data written by 0.1 or 0.2, schema 6 (0.3.0) for fibres
+ * stored with one qualifier and the portal's qualifiers column. All run this same upgrade, which
+ * always writes the current (0.3) model.
  *
  * - The write model gets the 0.2 fields (null), and materials and care in the 0.3 shape: part,
- *   material and qualifier as terms {code, name} (a 0.2 part "lining" becomes {"code": "lining"},
- *   a fibre {"fiber": "polyester", "recycled": true} or the 0.1 key recycled_polyester becomes
- *   {"material": {"code": "polyester"}, "qualifier": {"code": "recycled"}}), care entries with
+ *   material and each qualifier as terms {code, name} (a 0.2 part "lining" becomes {"code":
+ *   "lining"}, a fibre {"fiber": "polyester", "recycled": true}, the 0.1 key recycled_polyester or
+ *   a draft-0.3 {"qualifier": {"code": "recycled"}} becomes {"material": {"code": "polyester"},
+ *   "qualifiers": [{"code": "recycled"}]}), care entries with
  *   category, symbol and name, the names from the vocabularies. Sending the same data again
  *   after the upgrade is "unchanged" (the ETag is computed over the canonical model).
  * - The protocol representation gets the new properties. When the only difference is that
@@ -79,6 +81,13 @@ final class ArticleDataUpgrade
             return; // not valid under 0.1/0.2 either; left as it is
         }
         $set = [];
+        if ($kind === 'product' && array_key_exists('qualifiers', $row)) {
+            // The portal filter column (schema 6); absent while schemas 4 and 5 run.
+            $column = ArticleData::qualifierColumn($model['materials'] ?? null);
+            if ($column !== $row['qualifiers']) {
+                $set['qualifiers'] = $column;
+            }
+        }
         $input = Json::encode($model);
         if ($input !== (string) $row['input']) {
             $set['input'] = $input;

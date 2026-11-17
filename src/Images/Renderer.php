@@ -68,7 +68,6 @@ final class Renderer
         }
         [$ww, $wh] = self::fit($w, $h, self::WEB_MAX);
         $web = self::resizeOnWhite($img, $w, $h, $ww, $wh);
-        imagedestroy($img);
         $out = [];
         $out['web'] = ['path' => self::save($web, $outDir, 'web'), 'width' => $ww, 'height' => $wh];
 
@@ -77,7 +76,6 @@ final class Renderer
         imagefill($square, 0, 0, imagecolorallocate($square, 255, 255, 255));
         imagecopy($square, $web, intdiv($side - $ww, 2), intdiv($side - $wh, 2), 0, 0, $ww, $wh);
         $out['square'] = ['path' => self::save($square, $outDir, 'square'), 'width' => $side, 'height' => $side];
-        imagedestroy($square);
 
         [$tw, $th] = self::fit($ww, $wh, self::THUMB_MAX);
         if ([$tw, $th] === [$ww, $wh]) {
@@ -89,9 +87,7 @@ final class Renderer
         }
         $out['thumb'] = ['path' => self::save($thumb, $outDir, 'thumb'), 'width' => $tw, 'height' => $th];
         if ($thumb !== $web) {
-            imagedestroy($thumb);
         }
-        imagedestroy($web);
         return $out;
     }
 

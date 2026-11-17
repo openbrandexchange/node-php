@@ -140,56 +140,62 @@ final class ArticleData
 
     /**
      * The 0.1 material keys recycled_<material> and organic_<material> are the material with
-     * that qualifier (protocol.md §5.9.1); the key wins over a qualifier that was also given.
-     * With several prefixes ("organic_recycled_cotton") the first one is the qualifier.
+     * that qualifier (protocol.md §5.9.1), first in the fibre's list of qualifiers. With several
+     * prefixes ("organic_recycled_cotton") each one is a qualifier, in the order written.
      *
-     * @return array{0: string, 1: ?string} [material code, qualifier code from the key or null]
+     * @return array{0: string, 1: list<string>} [material code, qualifier codes from the key]
      */
     public static function splitMaterialKey(string $code): array
     {
-        $qualifier = null;
+        $qualifiers = [];
         while (true) {
             if (str_starts_with($code, 'recycled_') && strlen($code) > 9) {
-                $qualifier ??= 'recycled';
+                $qualifiers[] = 'recycled';
                 $code = substr($code, 9);
             } elseif (str_starts_with($code, 'organic_') && strlen($code) > 8) {
-                $qualifier ??= 'organic';
+                $qualifiers[] = 'organic';
                 $code = substr($code, 8);
             } else {
-                return [$code, $qualifier];
+                return [$code, array_values(array_unique($qualifiers))];
             }
         }
     }
 
     /**
-     * A stored fibre in the 0.3 shape {material, percentage, qualifier}, with the 0.1 material
-     * keys normalised and the names of the vocabulary.
+     * A stored fibre in the 0.3 shape {material, percentage, qualifiers}, with the 0.1 material
+     * keys normalised (the key's qualifier first) and the names of the vocabulary. Qualifiers
+     * keep their order; a repeated code counts once (the first wins, with its name).
      *
      * @param array<string, mixed> $material {code, name?}
-     * @param array<string, mixed>|null $qualifier {code, name?} or null
-     * @return array{material: array{code: string, name: array<string, string>|null}, percentage: int|float, qualifier: array{code: string, name: array<string, string>|null}|null}
+     * @param list<array<string, mixed>> $qualifiers [{code, name?}, ...]
+     * @return array{material: array{code: string, name: array<string, string>|null}, percentage: int|float, qualifiers: list<array{code: string, name: array<string, string>|null}>}
      */
-    public static function fibre(array $material, int|float $percentage, ?array $qualifier): array
+    public static function fibre(array $material, int|float $percentage, array $qualifiers = []): array
     {
         [$code, $fromKey] = self::splitMaterialKey((string) ($material['code'] ?? ''));
-        if ($fromKey !== null && ($qualifier === null || $qualifier['code'] !== $fromKey)) {
-            $qualifier = ['code' => $fromKey];
+        $given = array_merge(array_map(static fn (string $q) => ['code' => $q], $fromKey), $qualifiers);
+        $terms = [];
+        foreach ($given as $q) {
+            $qc = (string) ($q['code'] ?? '');
+            if ($qc !== '' && !isset($terms[$qc])) {
+                $terms[$qc] = self::term('qualifiers', $qc, is_array($q['name'] ?? null) ? $q['name'] : null);
+            }
         }
         return [
             'material' => self::term('materials', $code, is_array($material['name'] ?? null) ? $material['name'] : null),
             'percentage' => self::number($percentage),
-            'qualifier' => $qualifier === null ? null
-                : self::term('qualifiers', (string) $qualifier['code'], is_array($qualifier['name'] ?? null) ? $qualifier['name'] : null),
+            'qualifiers' => array_values($terms),
         ];
     }
 
     /**
      * Materials as stored by 0.1 or 0.2 ({"part": "lining", "fibers": [{"fiber": "polyester",
-     * "percentage": 100, "recycled": true}]}) in the 0.3 shape, for the upgrade of a database
-     * (schema 5). Parts that are already 0.3 are left as they are; flags that are false are
-     * dropped, and of recycled and organic both true, recycled is kept.
+     * "percentage": 100, "recycled": true}]}) or by a 0.3 draft with one qualifier per fibre
+     * ({"qualifier": {"code": "recycled"}} or null) in the 0.3 shape with a list of qualifiers,
+     * for the upgrade of a database (schemas 5 and 6). Parts that are already 0.3 are left as
+     * they are; flags that are false are dropped (recycled before organic when both are true).
      *
-     * @return mixed the materials, converted where they were 0.1/0.2
+     * @return mixed the materials, converted where they were older
      */
     public static function materialsFromLegacy(mixed $materials): mixed
     {
@@ -209,9 +215,17 @@ final class ArticleData
                 $fibers = [];
                 foreach ($part['fibers'] as $f) {
                     if (is_array($f) && array_key_exists('fiber', $f) && !array_key_exists('material', $f)) {
-                        $q = ($f['recycled'] ?? false) === true ? 'recycled' : (($f['organic'] ?? false) === true ? 'organic' : null);
-                        $f = ['material' => ['code' => $f['fiber']], 'percentage' => $f['percentage'] ?? null,
-                            'qualifier' => $q === null ? null : ['code' => $q]];
+                        $qs = [];
+                        foreach (['recycled', 'organic'] as $flag) {
+                            if (($f[$flag] ?? false) === true) {
+                                $qs[] = ['code' => $flag];
+                            }
+                        }
+                        $f = ['material' => ['code' => $f['fiber']], 'percentage' => $f['percentage'] ?? null, 'qualifiers' => $qs];
+                    } elseif (is_array($f) && array_key_exists('qualifier', $f) && !array_key_exists('qualifiers', $f)) {
+                        $q = $f['qualifier'];
+                        unset($f['qualifier']);
+                        $f['qualifiers'] = is_array($q) ? [$q] : [];
                     }
                     $fibers[] = $f;
                 }
@@ -220,6 +234,37 @@ final class ArticleData
             $out[] = $part;
         }
         return $out;
+    }
+
+    /**
+     * The qualifier codes of stored materials, in order of first appearance (the portal filter
+     * and facet "qualifiers").
+     *
+     * @return list<string>
+     */
+    public static function qualifierCodes(mixed $materials): array
+    {
+        $codes = [];
+        foreach (is_array($materials) ? $materials : [] as $part) {
+            foreach ((array) ($part['fibers'] ?? []) as $f) {
+                foreach ((array) ($f['qualifiers'] ?? []) as $q) {
+                    if (is_array($q) && is_string($q['code'] ?? null)) {
+                        $codes[$q['code']] = true;
+                    }
+                }
+            }
+        }
+        return array_map('strval', array_keys($codes));
+    }
+
+    /**
+     * The obx_products.qualifiers column: the qualifier codes of the materials as
+     * "|organic|regenerative|" (null when none), which the portal filter matches with LIKE.
+     */
+    public static function qualifierColumn(mixed $materials): ?string
+    {
+        $codes = self::qualifierCodes($materials);
+        return $codes === [] ? null : '|' . implode('|', $codes) . '|';
     }
 
     public static function isAnimalFibre(string $key): bool
@@ -592,7 +637,8 @@ final class ArticleData
     }
 
     /**
-     * The materials grammar with the qualifier: "outer: 100% polyester (recycled)".
+     * The materials grammar with the qualifiers, one code per bracket:
+     * "outer: 100% polyester (recycled) (post_consumer)".
      *
      * @param list<array<string, mixed>>|null $materials
      */
@@ -606,8 +652,8 @@ final class ArticleData
             $fibers = [];
             foreach ((array) $m['fibers'] as $f) {
                 $s = self::formatNumber($f['percentage']) . '% ' . $f['material']['code'];
-                if (($f['qualifier'] ?? null) !== null) {
-                    $s .= ' (' . $f['qualifier']['code'] . ')';
+                foreach ((array) ($f['qualifiers'] ?? []) as $q) {
+                    $s .= ' (' . $q['code'] . ')';
                 }
                 $fibers[] = $s;
             }

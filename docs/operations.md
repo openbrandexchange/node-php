@@ -150,7 +150,7 @@ The Docker image turns `SIGTERM` (`docker stop`, a deploy) into a graceful Apach
 
 ## Releases
 
-Versions follow semantic versioning; the version is `Config::VERSION` in `src/Config.php`. A maintainer releases by updating CHANGELOG.md and the version, then pushing a tag `vX.Y.Z`. The release workflow (`.github/workflows/release.yml`) builds the release zip (with `vendor/` and the web interface), `SHA256SUMS`, SPDX and CycloneDX SBOMs and build provenance as a draft GitHub release, and pushes multi-architecture images (linux/amd64, linux/arm64) to `ghcr.io/openbrandexchange/node-php`. Nothing is published by pushing to `main`.
+Versions follow semantic versioning; the version is `Config::VERSION` in `src/Config.php`. A maintainer releases by updating CHANGELOG.md and the version, then pushing a tag `vX.Y.Z`. The release workflow (`.github/workflows/release.yml`) builds the release zip (with `vendor/` and the web interface), `SHA256SUMS`, SPDX and CycloneDX SBOMs and build provenance as a draft GitHub release, and pushes multi-architecture images (linux/amd64, linux/arm64) to `ghcr.io/openbrandexchange/node-php` with the tags `:X.Y.Z`, `:X.Y` (follows the newest patch release of that minor version, e.g. `:0.3`) and `:latest` (the newest release; not for pre-releases). Nothing is published by pushing to `main`. After the first push of a release, check that the package is still **public** (GitHub → the organisation's Packages → node-php → Package settings → Change visibility); otherwise anonymous `docker pull` answers 403.
 
 Check a download with `sha256sum -c SHA256SUMS` (on macOS `shasum -a 256 -c SHA256SUMS`) and, for provenance, `gh attestation verify obx-portal-php-vX.Y.Z.zip --repo openbrandexchange/node-php`.
 

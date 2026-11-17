@@ -14,7 +14,7 @@ mkdir -p "$stage"
 for item in public src bin resources config data docs .htaccess composer.json composer.lock LICENSE NOTICE README.md NOTES.md CHANGELOG.md SECURITY.md; do
   [ -e "$here/$item" ] && cp -R "$here/$item" "$stage/"
 done
-rm -f "$stage/config/config.php"
+rm -f "$stage/config/config.php" "$stage/bin/dev" # bin/dev needs the test fixtures (not in the zip)
 find "$stage/data" -mindepth 1 ! -name .htaccess ! -name .gitkeep -exec rm -rf {} + 2>/dev/null || true
 if [ ! -f "$stage/public/ui/index.html" ]; then
   echo "public/ui has no web interface build; run scripts/update-ui.sh first" >&2

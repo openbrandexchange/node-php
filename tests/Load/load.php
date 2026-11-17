@@ -18,6 +18,7 @@ use Obx\Node\Config;
 use Obx\Node\Http\Request;
 use Obx\Node\Support\Json;
 
+$argv = (array) ($_SERVER['argv'] ?? []);
 $cmd = $argv[1] ?? '';
 if ($cmd === 'seed') {
     seed((string) $argv[2], (string) $argv[3], (int) ($argv[4] ?? 10000));

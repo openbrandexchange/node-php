@@ -137,11 +137,14 @@ final class ArticleDataTest extends NodeTestCase
                     $this->assertSame(['code', 'name'], array_keys($part['part']));
                     $this->assertNameOf('parts', $part['part'], $d['external_id']);
                     foreach ($part['fibers'] as $f) {
-                        $this->assertSame(['material', 'percentage', 'qualifier'], array_keys($f));
+                        $this->assertSame(['material', 'percentage', 'qualifiers'], array_keys($f));
+                        $this->assertTrue(array_is_list($f['qualifiers']));
+                        $codes = array_column($f['qualifiers'], 'code');
+                        $this->assertSame(array_values(array_unique($codes)), $codes, 'a code appears once');
                         $this->assertDoesNotMatchRegularExpression('/^(recycled|organic)_/', $f['material']['code']);
                         $this->assertNameOf('materials', $f['material'], $d['external_id']);
-                        if ($f['qualifier'] !== null) {
-                            $this->assertNameOf('qualifiers', $f['qualifier'], $d['external_id']);
+                        foreach ($f['qualifiers'] as $q) {
+                            $this->assertNameOf('qualifiers', $q, $d['external_id']);
                         }
                     }
                 }
@@ -190,7 +193,7 @@ final class ArticleDataTest extends NodeTestCase
             'brand_external_id' => 'kestrel', 'style_number' => 'KX-1', 'name' => ['en' => 'Test scarf'], 'item_type' => 'scarf',
             'materials' => [['part' => ['code' => 'main'], 'fibers' => [
                 ['material' => ['code' => 'organic_cotton'], 'percentage' => 60],
-                ['material' => ['code' => 'wool', 'name' => ['en' => 'Sheep']], 'percentage' => 30, 'qualifier' => null],
+                ['material' => ['code' => 'wool', 'name' => ['en' => 'Sheep']], 'percentage' => 30, 'qualifiers' => []],
             ]]],
             'care' => [['code' => 'wash_30', 'text' => ['en' => 'Inside out']], ['code' => 'steam_only', 'category' => 'ironing', 'name' => ['en' => 'Steam only']]],
             'features' => ['fit' => 'regular', 'fringe_cm' => 5], 'certifications' => [],
@@ -207,8 +210,8 @@ final class ArticleDataTest extends NodeTestCase
         // its qualifier; an unknown care code keeps what was sent.
         $vocab = static fn (string $v, string $code) => ArticleData::vocabulary($v)[$code]['name'];
         $this->assertSame([['part' => ['code' => 'main', 'name' => null], 'fibers' => [
-            ['material' => ['code' => 'cotton', 'name' => $vocab('materials', 'cotton')], 'percentage' => 60, 'qualifier' => ['code' => 'organic', 'name' => $vocab('qualifiers', 'organic')]],
-            ['material' => ['code' => 'wool', 'name' => $vocab('materials', 'wool')], 'percentage' => 30, 'qualifier' => null],
+            ['material' => ['code' => 'cotton', 'name' => $vocab('materials', 'cotton')], 'percentage' => 60, 'qualifiers' => [['code' => 'organic', 'name' => $vocab('qualifiers', 'organic')]]],
+            ['material' => ['code' => 'wool', 'name' => $vocab('materials', 'wool')], 'percentage' => 30, 'qualifiers' => []],
         ]]], $rec['data']['materials']);
         $this->assertSame(['code' => 'wash_30', 'category' => 'washing', 'symbol' => '1_D_30'], array_slice($rec['data']['care'][0], 0, 3));
         $this->assertSame(['en' => 'Inside out'], $rec['data']['care'][0]['text']);
@@ -217,21 +220,31 @@ final class ArticleDataTest extends NodeTestCase
         $this->assertNull($rec['data']['certifications']);
         // The data of a GET written back is unchanged; so is the qualifier form of the 0.1 key.
         $this->assertSame('unchanged', $this->json($put('product', 'KX-1', $rec['data']))['result']);
-        $body['materials'][0]['fibers'][0] = ['material' => ['code' => 'cotton'], 'percentage' => 60, 'qualifier' => ['code' => 'organic', 'name' => ['en' => 'Bio']]];
+        $body['materials'][0]['fibers'][0] = ['material' => ['code' => 'cotton'], 'percentage' => 60, 'qualifiers' => [['code' => 'organic', 'name' => ['en' => 'Bio']], ['code' => 'organic']]];
         $this->assertSame('unchanged', $this->json($put('product', 'KX-1', $body))['result']);
+        // Several qualifiers keep their order; the 0.1 key's comes first and counts once.
+        $several = $body;
+        $several['materials'][0]['fibers'][0] = ['material' => ['code' => 'recycled_polyester'], 'percentage' => 60, 'qualifiers' => [['code' => 'post_consumer'], ['code' => 'recycled']]];
+        $this->json($put('product', 'KX-1', $several));
+        $f = $this->json($this->http('GET', '/obx/v1/ingest/products/KX-1', ['bearer' => $token]))['data']['materials'][0]['fibers'][0];
+        $this->assertSame(['material' => ['code' => 'polyester', 'name' => $vocab('materials', 'polyester')], 'percentage' => 60, 'qualifiers' => [
+            ['code' => 'recycled', 'name' => $vocab('qualifiers', 'recycled')], ['code' => 'post_consumer', 'name' => $vocab('qualifiers', 'post_consumer')]]], $f);
         // An unknown material and qualifier keep the name they were given.
         $odd = $body;
-        $odd['materials'][0]['fibers'][1] = ['material' => ['code' => 'yak_wool', 'name' => ['en' => 'Yak wool']], 'percentage' => 30, 'qualifier' => ['code' => 'in_conversion']];
+        $odd['materials'][0]['fibers'][1] = ['material' => ['code' => 'yak_wool', 'name' => ['en' => 'Yak wool']], 'percentage' => 30, 'qualifiers' => [['code' => 'wild_harvested', 'name' => ['en' => 'Wild harvested']], ['code' => 'in_conversion', 'name' => ['en' => 'Not kept']]]];
         $this->json($put('product', 'KX-1', $odd));
         $f = $this->json($this->http('GET', '/obx/v1/ingest/products/KX-1', ['bearer' => $token]))['data']['materials'][0]['fibers'][1];
-        $this->assertSame(['material' => ['code' => 'yak_wool', 'name' => ['en' => 'Yak wool']], 'percentage' => 30, 'qualifier' => ['code' => 'in_conversion', 'name' => null]], $f);
+        $this->assertSame(['material' => ['code' => 'yak_wool', 'name' => ['en' => 'Yak wool']], 'percentage' => 30, 'qualifiers' => [
+            ['code' => 'wild_harvested', 'name' => ['en' => 'Wild harvested']], ['code' => 'in_conversion', 'name' => $vocab('qualifiers', 'in_conversion')]]], $f);
         $this->json($put('product', 'KX-1', $body));
 
         // 0.2 shapes and invalid terms are refused.
         foreach ([
             '/materials/0/part' => [['part' => 'main', 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100]]]],
             '/materials/0/fibers/0/material' => [['part' => ['code' => 'main'], 'fibers' => [['fiber' => 'cotton', 'percentage' => 100]]]],
-            '/materials/0/fibers/0/qualifier/code' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100, 'qualifier' => ['code' => 'Organic']]]]],
+            '/materials/0/fibers/0/qualifiers/1/code' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100, 'qualifiers' => [['code' => 'organic'], ['code' => 'Regenerative']]]]]],
+            '/materials/0/fibers/0/qualifiers' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100, 'qualifiers' => ['code' => 'organic']]]]],
+            '/materials/0/fibers/0/qualifier' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100, 'qualifier' => ['code' => 'organic']]]]],
             '/materials/0/fibers/0/material/name/en' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton', 'name' => ['en' => '']], 'percentage' => 100]]]],
         ] as $pointer => $bad) {
             $p = $this->assertProblem($put('product', 'KX-1', ['materials' => $bad] + $body), 422, 'validation_failed');
@@ -263,11 +276,15 @@ final class ArticleDataTest extends NodeTestCase
         $this->assertSame(1, $job['import_run']['counts']['errors']);
         $err = array_values(array_filter($this->rowErrors($job), static fn ($e) => $e['severity'] === 'error'))[0];
         $this->assertSame(['strap_length_cm', 'validation_failed'], [$err['column'], $err['obx_error']]);
-        // One qualifier per fibre (import-format.md §1.4).
-        $job = $this->importCsv($token, "brand,style_number,name:en,materials\nKestrel,KX-1,Test scarf,100% cotton (organic) (recycled)\n");
+        // One code per bracket (import-format.md §1.4): "(a, b)" skips the row; "(a) (b)" is two.
+        $job = $this->importCsv($token, "brand,style_number,name:en,materials\nKestrel,KX-1,Test scarf,\"100% cotton (organic, recycled)\"\n");
         $this->assertSame(1, $job['import_run']['counts']['errors']);
         $err = array_values(array_filter($this->rowErrors($job), static fn ($e) => $e['severity'] === 'error'))[0];
         $this->assertSame(['materials', 'validation_failed'], [$err['column'], $err['obx_error']]);
+        $job = $this->importCsv($token, "brand,style_number,name:en,materials\nKestrel,KX-1,Test scarf,100% cotton (organic) (in conversion) (organic)\n");
+        $this->assertSame([0, 1], [$job['import_run']['counts']['errors'], $job['import_run']['counts']['updated']], Json::encode($job['import_run']));
+        $this->assertSame(['organic', 'in_conversion'], array_column(Json::decode((string) $this->app->db->value("SELECT input FROM obx_products WHERE external_id = 'KX-1'"))['materials'][0]['fibers'][0]['qualifiers'], 'code'));
+        $this->json($put('product', 'KX-1', ['features' => [], 'contains_animal_origin' => false, 'materials' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100]]]]] + $body));
         $this->assertProblem($put('variant', '2000199901018', ['color' => ['code' => 'RED', 'family' => 'navy']] + $v), 422, 'validation_failed');
         $this->json($put('variant', '2000199901018', ['size_length' => '34', 'measurements' => ['strap_length_cm' => ['min' => 120, 'max' => 120], 'weight_kg' => 0.9]] + $v));
 
@@ -279,7 +296,7 @@ final class ArticleDataTest extends NodeTestCase
             $this->assertNull($p[$k], $k);
         }
         $this->assertFalse($p['contains_animal_origin']);
-        $this->assertSame([['part' => ['code' => 'main', 'name' => null], 'fibers' => [['material' => ['code' => 'cotton', 'name' => $vocab('materials', 'cotton')], 'percentage' => 100, 'qualifier' => null]]]], $p['materials']);
+        $this->assertSame([['part' => ['code' => 'main', 'name' => null], 'fibers' => [['material' => ['code' => 'cotton', 'name' => $vocab('materials', 'cotton')], 'percentage' => 100, 'qualifiers' => []]]]], $p['materials']);
         $this->assertSame('steam_only', $p['care'][1]['code']);
         $this->assertSame('red', $p['variants'][0]['color']['family']);
         $this->assertSame('34', $p['variants'][0]['size_length']);
@@ -317,7 +334,9 @@ final class ArticleDataTest extends NodeTestCase
         $bag = array_values(array_filter($rows, static fn ($r) => $r['style_number'] === 'KO-1009'))[0];
         $this->assertSame('85-140', $bag['strap_length_cm']);
         $this->assertSame('yes', $bag['feature:laptop_compartment']);
-        $this->assertSame('outer: 100% polyester (recycled); lining: 100% polyamide', $bag['materials']);
+        $this->assertSame('outer: 100% polyester (recycled) (post_consumer); lining: 100% polyamide', $bag['materials']);
+        $tee = array_values(array_filter($rows, static fn ($r) => $r['style_number'] === 'KO-1003'))[0];
+        $this->assertSame('main: 100% cotton (organic) (regenerative)', $tee['materials']);
 
         // The export is an import file: importing it changes nothing.
         $job = $this->importCsv($token, $csv);
@@ -349,7 +368,7 @@ final class ArticleDataTest extends NodeTestCase
             foreach ($materials as $part) {
                 $fibers = [];
                 foreach ($part['fibers'] as $f) {
-                    $q = $f['qualifier']['code'] ?? null;
+                    $q = $f['qualifiers'][0]['code'] ?? null;
                     $fibers[] = $v01 && $q !== null
                         ? ['fiber' => $q . '_' . $f['material']['code'], 'percentage' => $f['percentage']]
                         : ['fiber' => $f['material']['code'], 'percentage' => $f['percentage']] + ($q !== null ? [$q => true] : []);
@@ -400,10 +419,47 @@ final class ArticleDataTest extends NodeTestCase
             $this->assertEquals($want['materials'], $after['materials'], $after['external_id']);
             $this->assertEquals($want['care'], $after['care'], $after['external_id']);
         }
-        $this->assertSame(['code' => 'recycled', 'name' => ArticleData::vocabulary('qualifiers')['recycled']['name']], $before['KT-2001']['materials'][0]['fibers'][0]['qualifier']);
+        $this->assertSame([['code' => 'recycled', 'name' => ArticleData::vocabulary('qualifiers')['recycled']['name']]], $before['KT-2001']['materials'][0]['fibers'][0]['qualifiers']);
         // The same file again is all unchanged: the stored model is the 0.3 one.
         $token = $this->ingestToken();
         $job = $this->importCsv($token, (string) file_get_contents(self::fixtures('kestrel/products.csv')));
         $this->assertSame(0, $job['import_run']['counts']['updated'], Json::encode($job['import_run']['counts']));
+    }
+
+    public function testUpgradeOfADraft03DatabaseWithOneQualifierPerFibre(): void
+    {
+        $this->kestrelNode();
+        [, $id, $secret] = $this->retailerClient();
+        $client = $this->accessToken($id, $secret);
+        [, $cursor] = $this->drainSnapshot($client);
+        $db = $this->app->db;
+        $row = $db->one("SELECT * FROM obx_products WHERE external_id = 'KO-1008'");
+        $this->assertSame('|recycled|', $row['qualifiers']);
+        $before = $this->json($this->http('GET', '/obx/v1/products/' . $row['id'], ['bearer' => $client]));
+        // As the 0.3 draft stored it: "qualifier" (a term or null) instead of "qualifiers", and
+        // a database from before schema 6 has no qualifiers column yet (here: emptied).
+        $draft = static function (array $materials): array {
+            foreach ($materials as &$part) {
+                foreach ($part['fibers'] as &$f) {
+                    $f = ['material' => $f['material'], 'percentage' => $f['percentage'], 'qualifier' => $f['qualifiers'][0] ?? null];
+                }
+            }
+            return $materials;
+        };
+        $in = Json::decode((string) $row['input']);
+        $in['materials'] = $draft($in['materials']);
+        $rep = Json::decode((string) $row['rep']);
+        $rep['materials'] = $draft($rep['materials']);
+        $db->update('obx_products', ['input' => Json::encode($in), 'rep' => Json::encode($rep), 'rep_hash' => hash('sha256', Json::canonical($rep)), 'etag' => '"old"', 'qualifiers' => null], ['id' => $row['id']]);
+        $db->run("UPDATE obx_settings SET v = '5' WHERE k = 'schema_version'");
+        Schema::migrate($db);
+        $this->assertSame(Schema::latestVersion(), Schema::currentVersionOf($db));
+        Schema::migrate($db);
+
+        $this->assertSame('|recycled|', $db->value("SELECT qualifiers FROM obx_products WHERE external_id = 'KO-1008'"));
+        $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $client, 'query' => ['cursor' => $cursor]]));
+        $this->assertSame(['product upsert KO-1008'], array_map(static fn ($e) => $e['type'] . ' ' . $e['op'] . ' ' . $e['external_id'], $page['changes']));
+        $this->assertEquals($before['materials'], $page['changes'][0]['data']['materials']);
+        $this->assertSame('unchanged', $this->json($this->http('PUT', '/obx/v1/ingest/products/KO-1008', ['bearer' => $this->ingestToken(), 'json' => Json::decode((string) $db->value("SELECT input FROM obx_products WHERE external_id = 'KO-1008'"))]))['result']);
     }
 }

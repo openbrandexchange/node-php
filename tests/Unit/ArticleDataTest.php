@@ -25,32 +25,48 @@ final class ArticleDataTest extends TestCase
 
     public function testMaterialKeysOf01BecomeTheQualifier(): void
     {
-        $this->assertSame(['polyester', 'recycled'], ArticleData::splitMaterialKey('recycled_polyester'));
-        $this->assertSame(['cotton', 'organic'], ArticleData::splitMaterialKey('organic_recycled_cotton'));
-        $this->assertSame(['wool', null], ArticleData::splitMaterialKey('wool'));
-        $this->assertSame(['recycled_', null], ArticleData::splitMaterialKey('recycled_'));
-        // The key wins over a qualifier that was also given.
-        $f = ArticleData::fibre(['code' => 'organic_cotton'], 60.0, ['code' => 'regenerative']);
-        $this->assertSame(['cotton', 60, 'organic', 'Biologisch'], [$f['material']['code'], $f['percentage'], $f['qualifier']['code'], $f['qualifier']['name']['nl']]);
-        $this->assertNull(ArticleData::fibre(['code' => 'wool'], 30, null)['qualifier']);
+        $this->assertSame(['polyester', ['recycled']], ArticleData::splitMaterialKey('recycled_polyester'));
+        $this->assertSame(['cotton', ['organic', 'recycled']], ArticleData::splitMaterialKey('organic_recycled_cotton'));
+        $this->assertSame(['wool', []], ArticleData::splitMaterialKey('wool'));
+        $this->assertSame(['recycled_', []], ArticleData::splitMaterialKey('recycled_'));
+        // The key's qualifier comes first, the others keep their order, a repeat counts once.
+        $f = ArticleData::fibre(['code' => 'organic_cotton'], 60.0, [['code' => 'regenerative'], ['code' => 'organic', 'name' => ['en' => 'Bio']], ['code' => 'regenerative']]);
+        $this->assertSame(['cotton', 60, ['organic', 'regenerative'], 'Biologisch'], [$f['material']['code'], $f['percentage'], array_column($f['qualifiers'], 'code'), $f['qualifiers'][0]['name']['nl']]);
+        $this->assertSame([], ArticleData::fibre(['code' => 'wool'], 30)['qualifiers']);
+        $this->assertSame([['code' => 'in_conversion', 'name' => ArticleData::vocabulary('qualifiers')['in_conversion']['name']]], ArticleData::fibre(['code' => 'cotton'], 100, [['code' => 'in_conversion']])['qualifiers']);
     }
 
     public function testMaterialsOf02AreConverted(): void
     {
         $this->assertSame(
             [['part' => ['code' => 'lining'], 'fibers' => [
-                ['material' => ['code' => 'polyester'], 'percentage' => 100, 'qualifier' => ['code' => 'recycled']],
-                ['material' => ['code' => 'recycled_polyamide'], 'percentage' => 5, 'qualifier' => null],
-                ['material' => ['code' => 'cotton'], 'percentage' => 1, 'qualifier' => null],
+                ['material' => ['code' => 'polyester'], 'percentage' => 100, 'qualifiers' => [['code' => 'recycled']]],
+                ['material' => ['code' => 'recycled_polyamide'], 'percentage' => 5, 'qualifiers' => []],
+                ['material' => ['code' => 'cotton'], 'percentage' => 1, 'qualifiers' => []],
+                ['material' => ['code' => 'cotton'], 'percentage' => 1, 'qualifiers' => [['code' => 'recycled'], ['code' => 'organic']]],
             ]]],
             ArticleData::materialsFromLegacy([['part' => 'lining', 'fibers' => [
                 ['fiber' => 'polyester', 'percentage' => 100, 'recycled' => true],
                 ['fiber' => 'recycled_polyamide', 'percentage' => 5],
                 ['fiber' => 'cotton', 'percentage' => 1, 'organic' => false],
+                ['fiber' => 'cotton', 'percentage' => 1, 'organic' => true, 'recycled' => true],
             ]]]),
         );
-        $now = [['part' => ['code' => 'main', 'name' => null], 'fibers' => [['material' => ['code' => 'cotton', 'name' => null], 'percentage' => 100, 'qualifier' => null]]]];
+        // A fibre stored by the 0.3 draft with one qualifier gets the list.
+        $this->assertSame(
+            [['part' => ['code' => 'main', 'name' => null], 'fibers' => [
+                ['material' => ['code' => 'cotton', 'name' => null], 'percentage' => 60, 'qualifiers' => [['code' => 'organic', 'name' => null]]],
+                ['material' => ['code' => 'wool', 'name' => null], 'percentage' => 40, 'qualifiers' => []],
+            ]]],
+            ArticleData::materialsFromLegacy([['part' => ['code' => 'main', 'name' => null], 'fibers' => [
+                ['material' => ['code' => 'cotton', 'name' => null], 'percentage' => 60, 'qualifier' => ['code' => 'organic', 'name' => null]],
+                ['material' => ['code' => 'wool', 'name' => null], 'percentage' => 40, 'qualifier' => null],
+            ]]]),
+        );
+        $now = [['part' => ['code' => 'main', 'name' => null], 'fibers' => [['material' => ['code' => 'cotton', 'name' => null], 'percentage' => 100, 'qualifiers' => []]]]];
         $this->assertSame($now, ArticleData::materialsFromLegacy($now));
+        $this->assertSame('|organic|recycled|', ArticleData::qualifierColumn([['fibers' => [['qualifiers' => [['code' => 'organic']]], ['qualifiers' => [['code' => 'recycled'], ['code' => 'organic']]]]]]));
+        $this->assertNull(ArticleData::qualifierColumn($now));
         $this->assertNull(ArticleData::materialsFromLegacy(null));
     }
 

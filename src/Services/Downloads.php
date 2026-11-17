@@ -333,8 +333,8 @@ final class Downloads
     }
 
     /**
-     * The materials grammar of import-format.md §1.4, with the qualifier of a fibre in
-     * brackets ("100% polyester (recycled)").
+     * The materials grammar of import-format.md §1.4, with each qualifier of a fibre in its own
+     * brackets ("100% polyester (recycled) (post_consumer)").
      *
      * @param list<array<string, mixed>>|null $materials
      */

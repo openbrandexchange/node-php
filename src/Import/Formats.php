@@ -108,19 +108,25 @@ final class Formats
 
     /**
      * materials := part (";" part)*, part := [name ":"] fiber ("," fiber)*,
-     * fiber := number "%" material_code [qualifier], qualifier := "(" qualifier_code ")"
-     * (import-format.md §1.4). A qualifier sets that fibre's qualifier, and the 0.1 keys
-     * recycled_<material> and organic_<material> are normalised to the material with that
-     * qualifier, so both spellings give the same materials. The result is the write shape
+     * fiber := number "%" material_code qualifier*, qualifier := "(" qualifier_code ")"
+     * (import-format.md §1.4). Each qualifier in brackets adds a code to the fibre's qualifiers,
+     * in order, a repeated code once; the 0.1 keys recycled_<material> and organic_<material>
+     * are normalised to the material with that qualifier first, so both spellings give the same
+     * materials. The result is the write shape
      * (terms without names; the Validator adds them). Percentages that do not add up to 100 are
      * reported as the label warning fibre_percentages_not_100 (rule 10), not here.
      *
      * @param list<string> $warnings
      * @return list<array<string, mixed>>|null null when the text cannot be parsed
-     * @throws \InvalidArgumentException a fibre with more than one qualifier (validation_failed)
+     * @throws \InvalidArgumentException brackets with more than one code, "(organic, recycled)"
+     *         (validation_failed)
      */
     public static function parseMaterials(string $text, array &$warnings): ?array
     {
+        // One code per bracket: the comma separates fibres, so "(a, b)" is an error, not two fibres.
+        if (preg_match('/\(([^()]*,[^()]*)\)/', $text, $bad)) {
+            throw new \InvalidArgumentException('"(' . trim($bad[1]) . ')" has more than one qualifier in one pair of brackets; write one code per bracket, e.g. "100% polyester (recycled) (post_consumer)".');
+        }
         $out = [];
         foreach (explode(';', $text) as $partText) {
             $partText = trim($partText);
@@ -152,17 +158,14 @@ final class Formats
                     array_unshift($qualifiers, self::key($q[1]));
                     $text = substr($text, 0, -strlen($q[0]));
                 }
-                if (count($qualifiers) > 1) {
-                    throw new \InvalidArgumentException('"' . trim($f) . '" has more than one qualifier; a fibre has one, e.g. "100% cotton (organic)".');
-                }
                 $key = self::key($text);
                 if ($key === '' || $pct <= 0 || $pct > 100 || in_array('', $qualifiers, true)) {
                     return null;
                 }
                 [$key, $fromKey] = ArticleData::splitMaterialKey($key);
-                $qualifier = $fromKey ?? $qualifiers[0] ?? null;
+                $codes = array_values(array_unique(array_merge($fromKey, $qualifiers)));
                 $fibers[] = ['material' => ['code' => $key], 'percentage' => Validator::number($pct),
-                    'qualifier' => $qualifier === null ? null : ['code' => $qualifier]];
+                    'qualifiers' => array_map(static fn (string $q) => ['code' => $q], $codes)];
             }
             if ($fibers === []) {
                 return null;

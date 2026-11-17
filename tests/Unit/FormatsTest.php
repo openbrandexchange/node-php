@@ -68,7 +68,7 @@ final class FormatsTest extends TestCase
     public function testMaterialsGrammar(): void
     {
         $w = [];
-        $fibre = static fn (string $code, int|float $pct, ?string $q = null) => ['material' => ['code' => $code], 'percentage' => $pct, 'qualifier' => $q === null ? null : ['code' => $q]];
+        $fibre = static fn (string $code, int|float $pct, string ...$qs) => ['material' => ['code' => $code], 'percentage' => $pct, 'qualifiers' => array_map(static fn ($q) => ['code' => $q], $qs)];
         $this->assertSame(
             [['part' => ['code' => 'outer'], 'fibers' => [$fibre('cotton', 65), $fibre('polyamide', 35)]], ['part' => ['code' => 'lining'], 'fibers' => [$fibre('polyester', 100)]]],
             Formats::parseMaterials('outer: 65% cotton, 35% polyamide; lining: 100% polyester', $w)
@@ -79,11 +79,17 @@ final class FormatsTest extends TestCase
         $this->assertSame(Formats::parseMaterials('100% recycled_polyester', $w), Formats::parseMaterials('100% polyester (Recycled)', $w));
         $this->assertSame([['part' => ['code' => 'main'], 'fibers' => [$fibre('merino_wool', 100, 'regenerative')]]], Formats::parseMaterials('100% Merino Wool (regenerative)', $w));
         $this->assertSame([['part' => ['code' => 'main'], 'fibers' => [$fibre('cotton', 100, 'in_conversion')]]], Formats::parseMaterials('100% cotton (in conversion)', $w));
-        try {
-            Formats::parseMaterials('100% cotton (organic) (recycled)', $w);
-            $this->fail('two qualifiers on one fibre');
-        } catch (\InvalidArgumentException) {
-            $this->addToAssertionCount(1);
+        // Several qualifiers, one code per bracket, in order; a repeat counts once; the 0.1 key first.
+        $this->assertSame([['part' => ['code' => 'main'], 'fibers' => [$fibre('polyester', 100, 'recycled', 'post_consumer')]]], Formats::parseMaterials('100% polyester (recycled) (post_consumer)', $w));
+        $this->assertSame([['part' => ['code' => 'main'], 'fibers' => [$fibre('cotton', 95, 'organic', 'regenerative'), $fibre('elastane', 5)]]], Formats::parseMaterials('95% cotton (organic)(regenerative) (organic), 5% elastane', $w));
+        $this->assertSame([['part' => ['code' => 'main'], 'fibers' => [$fibre('polyester', 100, 'recycled', 'post_consumer')]]], Formats::parseMaterials('100% recycled_polyester (post consumer) (recycled)', $w));
+        foreach (['100% cotton (organic, recycled)', 'outer: 100% polyester (recycled,post_consumer); lining: 100% cotton'] as $bad) {
+            try {
+                Formats::parseMaterials($bad, $w);
+                $this->fail('two codes in one pair of brackets: ' . $bad);
+            } catch (\InvalidArgumentException $e) {
+                $this->assertStringContainsString('one code per bracket', $e->getMessage());
+            }
         }
         $this->assertSame(12.5, Formats::parseMaterials('87,5% wool, 12.5% cashmere', $w)[0]['fibers'][1]['percentage']);
         $this->assertNull(Formats::parseMaterials('cotton', $w));

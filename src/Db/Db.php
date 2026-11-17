@@ -34,7 +34,8 @@ final class Db
             PDO::ATTR_STRINGIFY_FETCHES => false,
         ];
         if (str_starts_with($dsn, 'mysql:')) {
-            $options[PDO::MYSQL_ATTR_USE_BUFFERED_QUERY] = true;
+            // Pdo\Mysql (PHP 8.4+) replaces the PDO::MYSQL_* constants (deprecated in 8.5).
+            $options[(int) constant(class_exists('Pdo\\Mysql') ? 'Pdo\\Mysql::ATTR_USE_BUFFERED_QUERY' : 'PDO::MYSQL_ATTR_USE_BUFFERED_QUERY')] = true;
         }
         $this->pdo = new PDO($dsn, $user, $password, $options);
         $this->driver = (string) $this->pdo->getAttribute(PDO::ATTR_DRIVER_NAME);

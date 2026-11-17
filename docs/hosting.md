@@ -11,6 +11,8 @@ The PHP edition runs wherever PHP 8.2 or newer runs. Pick the option that matche
 
 Whatever you choose, the portal is the same: the same screens, the same API, and backups move between the options ([operations.md](operations.md#backups)).
 
+**How long it takes.** Trying it out on your own computer takes a few minutes (`composer dev`, see the README, or `docker compose up -d`). Putting a real portal online takes longer the first time: count on **half a day to a day** for a domain or subdomain, HTTPS, the database choice, the e-mail sender, a cron job, your branding and a first import of your own spreadsheet and images, and more when your hosting company has to switch something on (PHP version, an extension, the document root). Later upgrades take minutes plus a backup.
+
 ## Requirements
 
 - PHP 8.2, 8.3 or 8.4 with PDO (SQLite or MySQL), OpenSSL and mbstring. These are on by default on almost every host.
@@ -47,7 +49,7 @@ Whatever you choose, the portal is the same: the same screens, the same API, and
 
 ## Docker and Docker Compose
 
-In a copy of this repository (or with the published image `ghcr.io/openbrandexchange/node-php`):
+In a copy of this repository (or with the published image `ghcr.io/openbrandexchange/node-php`; tags: `:0.3` follows the newest 0.3.x release, `:0.3.0` is exactly that release, `:latest` the newest release; pin `:0.3` or an exact version in production, since a new minor version before 1.0 may change behaviour):
 
 ```sh
 docker compose up -d
@@ -66,7 +68,7 @@ Open <http://localhost:8080> and enter the setup code. Data lives in the `portal
   ```
 
   and set `OBX_PUBLIC_URL=https://brands.yourbrand.com` and `OBX_TRUSTED_PROXIES=private` (so rate limits see the visitor's address, not the proxy's).
-- **Without Compose:** `docker run -d --name obx-portal -p 8080:8080 -v obx-data:/var/www/html/data -e OBX_PUBLIC_URL=https://brands.yourbrand.com ghcr.io/openbrandexchange/node-php:0.1`.
+- **Without Compose:** `docker run -d --name obx-portal -p 8080:8080 -v obx-data:/var/www/html/data -e OBX_PUBLIC_URL=https://brands.yourbrand.com ghcr.io/openbrandexchange/node-php:0.3`. If the pull is refused (`denied` / 403), the package is not public at the moment: build the image from this repository instead (`docker build -t obx-portal .`) and run `obx-portal`.
 - **Sizing:** the Compose file limits the container to 2 CPUs and 2 GB and runs at most 16 Apache processes (`OBX_APACHE_WORKERS`). See [operations.md](operations.md#limits-and-sizing).
 - **Monitoring:** `/readyz` for uptime checks, `OBX_METRICS_TOKEN` for Prometheus ([operations.md](operations.md#metrics)).
 

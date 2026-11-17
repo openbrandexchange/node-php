@@ -254,7 +254,6 @@ final class SafeHttp
         $ok = curl_exec($ch);
         $status = (int) curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
         $err = curl_error($ch);
-        curl_close($ch);
         if ($fh !== null) {
             fclose($fh);
         }

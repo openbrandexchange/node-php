@@ -288,16 +288,17 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     fr); names that were sent are sorted like every LocalizedText.
 61. **Write paths are strict about 0.3.** `"part": "main"`, `"fiber"` and the flags are refused
     with `validation_failed` (the 0.2 shapes are not maintained); the 0.1 material keys
-    `recycled_<material>` / `organic_<material>` are accepted everywhere and the key wins over a
-    qualifier sent with it (ingest.md §3.4); with two prefixes (`organic_recycled_cotton`) the
-    first is the qualifier. An empty string as a name is `validation_failed` like in every
-    LocalizedText; a `null` language is left out. In an import, two qualifiers on one fibre are an
-    error that skips the row (import-format.md §1.4); any other code in brackets is the
-    qualifier, lowercased with `_`. The label warning `animal_origin_unknown` names the material
+    `recycled_<material>` / `organic_<material>` are accepted everywhere and the key's qualifier
+    comes first in `qualifiers`, before those sent with it (ingest.md §3.4); with two prefixes
+    (`organic_recycled_cotton`) both are qualifiers, in the order written. The draft's single
+    `"qualifier"` is refused with `validation_failed` (pointer `/materials/i/fibers/j/qualifier`)
+    rather than ignored, so a client written against the draft loses no data silently. An empty
+    string as a name is `validation_failed` like in every LocalizedText; a `null` language is
+    left out. In an import every code in brackets is a qualifier, lowercased with `_`. The label warning `animal_origin_unknown` names the material
     code, `fibre_percentages_not_100` the part code.
 62. **Upgrade of a 0.1 or 0.2 database (schema 5)** runs the upgrade of note 48 again, which now
     first turns 0.1/0.2 materials into 0.3 (`recycled: true` → qualifier `recycled`; with both
-    flags true, `recycled` wins: 0.3 has one qualifier per fibre). Every visible article whose
+    flags true, both, `recycled` first). Every visible article whose
     materials or care changed shape gets one upsert entry and a new `updated_at`, since its
     representation changed for consumers; variants and assets get none.
 63. **Cursors from before 0.3 expire (protocol.md §6.4) through a cursor epoch.** Every
@@ -309,6 +310,38 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     rather than a key in `state`, so the long-running worker never writes an old copy over it.
     The change entries of note 62 stay: they cost little and keep a consumer correct that kept
     its data and restarted from a snapshot.
+
+64. **Several qualifiers per fibre (spec 5737aa2).** `qualifiers` is always a list (`[]` when
+    none) in the stored model, so every path (Ingest API, admin, protocol, `/changes`, exports)
+    returns it. Repeats are dropped keeping the first (with its name); a fibre whose `qualifiers`
+    is `null` or left out has none. In an import, a bracket with a comma (`(organic, recycled)`) is
+    `validation_failed` and skips the row, checked on the whole cell before fibres are split on
+    commas (otherwise it would read as two broken fibres and only give the "unparsable" warning).
+    The CSV export writes one bracket per code, in order, so it imports back unchanged.
+65. **Upgrade of a draft-0.3 database (schema 6).** 0.3 was developed with one `qualifier` per
+    fibre; a database that ran schema 5 of that draft stores it. Schema 6 adds the column
+    `obx_products.qualifiers` and runs the upgrade of note 48 once more, which turns
+    `"qualifier": {...}` into `"qualifiers": [{...}]` (`null` into `[]`) and fills the column. A
+    visible article whose representation changed gets one upsert entry; the cursor epoch is not
+    raised again (0.3 was never released with the draft shape, and the entries bring every
+    consumer up to date). On a 0.1/0.2 database schemas 5 and 6 run in one go and the second
+    pass changes nothing but the column.
+66. **Portal filter and facet on qualifiers.** `obx_products.qualifiers` holds the product's
+    qualifier codes as `|code|code|` (null when none), written with the product. The filter
+    `qualifier` (repeated or comma-separated, in the query and in a download job's `filter`) is
+    `(qualifiers LIKE '%|a|%' ESCAPE '!' OR …)`, with `_` escaped, the same SQL on SQLite, MySQL and
+    MariaDB; a value that is not a code (`[a-z0-9_]`) matches nothing. A column rather than a
+    join table keeps the write path, deletes and backups unchanged. The facet `qualifiers` is
+    disjunctive like the others (note 21), in the vocabulary's order and then by code; `label` is
+    the vocabulary's LocalizedText, for another code the name one of the viewer's products gave
+    it, and absent when there is none.
+67. **Running without Docker.** `composer dev` (`bin/dev`) runs the portal with PHP's built-in
+    web server in `data/dev/` and sets it up in-process through the portal's own API (setup,
+    upload key, Kestrel import from `tests/fixtures/spec/kestrel`, a retailer with a portal
+    account), so the demo exercises the same code as a real first run. It never reads
+    `config/config.php`, so it cannot touch a real install in the same folder; it is not in the
+    release zip. `LOCAL=1 scripts/conformance.sh` runs the suite the same way, with
+    `PHP_CLI_SERVER_WORKERS=4` (the built-in server otherwise answers one request at a time) and `bin/obx worker`.
 
 ## Known limitations (tracked)
 

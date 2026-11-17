@@ -2,28 +2,41 @@
 
 All notable changes to the PHP edition of the Open Brand Exchange portal ("Portal for web hosting"). The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [semantic versioning](https://semver.org/): while it is 0.x, a minor version may change behaviour, and the upgrade notes say what to do.
 
-## [0.3.0] - 2026-11-12
+## [0.3.0] - 2026-11-17
 
 Materials and care as terms with names: this release implements Open Brand Exchange specification 0.3.0 (OBX Protocol 0.3, [proposal 0004](https://github.com/openbrandexchange/spec/blob/main/docs/proposals/0004-terms-with-names.md)). **Breaking for retailers' software** that reads `materials` or `care` (allowed before 1.0); everything else is unchanged.
 
+It follows the final 0.3.0 of the specification (spec commit 5737aa2: several qualifiers per fibre, the portal filter on qualifiers) and passes the conformance suite of obx-go 90b91df on SQLite and MySQL 8.4.
+
 ### For brands
 
-- Materials take any qualifier in brackets, one per fibre: `100% cotton (organic)`, `outer: 100% polyester (recycled)`, and new `100% merino_wool (regenerative)`. Two qualifiers on one fibre skip the row with an error in the column `materials`. The 0.1 spelling `recycled_polyester` / `organic_cotton` still works and means the same.
+- Materials take qualifiers in brackets, one code per bracket and as many as a fibre needs: `100% cotton (organic)`, `outer: 100% polyester (recycled) (post_consumer)`, `100% cotton (organic) (regenerative)`. New codes with names: `in_conversion`, `pre_consumer`, `post_consumer` (next to `organic`, `recycled`, `regenerative`); any other code is kept too. Two codes in one bracket (`(organic, recycled)`) skip the row with an error in the column `materials`; a repeated code counts once. The 0.1 spelling `recycled_polyester` / `organic_cotton` still works and means the same. The article data CSV writes the qualifiers the same way, so it imports back unchanged.
 - You keep sending codes only (`cotton`, `lining`, `wash_30`); the portal adds the names in English, Dutch, German and French, and for care the symbol group and the GINETEX symbol code, from the specification's vocabularies. For a code outside the vocabularies the Ingest API and the admin keep the name (and for care the category and symbol) you send.
 - Care codes outside the vocabulary are still kept, with a warning in imports.
 
 ### For retailers' software
 
-- `materials`: `part`, the fibre's `material` and its `qualifier` are terms `{"code", "name"}`, with `name` per language (`null` for the part `main` and for codes without a name). A fibre is `{"material": {...}, "percentage": 95, "qualifier": {...} | null}`; `fiber` and the flags `recycled` / `organic` are gone.
+- `materials`: `part`, the fibre's `material` and each of its `qualifiers` are terms `{"code", "name"}`, with `name` per language (`null` for the part `main` and for codes without a name). A fibre is `{"material": {...}, "percentage": 95, "qualifiers": [{...}, ...]}`, `[]` when it has none, in the brand's order without repeats; `fiber` and the flags `recycled` / `organic` are gone.
 - `care`: every entry has `code`, `category` (`washing`, `bleaching`, `drying`, `ironing`, `professional_care` or `null`), `symbol` (for example `1_D_30`, or `null`), `name` and `text` (only the brand's own extra text).
 - `OBX-Version: 0.3`; the discovery document says `obx_version` `0.3`.
 - Every `/changes` cursor issued before the upgrade is answered with `410 cursor_expired` (protocol.md §6.4): restart without a cursor and take the snapshot in the 0.3 shapes.
-- The Ingest API and the admin API take and return the same shapes; `name`, `category` and `symbol` may be left out on writes. The 0.2 shapes (`"part": "main"`, `"fiber": "cotton"`, the flags) are refused with `validation_failed`.
+- The Ingest API and the admin API take and return the same shapes; `name`, `category` and `symbol` may be left out on writes, and so may `qualifiers` (= none). The 0.2 shapes (`"part": "main"`, `"fiber": "cotton"`, the flags) and a single `"qualifier"` are refused with `validation_failed`.
+
+### For retailers
+
+- The portal filters on qualifiers ("Recycled", "Post-consumer", "Organic", …): the filter `qualifier` on the catalog, in "download everything in this filter" and the facet `qualifiers` with the names per language (Node Admin API, spec 0.3). The admin-ui shows it from its next version.
+
+### Hosting and development
+
+- **Run it locally without Docker:** `composer dev` (`php bin/dev`) starts the portal with PHP's built-in web server and SQLite, loads the Kestrel demo catalog and prints the address and the admin and retailer logins. `LOCAL=1 scripts/conformance.sh ../obx-go` runs the conformance suite with local PHP and Go (SQLite, or MySQL with `DB=mysql MYSQL_DSN=…`).
+- Runs on PHP 8.5 without deprecation notices (no-op `curl_close()` / `imagedestroy()` calls removed); `bin/obx` reads its arguments from `$_SERVER['argv']`.
+- The hosting docs name the current image tags (`ghcr.io/openbrandexchange/node-php:0.3`, `:0.3.0`, `:latest`) instead of `:0.1`, and give a realistic first-time estimate (half a day to a day for a real portal).
 
 ### Upgrading
 
-- Upload the new files (or pull the new image) and open the portal: database schema 5 rewrites the stored materials and care of every article once into the 0.3 form (`recycled: true` becomes the qualifier `recycled`, names from the vocabularies). Every visible article with materials or care gets one change entry, so retailers' software fetches the new form; sizes and images are not sent again. With tens of thousands of articles run `php bin/obx migrate` from the command line. Sending the same spreadsheet again afterwards changes nothing. Make a backup first (`php bin/obx backup`), as for every upgrade.
-- Retailers' software must read `part.code`, `fibers[].material.code` and `fibers[].qualifier.code` instead of `part`, `fiber` and the flags before it syncs from a 0.3 portal.
+- Upload the new files (or pull the new image) and open the portal: database schemas 5 and 6 rewrite the stored materials and care of every article once into the 0.3 form (`recycled: true` becomes the qualifier `recycled`, names from the vocabularies) and add the qualifier column for the portal filter. Every visible article with materials or care gets one change entry, so retailers' software fetches the new form; sizes and images are not sent again. With tens of thousands of articles run `php bin/obx migrate` from the command line. Sending the same spreadsheet again afterwards changes nothing. Make a backup first (`php bin/obx backup`), as for every upgrade.
+- Retailers' software must read `part.code`, `fibers[].material.code` and `fibers[].qualifiers[].code` instead of `part`, `fiber` and the flags before it syncs from a 0.3 portal.
+- A portal that already ran a pre-release build of 0.3 (one `qualifier` per fibre) gets schema 6 only: every visible article with materials gets one change entry with the list `qualifiers`.
 
 ## [0.2.1] - 2026-11-12
 

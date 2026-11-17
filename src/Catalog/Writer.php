@@ -310,6 +310,7 @@ final class Writer
                 $set['season'] = $model['season'];
                 $set['collection'] = $model['collection'];
                 $set['target_group'] = $model['target_group'];
+                $set['qualifiers'] = ArticleData::qualifierColumn($model['materials'] ?? null);
                 break;
             case 'variant':
                 $product = $this->load('product', (string) $model['product_external_id']);

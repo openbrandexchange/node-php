@@ -13,6 +13,32 @@ in Docker, or on Google Cloud Run. Other editions: *Portal for Cloudflare* and
 *Portal for Google Cloud & Docker*. They all speak the same open standard, so retailers and
 your automation work with any of them.
 
+## Run it locally (2 minutes)
+
+Without Docker, with PHP 8.2 or newer (pdo_sqlite, mbstring, openssl; GD for image versions) and
+[Composer](https://getcomposer.org) (on a Mac: `brew install php composer`):
+
+```sh
+git clone https://github.com/openbrandexchange/node-php.git obx-portal && cd obx-portal
+composer install
+composer dev                # or: php bin/dev --port 8090
+```
+
+It starts the portal with PHP's built-in web server and SQLite in `data/dev/`, sets it up and
+loads the Kestrel demo catalog of the specification (11 articles with sizes, composition, care
+and images), and prints the address and the logins:
+
+```
+Open Brand Exchange portal (PHP), local: http://localhost:8080/
+  Admin:     admin@kestrel.example / kestrel demo admin
+  Retailer:  retailer@shop.example / kestrel demo retailer (the portal of Demo Shop)
+```
+
+`php bin/dev --reset` starts over; `php bin/dev --empty` skips the demo, so the setup wizard asks
+for the setup code `OBX-DEV-SETUP`. E-mails are switched off. This is for trying out and
+development only; for a real portal see the hosting options below (Docker:
+`docker compose up -d`).
+
 **What you get**
 
 - **A portal for your retailers** ("Kestrel · Beeldbank" in Dutch, "Händlerportal" in German,
@@ -135,7 +161,8 @@ Command line: `php bin/obx cron | worker | check | migrate | backup | restore | 
 
 ## For developers
 
-Everything runs in Docker; no local PHP is needed. [CONTRIBUTING.md](CONTRIBUTING.md) has the
+Everything runs in Docker, or with local PHP and Go (`composer dev`, `composer test`,
+`composer analyse`, `LOCAL=1 ./scripts/conformance.sh ../obx-go`). [CONTRIBUTING.md](CONTRIBUTING.md) has the
 rules for changes (tests test behaviour, shared hosting first, 25 languages, DCO sign-off).
 
 ```sh
@@ -145,6 +172,7 @@ rules for changes (tests test behaviour, shared hosting first, 25 languages, DCO
 ./scripts/test-hosting.sh              # release zip + web installer on stock php-apache 8.2/8.3/8.4, no cron
 ./scripts/ui-walk.sh                   # the real web interface in a browser: every flow, axe, keyboard only
 ./scripts/conformance.sh ../obx-go     # the official obx-conformance suite against the Docker image (DB=mysql, RENDITIONS=client)
+LOCAL=1 ./scripts/conformance.sh ../obx-go  # the same with local PHP and Go, no Docker (DB=mysql with MYSQL_DSN/MYSQL_USER/MYSQL_PASSWORD)
 ./scripts/load-test.sh                 # seeded load test (10 000 articles), prints a table of timings
 ./scripts/check-licenses.sh            # licences of the production dependencies
 ./scripts/build-release.sh             # build/obx-portal-php-<version>.zip for FTP upload

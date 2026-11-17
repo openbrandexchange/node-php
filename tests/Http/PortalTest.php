@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Obx\Node\Tests\Http;
 
+use Obx\Node\Catalog\ArticleData;
 use Obx\Node\Support\Json;
 use Obx\Node\Tests\Support\NodeTestCase;
 
@@ -114,6 +115,58 @@ final class PortalTest extends NodeTestCase
         $last = $this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'r1', 'query' => ['limit' => '5', 'cursor' => $rest['next_cursor']]]));
         $this->assertCount(1, $last['items']);
         $this->assertNull($last['next_cursor']);
+    }
+
+    public function testQualifierFilterFacetAndDownloadJob(): void
+    {
+        $this->retailerUser('r1', ['name' => 'Shop One']);
+        $styles = fn (array $query) => array_column($this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'r1', 'query' => $query]))['items'], 'style_number');
+        // Any fibre of any part with any of the codes; OR within the parameter, AND across.
+        $this->assertSame(['KO-1009'], $styles(['qualifier' => ['post_consumer']]));
+        $this->assertSame(['KO-1003', 'KO-1009'], $styles(['qualifier' => ['post_consumer', 'regenerative']]));
+        $this->assertSame(['KO-1008', 'KO-1009', 'KT-2001', 'KT-2002'], $styles(['qualifier' => ['recycled']]), 'also the 0.1 key recycled_polyester and a lining');
+        $this->assertSame(['KO-1009'], $styles(['qualifier' => ['recycled'], 'item_type' => ['bag']]));
+        $this->assertSame([], $styles(['qualifier' => ['post%consumer']]));
+        $this->assertSame([], $styles(['qualifier' => ['postXconsumer']]), '_ is no wildcard');
+        $this->assertSame([], $styles(['qualifier' => ['recycled|post_consumer']]));
+        $this->assertSame(11, count($styles(['qualifier' => ['']])), 'an empty value is no filter');
+
+        $facets = $this->json($this->http('GET', '/admin/api/portal/facets', ['browser' => 'r1']));
+        $this->assertSame([
+            ['value' => 'organic', 'count' => 1, 'label' => ArticleData::vocabulary('qualifiers')['organic']['name']],
+            ['value' => 'recycled', 'count' => 4, 'label' => ArticleData::vocabulary('qualifiers')['recycled']['name']],
+            ['value' => 'post_consumer', 'count' => 1, 'label' => ArticleData::vocabulary('qualifiers')['post_consumer']['name']],
+            ['value' => 'regenerative', 'count' => 1, 'label' => ArticleData::vocabulary('qualifiers')['regenerative']['name']],
+        ], $facets['qualifiers'], 'vocabulary order, the name per language as label');
+        // Disjunctive: the qualifier facet ignores its own filter, the others apply it.
+        $facets = $this->json($this->http('GET', '/admin/api/portal/facets', ['browser' => 'r1', 'query' => ['qualifier' => ['post_consumer'], 'item_type' => ['jacket']]]));
+        $this->assertSame(['recycled' => 1], array_column($facets['qualifiers'], 'count', 'value'));
+        $this->assertSame(['bag' => 1], array_column($facets['item_types'], 'count', 'value'));
+        // A code outside the vocabulary: the name it was given, or no label.
+        $token = $this->ingestToken();
+        $body = ['brand_external_id' => 'kestrel', 'style_number' => 'KX-9', 'name' => ['en' => 'Yak scarf'], 'item_type' => 'scarf', 'materials' => [
+            ['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'yak_wool'], 'percentage' => 100, 'qualifiers' => [['code' => 'wild_harvested', 'name' => ['en' => 'Wild harvested']], ['code' => 'nomadic']]]]],
+        ]];
+        $this->json($this->http('PUT', '/obx/v1/ingest/products/KX-9', ['bearer' => $token, 'json' => $body]), 201);
+        $facets = $this->json($this->http('GET', '/admin/api/portal/facets', ['browser' => 'r1', 'query' => ['q' => 'yak']]));
+        $this->assertSame([['value' => 'nomadic', 'count' => 1], ['value' => 'wild_harvested', 'count' => 1, 'label' => ['en' => 'Wild harvested']]], $facets['qualifiers']);
+        $this->assertSame(['KX-9'], $styles(['qualifier' => ['nomadic', 'organic'], 'q' => 'yak']));
+        // Writing the product without qualifiers takes it out of the filter.
+        $body['materials'][0]['fibers'][0]['qualifiers'] = [];
+        $this->json($this->http('PUT', '/obx/v1/ingest/products/KX-9', ['bearer' => $token, 'json' => $body]));
+        $this->assertSame([], $styles(['qualifier' => ['nomadic']]));
+
+        // The same filter in a background download.
+        $job = $this->json($this->http('POST', '/admin/api/portal/download-jobs', ['browser' => 'r1', 'json' => ['source' => 'filter', 'filter' => ['qualifier' => ['post_consumer', 'regenerative']], 'variant' => 'web']]), 202);
+        $file = $this->http('GET', '/admin/api/portal/download-jobs/' . $job['id'] . '/file', ['browser' => 'r1']);
+        $dirs = [];
+        foreach ($this->zipEntries($file->content()) as $e) {
+            if (str_contains($e, '/')) {
+                $dirs[strstr($e, '/', true)] = true;
+            }
+        }
+        ksort($dirs);
+        $this->assertSame(['KO-1003', 'KO-1009'], array_keys($dirs));
     }
 
     public function testEanPasteSelectionZipsAndCsv(): void

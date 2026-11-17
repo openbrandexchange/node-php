@@ -41,6 +41,10 @@
         "optimize-autoloader": true
     },
     "scripts": {
+        "dev": [
+            "Composer\\Config::disableProcessTimeout",
+            "@php bin/dev"
+        ],
         "test": "phpunit",
         "analyse": "phpstan analyse --memory-limit=1G",
         "lint": "find src tests bin public -name '*.php' -not -path 'tests/ui/*' -print0 | xargs -0 -n1 php -l -d display_errors=1 >/dev/null"

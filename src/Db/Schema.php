@@ -194,6 +194,14 @@ final class Schema
                     \Obx\Node\Catalog\Feed::setEpoch($db, 1);
                 },
             ],
+            // 0.3.0: several qualifiers per fibre (spec 5737aa2). Fibres stored with one
+            // "qualifier" get the list "qualifiers" (a visible article gets a change entry), and
+            // products get the qualifier codes of their materials as "|code|code|" for the portal
+            // filter and facet "qualifiers" (null when none).
+            6 => [
+                'ALTER TABLE obx_products ADD COLUMN qualifiers {text}',
+                [\Obx\Node\Catalog\ArticleDataUpgrade::class, 'run'],
+            ],
         ];
     }
 
@@ -259,7 +267,7 @@ final class Schema
                     $sql($db);
                     continue;
                 }
-                if (!$db->isSqlite() && self::alreadyApplied($db, $sql)) {
+                if ((!$db->isSqlite() || str_starts_with($sql, 'ALTER TABLE')) && self::alreadyApplied($db, $sql)) {
                     continue;
                 }
                 $db->pdo->exec(self::translate($db, $sql));
@@ -282,9 +290,23 @@ final class Schema
         }
     }
 
-    /** MySQL: skips CREATE TABLE / CREATE INDEX statements whose object already exists. */
+    /**
+     * MySQL: skips CREATE TABLE / CREATE INDEX statements whose object already exists; both
+     * drivers: skips ALTER TABLE … ADD COLUMN when the column is there.
+     */
     private static function alreadyApplied(Db $db, string $sql): bool
     {
+        if (preg_match('/^ALTER TABLE (\w+) ADD COLUMN (\w+)/', $sql, $m)) {
+            if ($db->isSqlite()) {
+                foreach ($db->all('PRAGMA table_info(' . $m[1] . ')') as $col) {
+                    if ((string) $col['name'] === $m[2]) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            return $db->value('SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?', [$m[1], $m[2]]) > 0;
+        }
         if (preg_match('/^CREATE TABLE (\w+)/', $sql, $m)) {
             return $db->value('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?', [$m[1]]) > 0;
         }

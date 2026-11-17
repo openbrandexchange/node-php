@@ -1,0 +1,229 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/*
+ * Runs the portal locally without Docker, for trying it out and for development:
+ *   composer dev                 (or: php bin/dev)
+ *   php bin/dev --port 8090      another port (or PORT=8090)
+ *   php bin/dev --reset          throw the local portal away and start again
+ *   php bin/dev --empty          no demo: the setup wizard asks for the setup code below
+ *
+ * PHP's built-in web server, SQLite and the files in data/dev/ (not used by a real install in
+ * data/), the web interface from public/ui, e-mails switched off. On the first start the portal
+ * is set up with a known admin login, the Kestrel demo catalog of the specification (products,
+ * sizes and images from tests/fixtures/spec/kestrel) and a retailer account for the portal.
+ * Not for production: see README.md for hosting.
+ */
+
+use Obx\Node\App;
+use Obx\Node\Config;
+use Obx\Node\Http\Request;
+use Obx\Node\Http\Response;
+
+const SETUP_CODE = 'OBX-DEV-SETUP';
+const ADMIN = ['name' => 'Ada Admin', 'email' => 'admin@kestrel.example', 'password' => 'kestrel demo admin'];
+const RETAILER = ['name' => 'Rita Retailer', 'email' => 'retailer@shop.example', 'password' => 'kestrel demo retailer', 'shop' => 'Demo Shop'];
+
+$root = dirname(__DIR__);
+$args = array_slice((array) ($_SERVER['argv'] ?? []), 1);
+$port = (int) (getenv('PORT') ?: 8080);
+$reset = false;
+$empty = false;
+for ($i = 0; $i < count($args); $i++) {
+    $a = (string) $args[$i];
+    if ($a === '--port' && isset($args[$i + 1])) {
+        $port = (int) $args[++$i];
+    } elseif (str_starts_with($a, '--port=')) {
+        $port = (int) substr($a, 7);
+    } elseif ($a === '--reset') {
+        $reset = true;
+    } elseif ($a === '--empty') {
+        $empty = true;
+    } else {
+        fwrite(STDERR, "usage: php bin/dev [--port N] [--reset] [--empty]\n");
+        exit(64);
+    }
+}
+if ($port < 1 || $port > 65535) {
+    fwrite(STDERR, "The port must be a number from 1 to 65535.\n");
+    exit(64);
+}
+
+$missing = [];
+if (version_compare(PHP_VERSION, '8.2.0', '<')) {
+    $missing[] = 'PHP 8.2 or newer (this is ' . PHP_VERSION . ')';
+}
+foreach (['pdo_sqlite', 'mbstring', 'openssl'] as $ext) {
+    if (!extension_loaded($ext)) {
+        $missing[] = 'the PHP extension ' . $ext;
+    }
+}
+if (!is_file($root . '/vendor/autoload.php')) {
+    $missing[] = 'the dependencies: run "composer install" first';
+}
+if ($missing !== []) {
+    fwrite(STDERR, "Cannot start the local portal; missing:\n  - " . implode("\n  - ", $missing) . "\n");
+    exit(69);
+}
+require $root . '/vendor/autoload.php';
+
+$data = $root . '/data/dev';
+if ($reset && is_dir($data)) {
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($data, FilesystemIterator::SKIP_DOTS), RecursiveIteratorIterator::CHILD_FIRST);
+    foreach ($it as $f) {
+        $f->isDir() && !$f->isLink() ? rmdir($f->getPathname()) : unlink($f->getPathname());
+    }
+    rmdir($data);
+}
+if (!is_dir($data)) {
+    mkdir($data, 0700, true);
+}
+$url = 'http://localhost:' . $port;
+// The same settings for this process (setup) and the web server (inherits the environment).
+$env = [
+    'OBX_PUBLIC_URL' => $url,
+    'OBX_DATA_DIR' => $data,
+    'OBX_DB_DSN' => 'sqlite:' . $data . '/obx.sqlite',
+    'OBX_SETUP_CODE' => SETUP_CODE,
+    'OBX_MAIL_TRANSPORT' => 'none',
+    'OBX_ALLOW_PRIVATE_URLS' => 'true',
+    'OBX_CONFIG_FILE' => $data . '/no-config.php', // never the config/config.php of a real install
+];
+foreach ($env as $k => $v) {
+    putenv($k . '=' . $v);
+}
+
+$app = new App(Config::load($root, ['jobs_inline' => true]));
+$out = static fn (string $line) => fwrite(STDOUT, $line . "\n");
+if (!$empty && !$app->settings->setupDone()) {
+    $fixtures = $root . '/tests/fixtures/spec/kestrel';
+    if (!is_file($fixtures . '/products.csv')) {
+        fwrite(STDERR, "The Kestrel demo data is not here ($fixtures); use a git checkout, or --empty.\n");
+        exit(66);
+    }
+    $out('Setting up the local portal with the Kestrel demo catalog ...');
+    try {
+        demoSetup($app, $fixtures, $data);
+    } catch (RuntimeException $e) {
+        fwrite(STDERR, 'Setting up failed: ' . $e->getMessage() . "\nStart again with: php bin/dev --reset\n");
+        exit(70);
+    }
+}
+$setUp = $app->settings->setupDone();
+$demo = $setUp && (int) $app->db->value('SELECT COUNT(*) FROM obx_users WHERE email = ?', [ADMIN['email']]) > 0;
+unset($app);
+
+$line = str_repeat('-', 64);
+$out($line);
+$out('Open Brand Exchange portal (PHP), local: ' . $url . '/');
+if ($demo) {
+    $out('  Admin:     ' . ADMIN['email'] . ' / ' . ADMIN['password']);
+    $out('  Retailer:  ' . RETAILER['email'] . ' / ' . RETAILER['password'] . ' (the portal of ' . RETAILER['shop'] . ')');
+} elseif ($setUp) {
+    $out('  Sign in with the admin account you made in the setup wizard.');
+} else {
+    $out('  Setup code for the wizard: ' . SETUP_CODE);
+}
+$out('  Data:      ' . $data . ' (start over: php bin/dev --reset)');
+$out('  E-mails are switched off. Stop with Ctrl+C.');
+$out($line);
+passthru(escapeshellarg(PHP_BINARY) . ' -d enable_post_data_reading=0 -d upload_max_filesize=512M -d post_max_size=520M -S localhost:' . $port
+    . ' -t ' . escapeshellarg($root . '/public') . ' ' . escapeshellarg($root . '/public/index.php'), $code);
+exit((int) $code);
+
+/**
+ * First-run setup through the portal's own API, in this process: the admin, an upload key, the
+ * Kestrel import (products.csv, assets.csv and the images), a retailer with a portal account.
+ */
+function demoSetup(App $app, string $fixtures, string $data): void
+{
+    $jar = ['admin' => [], 'retailer' => []];
+    $call = static function (string $method, string $path, array $o = []) use ($app, &$jar): array {
+        $headers = (array) ($o['headers'] ?? []);
+        $body = '';
+        if (array_key_exists('json', $o)) {
+            $body = (string) json_encode($o['json']);
+            $headers['Content-Type'] = 'application/json';
+        }
+        $who = $o['browser'] ?? null;
+        if ($who !== null && $method !== 'GET') {
+            $headers['X-CSRF-Token'] = $jar[$who]['csrf'] ?? '';
+        }
+        if (isset($o['bearer'])) {
+            $headers['Authorization'] = 'Bearer ' . $o['bearer'];
+        }
+        $headers['Content-Length'] = (string) strlen($body);
+        $res = $app->handle(new Request(
+            method: $method,
+            path: $path,
+            headers: $headers,
+            cookies: $who !== null ? array_diff_key($jar[$who], ['csrf' => true]) : [],
+            body: $body,
+            files: (array) ($o['files'] ?? []),
+            host: 'localhost',
+        ));
+        if ($who !== null) {
+            foreach ($res->cookies as $c) {
+                [$pair] = explode(';', $c, 2);
+                [$name, $value] = explode('=', $pair, 2);
+                $jar[$who][rawurldecode($name)] = rawurldecode($value);
+            }
+        }
+        $json = json_decode(response($res), true);
+        if ($res->status >= 400 || !is_array($json)) {
+            throw new RuntimeException($method . ' ' . $path . ' answered ' . $res->status . ': ' . substr(response($res), 0, 500));
+        }
+        if ($who !== null && isset($json['csrf_token'])) {
+            $jar[$who]['csrf'] = (string) $json['csrf_token'];
+        }
+        return $json;
+    };
+    $call('GET', '/admin/api/session', ['browser' => 'admin']);
+    $call('POST', '/admin/api/setup', ['browser' => 'admin', 'json' => [
+        'setup_code' => SETUP_CODE,
+        'company' => ['name' => 'Kestrel Outfitters', 'first_brand_name' => 'Kestrel', 'default_language' => 'en', 'languages' => ['en', 'nl', 'de', 'fr']],
+        'admin' => ['name' => ADMIN['name'], 'email' => ADMIN['email'], 'password' => ADMIN['password']],
+    ]]);
+    $token = (string) $call('POST', '/admin/api/ingest-tokens', ['browser' => 'admin', 'json' => [
+        'name' => 'Demo import (bin/dev)', 'scopes' => ['ingest:read', 'ingest:write'],
+    ]])['secret'];
+    // The images as separate parts next to the two files (no zip extension needed).
+    $tmp = $data . '/demo-upload';
+    @mkdir($tmp, 0700, true);
+    $part = static function (string $file, string $type) use ($tmp): array {
+        $copy = $tmp . '/' . bin2hex(random_bytes(6));
+        copy($file, $copy);
+        return ['name' => basename($file), 'tmp' => $copy, 'size' => (int) filesize($copy), 'type' => $type];
+    };
+    $images = array_map(static fn (string $f) => $part($f, 'image/png'), glob($fixtures . '/images/*.png') ?: []);
+    $job = $call('POST', '/obx/v1/ingest/imports', [
+        'bearer' => $token,
+        'headers' => ['Content-Type' => 'multipart/form-data; boundary=x'],
+        'files' => ['csv' => [$part($fixtures . '/products.csv', 'text/csv')], 'assets_csv' => [$part($fixtures . '/assets.csv', 'text/csv')], 'images' => $images],
+    ]);
+    $job = $call('GET', '/obx/v1/ingest/jobs/' . $job['id'], ['bearer' => $token]);
+    array_map('unlink', glob($tmp . '/*') ?: []);
+    @rmdir($tmp);
+    $counts = $job['import_run']['counts'] ?? [];
+    if (($job['status'] ?? '') !== 'succeeded' || ($counts['errors'] ?? 1) !== 0) {
+        throw new RuntimeException('the Kestrel import did not succeed: ' . json_encode($job['import_run'] ?? $job));
+    }
+    $retailer = $call('POST', '/admin/api/retailers', ['browser' => 'admin', 'json' => ['name' => RETAILER['shop']]]);
+    $invite = $call('POST', '/admin/api/users/invites', ['browser' => 'admin', 'json' => [
+        'email' => RETAILER['email'], 'name' => RETAILER['name'], 'role' => 'retailer', 'retailer_id' => $retailer['id'],
+    ]]);
+    $call('GET', '/admin/api/session', ['browser' => 'retailer']);
+    $code = substr((string) $invite['invite_url'], (int) strrpos((string) $invite['invite_url'], '/') + 1);
+    $call('POST', '/admin/api/invites/' . $code . '/accept', ['browser' => 'retailer', 'json' => ['password' => RETAILER['password']]]);
+    fwrite(STDOUT, sprintf("Imported %d products, %d sizes and %d images.\n",
+        (int) $app->db->value('SELECT COUNT(*) FROM obx_products'),
+        (int) $app->db->value('SELECT COUNT(*) FROM obx_variants'),
+        (int) $app->db->value('SELECT COUNT(*) FROM obx_assets')));
+}
+
+function response(Response $res): string
+{
+    return $res->content();
+}

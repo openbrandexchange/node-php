@@ -5,6 +5,11 @@
 #   scripts/conformance.sh [path-to-obx-go] [extra obx-conformance args]
 # Environment: RENDITIONS=client to test a node without server-side image versions;
 #              DB=mysql (MySQL 8.4) or DB=mariadb (MariaDB 11) instead of SQLite.
+# Without Docker (LOCAL=1, or when Docker is not running): the node runs with this computer's
+# PHP (built-in web server with 4 workers, plus bin/obx worker) in a temporary folder, and the
+# suite is built with this computer's Go. DB=mysql then needs MYSQL_DSN (for example
+# "mysql:host=127.0.0.1;port=3306"), MYSQL_USER and MYSQL_PASSWORD of a server where the
+# script may create and drop a database obx_php_conformance_<random>.
 set -eu
 here=$(cd "$(dirname "$0")/.." && pwd)
 obxgo=${1:-"$here/../obx-go"}
@@ -14,6 +19,50 @@ if [ ! -f "$obxgo/go.mod" ]; then
   exit 1
 fi
 db=${DB:-sqlite}
+if [ "${LOCAL:-}" = 1 ] || ! docker info >/dev/null 2>&1; then
+  command -v php >/dev/null || { echo "LOCAL=1 needs php (8.2+) on the PATH" >&2; exit 1; }
+  command -v go >/dev/null || { echo "LOCAL=1 needs go on the PATH" >&2; exit 1; }
+  [ -f "$here/vendor/autoload.php" ] || (cd "$here" && composer install --no-interaction --no-progress --quiet)
+  work=$(mktemp -d)
+  port=${PORT:-18080}
+  dbname=""
+  cleanup() {
+    [ -n "${server:-}" ] && kill "$server" 2>/dev/null || true
+    [ -n "${worker:-}" ] && kill "$worker" 2>/dev/null || true
+    pkill -f "php.*-S 127.0.0.1:$port" 2>/dev/null || true
+    if [ -n "$dbname" ]; then
+      php -r '$p = new PDO(getenv("MYSQL_DSN"), getenv("MYSQL_USER"), getenv("MYSQL_PASSWORD")); $p->exec("DROP DATABASE IF EXISTS " . $argv[1]);' "$dbname" || true
+    fi
+    rm -rf "$work"
+  }
+  trap cleanup EXIT
+  (cd "$obxgo" && go build -o "$work/obx-conformance" ./cmd/obx-conformance)
+  export OBX_PUBLIC_URL="http://127.0.0.1:$port" OBX_SETUP_CODE=CONFORMANCE-1 OBX_ALLOW_PRIVATE_URLS=true \
+    OBX_RENDITIONS="${RENDITIONS:-auto}" OBX_DATA_DIR="$work/data" OBX_CONFIG_FILE="$work/no-config.php" \
+    OBX_MAIL_TRANSPORT=none PHP_CLI_SERVER_WORKERS=4
+  mkdir -p "$work/data"
+  case "$db" in
+    sqlite) export OBX_DB_DSN="sqlite:$work/data/obx.sqlite" ;;
+    mysql|mariadb)
+      : "${MYSQL_DSN:?DB=$db with LOCAL=1 needs MYSQL_DSN, MYSQL_USER and MYSQL_PASSWORD}"
+      dbname="obx_php_conformance_$(od -An -N4 -tx1 /dev/urandom | tr -d ' \n')"
+      php -r '$p = new PDO(getenv("MYSQL_DSN"), getenv("MYSQL_USER"), getenv("MYSQL_PASSWORD")); $p->exec("CREATE DATABASE " . $argv[1] . " CHARACTER SET utf8mb4 COLLATE utf8mb4_bin");' "$dbname"
+      export OBX_DB_DSN="$MYSQL_DSN;dbname=$dbname;charset=utf8mb4" OBX_DB_USER="${MYSQL_USER:-root}" OBX_DB_PASSWORD="${MYSQL_PASSWORD:-}" ;;
+    *) echo "DB must be sqlite, mysql or mariadb" >&2; exit 1 ;;
+  esac
+  php "$here/bin/obx" migrate >/dev/null
+  php -d enable_post_data_reading=0 -d upload_max_filesize=512M -d post_max_size=520M -S "127.0.0.1:$port" \
+    -t "$here/public" "$here/public/index.php" >"$work/server.log" 2>&1 &
+  server=$!
+  php "$here/bin/obx" worker >"$work/worker.log" 2>&1 &
+  worker=$!
+  i=0
+  until curl -s -o /dev/null "http://127.0.0.1:$port/.well-known/obx"; do
+    i=$((i+1)); [ $i -gt 60 ] && { echo "node did not start" >&2; cat "$work/server.log" >&2; exit 2; }; sleep 1
+  done
+  "$work/obx-conformance" all --url "http://127.0.0.1:$port" --setup-code CONFORMANCE-1 "$@"
+  exit $?
+fi
 case "$db" in
   sqlite) ;;
   mysql) dbimage=mysql:8.4 ;;
