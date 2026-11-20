@@ -2,14 +2,14 @@
 
 Everything a brand, or whoever hosts the portal for them, needs to keep it running: settings, health checks, logs, metrics, background work, backups and restores, upgrades, limits and data retention. How to install it in the first place is in [hosting.md](hosting.md).
 
-The command-line tool is `php bin/obx` (in Docker: `docker exec -u www-data <container> php bin/obx …`). On shared hosting without a shell, every command can also be run once from the hosting panel's cron screen.
+The command-line tool is `php bin/obx` (in the local Docker container: `docker exec -u www-data <container> php bin/obx …`). On shared hosting without a shell, every command can also be run once from the hosting panel's cron screen.
 
 | Command | What it does |
 |---|---|
 | `php bin/obx check` | checks the configuration, the database, the data folder and the file storage; exit code 1 on problems. `--config-only` checks the settings without connecting anywhere |
 | `php bin/obx migrate` | creates or updates the database tables (forward only) |
 | `php bin/obx cron` | one pass of background work (imports, zips, e-mails, webhooks, housekeeping), at most ~50 s |
-| `php bin/obx worker [--max-seconds=N]` | keeps doing background work (Docker, systemd, supervisor) |
+| `php bin/obx worker [--max-seconds=N]` | keeps doing background work (systemd, supervisor, the Docker image) |
 | `php bin/obx backup FILE.zip [--no-files]` | a complete backup, see [Backups](#backups) |
 | `php bin/obx restore FILE.zip [--force]` | restores a backup |
 | `php bin/obx setup-code` / `cron-url` / `version` | the first-run code, the web address for hosts without cron, the version |
@@ -31,10 +31,10 @@ The installer writes `config/config.php`. Every setting can also come from an en
 | `OBX_MAX_UPLOAD_BYTES` | largest single upload | 100 MB |
 | `OBX_RATE_LIMIT_FACTOR` | multiplies all rate limits (`0.01` to test 429 handling) | `1` |
 | `OBX_ALLOW_PRIVATE_URLS` | `true` only for local development: imports and webhooks may reach private addresses and plain http (link-local and cloud-metadata addresses stay refused) | `false` |
-| `OBX_TRUST_PROXY` / `OBX_TRUSTED_PROXIES` | behind a reverse proxy or load balancer: take the client address from `X-Forwarded-For` (for rate limits and the audit log). `OBX_TRUST_PROXY=true` trusts any direct peer (Cloud Run); `OBX_TRUSTED_PROXIES` takes a list such as `10.0.0.0/8,192.168.1.5` or `private` | off |
+| `OBX_TRUST_PROXY` / `OBX_TRUSTED_PROXIES` | behind a reverse proxy or load balancer: take the client address from `X-Forwarded-For` (for rate limits and the audit log). `OBX_TRUST_PROXY=true` trusts any direct peer (a load balancer in front of every request); `OBX_TRUSTED_PROXIES` takes a list such as `10.0.0.0/8,192.168.1.5` or `private` | off |
 | `OBX_LOG_FORMAT` (`text`, `json`), `OBX_LOG_FILE` (a file or `php://stderr`), `OBX_ACCESS_LOG` | logs, see [Logs](#logs) | `text` to PHP's error log, no access lines (Docker: `json` on stderr with access lines) |
 | `OBX_METRICS_TOKEN` | 16+ characters: serve Prometheus metrics at `/metrics` | off |
-| `OBX_WORKER` (Docker) | `0` disables the in-container worker (Cloud Run uses Cloud Scheduler) | `1` |
+| `OBX_WORKER` (Docker) | `0` disables the in-container worker | `1` |
 | `OBX_APACHE_WORKERS` (Docker) | Apache processes serving requests at once | `16` |
 | `PORT` (Docker) | listen port | `8080` |
 
@@ -80,7 +80,6 @@ Timeouts on outbound calls: imports and S3 15 s to connect and 10 minutes in tot
 
 `php bin/obx backup FILE.zip` writes everything in one zip: every table as NDJSON (read inside one transaction, so the rows are a consistent snapshot while the portal keeps running), every stored image (originals and versions), and the secret key. It works the same on SQLite and MySQL, and a backup restores into either. The zip holds personal data and the secret key: store it like a password (encrypted disk, a private bucket), and delete old ones.
 
-- **Docker:** `docker exec -u www-data obx-portal php bin/obx backup /var/www/html/data/backup-$(date +%F).zip`, then copy it off the host (`docker cp`). Or back up the volume while the container is stopped.
 - **Shared hosting:** add a second cron job, for example daily at 03:00: `php /path/to/obx-portal/bin/obx backup /path/to/private/backup-$(date +\%u).zip` (seven rotating files, one per weekday; `%` must be written `\%` in crontab). Download the files with FTP now and then. The hosting company's own backups of the web space and the MySQL database are a good second line, but only the `bin/obx backup` file is guaranteed consistent.
 - **Images in a bucket (`OBX_BLOB_STORE=s3`):** `--no-files` leaves the images out; switch on versioning or replication in the bucket instead.
 
@@ -100,8 +99,7 @@ This procedure is tested: the PHPUnit suite backs up an imported node, restores 
 2. **Make a backup** (`php bin/obx backup`). It is your only way back: migrations only move forward.
 3. **Replace the code:**
    - Shared hosting: upload the new release zip over the old folder, keeping `config/` and `data/` (they are not in the zip with content). Delete files the new release no longer has only when the notes say so.
-   - Docker: `docker compose pull && docker compose up -d` (or build the new tag). The container migrates at start.
-   - Cloud Run: run `deploy/cloudrun.sh` again from the new release.
+   - Own server: replace the folder with the new release (or `git pull && composer install --no-dev`), keeping `config/` and `data/`.
 4. **Migrate:** on shared hosting the first request after the upload runs the migrations (one process at a time, under a lock); `php bin/obx migrate` does it explicitly and says from which version to which.
 5. **Check** `/readyz` and sign in.
 
@@ -118,7 +116,7 @@ If a migration fails (for example the database user may not create indexes), not
 - One portal handles tens of thousands of articles on a small host: see [performance.md](performance.md) for the numbers of the seeded load test (10,000 articles, 60,000 EANs, 40,000 images).
 - PHP: `memory_limit` 512 MB, `max_execution_time` 300 s, uploads up to 512 MB (`public/.user.ini`, `public/.htaccess` and the Docker image set these). Server-side image versions need roughly 4 bytes per pixel of the largest original; images above 100 megapixels are refused.
 - Docker: each Apache process may use up to `memory_limit` while it renders images; `OBX_APACHE_WORKERS` (default 16) caps how many run at once. The Compose file limits the container to 2 CPUs and 2 GB; raise both together.
-- SQLite is fine for one server. Use MySQL/MariaDB when several containers serve the same portal (Cloud Run with more than one instance).
+- SQLite is fine for one server. Use MySQL/MariaDB when several web servers serve the same portal.
 - Rate limits (per client address unless noted): sign-in 30 per 15 minutes per address and 10 per e-mail address, setup 10, forgot-password e-mails 5 and new passwords 10 per 15 minutes, invitation links 30, access requests 5 per hour, token endpoint 30 per minute, discovery 600 per minute; the protocol and ingest APIs per key as in the spec. `429` answers carry `Retry-After`. Behind a proxy set `OBX_TRUST_PROXY`, or every visitor shares the proxy's limits.
 
 ## Personal data (GDPR)

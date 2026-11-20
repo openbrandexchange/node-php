@@ -34,9 +34,9 @@ jobs:
           docker run --rm -v "$PWD":/app -w /app obx-node-php-test sh -c \
             'composer validate --strict && composer install --no-interaction --no-progress --quiet && vendor/bin/phpstan analyse --no-progress --memory-limit=1G'
       - name: Shell scripts
-        run: shellcheck deploy/*.sh scripts/*.sh docker/entrypoint.sh
+        run: shellcheck scripts/*.sh docker/entrypoint.sh
       - name: No TODO or FIXME in shipped code
-        run: "! grep -rnE 'TODO|FIXME|XXX' src public/index.php bin docker deploy scripts"
+        run: "! grep -rnE 'TODO|FIXME|XXX' src public/index.php bin docker scripts"
 
   test:
     name: Tests (PHP ${{ matrix.php }}, SQLite)

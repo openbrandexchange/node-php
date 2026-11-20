@@ -1,4 +1,6 @@
-# Local or single-server hosting with Docker Compose:  docker compose up -d
+# FOR LOCAL DEVELOPMENT ONLY, not a production route. For a real portal use ordinary web hosting
+# with the release zip (docs/hosting.md).
+# Local run with Docker Compose:  docker compose up -d
 # Then open http://localhost:8080 and follow the setup wizard (the setup code is in the logs:
 # docker compose logs portal | grep "Setup code").
 services:

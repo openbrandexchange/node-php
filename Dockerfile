@@ -1,3 +1,5 @@
+# FOR LOCAL DEVELOPMENT AND CI ONLY, not a production route. For a real portal use ordinary web
+# hosting with the release zip (docs/hosting.md).
 # Open Brand Exchange · Portal for web hosting (node-php) as a container.
 # Apache + PHP 8.3 with GD (server-side image versions), zip, SQLite and MySQL.
 #   docker build -t obx-portal-php .

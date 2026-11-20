@@ -113,9 +113,9 @@ extensions. Each is the simplest reading; the spec repository is the source of t
 27. **Setup code**: the web installer creates it (in `data/SETUP-CODE.txt`, readable over FTP only),
     asks for it once and stores it as the preset code, so the wizard asks for the same code. Docker
     prints it at start (`docker logs`); `OBX_SETUP_CODE` presets it.
-28. **Cloud Run** runs without the in-container worker (`OBX_WORKER=0`); Cloud Scheduler calls
-    `/cron?key=…` every minute. The cron key is HMAC-derived from `OBX_SECRET_KEY` (the deploy script
-    derives it the same way with openssl). SQLite on Cloud Run is only for trying out.
+28. **Cloud Run** is no longer a documented route (the deploy script was removed with the move to
+    ordinary web hosting and the node-go installer). The cron key stays HMAC-derived from
+    `OBX_SECRET_KEY`, so an external scheduler can call `/cron?key=…`.
 29. **Root installs** (everything uploaded into `public_html`): the root `.htaccess` forwards to
     `public/` and denies the other folders; the request's base path then excludes `/public`.
 
@@ -427,8 +427,5 @@ Each is a deliberate choice for 0.1.0 with its reason; none is reachable as a br
   gauges from the database, and request metrics come from the web server or proxy.
 - **Hosts that ignore `.user.ini` and `.htaccess`** keep PHP's own upload parsing: several files
   under the same field name lose all but the last there; upload images as one zip.
-- **`deploy/cloudrun.sh`** is checked with shellcheck (and its cron-key derivation against the
-  PHP one) but was not run against a real Google Cloud project here (no account; the owner can run
-  it). The Docker image it deploys is the tested one.
 - **The 21 languages other than en, nl, de and fr** in the installer are machine-quality
   translations that follow the glossary; they need a native review, like the web interface's.

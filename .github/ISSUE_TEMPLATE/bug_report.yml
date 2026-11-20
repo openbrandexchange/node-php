@@ -33,8 +33,7 @@ body:
       label: Where does the portal run?
       options:
         - Shared web hosting (release zip)
-        - Docker / Docker Compose
-        - Google Cloud Run
+        - Docker (local development)
         - Own server with nginx or Apache
         - Other
     validations:

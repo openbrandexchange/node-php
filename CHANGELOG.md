@@ -9,6 +9,11 @@ All notable changes to the PHP edition of the Open Brand Exchange portal ("Porta
 - **Portal appearance**: make the portal look like your own showroom. Settings → branding takes a theme (light, dark or automatic colour scheme; primary, secondary, background, surface and text colours; heading and body font from eleven bundled open fonts; corner radius, grid density, card style, how product images fit and the colour behind them), a login page (centred or split with a background image, title and text per language) and a start page for retailers built from blocks: hero, tiles, text, image with text, products, announcement and contact. Everything is optional; without it the portal looks as before. A square favicon (PNG or WebP) can be uploaded next to the logo.
 - Branding images (PNG, JPEG or WebP, up to 10 MB and 8,000 pixels per side, at most 200) are uploaded once and used on the login and start page; an image still in use cannot be deleted.
 
+### Documentation
+
+- `docs/hosting.md` now walks through ordinary web hosting step by step for DirectAdmin, cPanel and Plesk: create the subdomain, upload and extract the zip, DNS (an A record when the domain's DNS is elsewhere), Let's Encrypt in the panel, the installer, cron jobs.
+- Docker and Google Cloud Run are no longer production routes: the Docker files are labelled for local development and CI, and `deploy/cloudrun.sh` is removed. For a VPS of your own, the docs point to the one-command installer of the Portal for your own server (node-go).
+
 ### Upgrade notes
 
 - The database gets the table `obx_branding_images` (schema version 8) on the first request after the upgrade, on SQLite and MySQL alike.

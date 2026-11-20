@@ -8,9 +8,9 @@ own systems: upload a spreadsheet, point the portal at an export folder, or let 
 updates.
 
 This is the PHP edition of an [Open Brand Exchange](https://openbrandexchange.com) portal
-(repository `node-php`). It runs on ordinary shared hosting (Apache or nginx with PHP 8.2+),
-in Docker, or on Google Cloud Run. Other editions: *Portal for Cloudflare* and
-*Portal for Google Cloud & Docker*. They all speak the same open standard, so retailers and
+(repository `node-php`). It runs on ordinary web hosting (Apache or nginx with PHP 8.2+, for
+example a DirectAdmin, cPanel or Plesk package) and on a server of your own with nginx or Apache.
+Other editions: *Portal for Cloudflare* (`node-ts`) and *Portal for your own server* (`node-go`). They all speak the same open standard, so retailers and
 your automation work with any of them.
 
 ## Run it locally (2 minutes)
@@ -36,8 +36,7 @@ Open Brand Exchange portal (PHP), local: http://localhost:8080/
 
 `php bin/dev --reset` starts over; `php bin/dev --empty` skips the demo, so the setup wizard asks
 for the setup code `OBX-DEV-SETUP`. E-mails are switched off. This is for trying out and
-development only; for a real portal see the hosting options below (Docker:
-`docker compose up -d`).
+development only; for a real portal see the hosting options below.
 
 **What you get**
 
@@ -64,9 +63,10 @@ development only; for a real portal see the hosting options below (Docker:
   makes the web, square and thumbnail versions itself when the server has GD, otherwise the web
   interface and the `obx` tool make them.
 
-## 60-second quickstart
+## Try it in Docker (local only)
 
-With Docker, in a copy of this repository:
+Docker is for trying out and development on your own computer, not for running a real portal. In a
+copy of this repository:
 
 ```sh
 git clone https://github.com/openbrandexchange/node-php.git obx-portal && cd obx-portal
@@ -94,17 +94,23 @@ OBX_PUBLIC_URL=http://localhost:8080 php bin/obx serve 8080
 The setup code is printed in the terminal (and written to `data/SETUP-CODE.txt`). This built-in
 server is for trying the portal out; for real use pick one of the hosting options below.
 
-## Install on your web hosting (FTP)
+## Install on your web hosting
 
-1. Download the release zip `obx-portal-php-<version>.zip` and unzip it on your computer.
-2. Upload the folder with your FTP program. Best: make the portal's `public` folder the
-   *document root* of your (sub)domain in the hosting control panel, e.g.
-   `brands.yourbrand.com → /obx-portal/public`. If you can only upload into `public_html`, upload
+Step by step for DirectAdmin, cPanel and Plesk, with the DNS and HTTPS steps:
+[docs/hosting.md](docs/hosting.md#ordinary-web-hosting-step-by-step). In short:
+
+1. Create a subdomain such as `portal.yourbrand.com` in your hosting control panel. If your
+   domain's DNS is elsewhere, add an A record for it pointing at the hosting server's IP address.
+   Switch on the free Let's Encrypt certificate for it in the panel.
+2. Download the release zip `obx-portal-php-<version>.zip` and upload it with the panel's file
+   manager (then *Extract*) or unzip it and upload the folder with your FTP program. Best: make the
+   portal's `public` folder the *document root* of the subdomain, e.g.
+   `portal.yourbrand.com → /obx-portal/public`. If you can only upload into `public_html`, upload
    the *contents* of the folder there; the included `.htaccess` files keep everything except
    `public` private.
 3. Make the `data` and `config` folders writable for the web server: in your FTP program,
    *File permissions* 775 (if the installer still says "not writable" after a reload: 777).
-4. Open `https://brands.yourbrand.com` (in your browser's language; 25 languages). The
+4. Open `https://portal.yourbrand.com` (in your browser's language; 25 languages). The
    installer checks your server, then asks for the **setup code** from `data/SETUP-CODE.txt`
    (open it with your FTP program: this proves you uploaded the files), the web address, the
    database ("Simple", a file in the data folder, or your MySQL/MariaDB) and optionally the
@@ -120,16 +126,17 @@ Requirements: Apache with mod_rewrite (or nginx), PHP 8.2, 8.3 or 8.4 with PDO (
 versions on the server), zip (zip uploads) and curl (scheduled imports, webhooks) are strongly
 recommended; the installer tells you what is missing. This path is tested on every change on
 stock Apache hosting with only PDO SQLite, GD, curl, zip and mbstring, and without cron.
-Everything else about hosting (Docker, nginx, Cloud Run, custom domains, HTTPS, backups):
+Everything else about hosting (panel steps, DNS, HTTPS, nginx, backups):
 [docs/hosting.md](docs/hosting.md).
 
 ## Other ways to host
 
 | Where | How |
 |---|---|
-| Docker / a VPS | `docker compose up -d` (SQLite by default, MySQL with `--profile mysql`). Apache, PHP 8.3 with GD, a background worker, JSON logs, health check, graceful stop. |
-| Google Cloud Run | `PROJECT=my-project PUBLIC_URL=https://brands.example.com ./deploy/cloudrun.sh`: Cloud SQL for MySQL, a Cloud Storage bucket for images, the secret key in Secret Manager, Cloud Scheduler for background work. |
 | Your own server with nginx | [docs/nginx.conf](docs/nginx.conf) (document root `public/`, PHP-FPM, cron or a systemd worker). |
+| A Linux VPS just for the portal | The *Portal for your own server* ([node-go](https://github.com/openbrandexchange/node-go)) installs with one command and HTTPS: `curl -fsSL https://openbrandexchange.com/install.sh \| sudo sh -s -- --domain portal.yourbrand.com`. |
+
+The `Dockerfile` and `docker-compose.yml` are for local development and CI only.
 
 ## Automate publishing
 
