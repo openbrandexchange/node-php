@@ -23,8 +23,8 @@ use Obx\Node\Http\Request;
 use Obx\Node\Http\Response;
 
 const SETUP_CODE = 'OBX-DEV-SETUP';
-const ADMIN = ['name' => 'Ada Admin', 'email' => 'admin@maison-noor.example', 'password' => 'maison-noor demo admin'];
-const RETAILER = ['name' => 'Rita Retailer', 'email' => 'retailer@shop.example', 'password' => 'maison-noor demo retailer', 'shop' => 'Demo Shop'];
+const ADMIN = ['name' => 'Ada Admin', 'email' => 'admin@maison-noor.example', 'password' => 'noor demo admin'];
+const RETAILER = ['name' => 'Rita Retailer', 'email' => 'retailer@shop.example', 'password' => 'noor demo retailer', 'shop' => 'Demo Shop'];
 
 $root = dirname(__DIR__);
 $args = array_slice((array) ($_SERVER['argv'] ?? []), 1);

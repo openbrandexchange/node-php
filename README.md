@@ -30,8 +30,8 @@ and images), and prints the address and the logins:
 
 ```
 Open Brand Exchange portal (PHP), local: http://localhost:8080/
-  Admin:     admin@maison-noor.example / maison-noor demo admin
-  Retailer:  retailer@shop.example / maison-noor demo retailer (the portal of Demo Shop)
+  Admin:     admin@maison-noor.example / noor demo admin
+  Retailer:  retailer@shop.example / noor demo retailer (the portal of Demo Shop)
 ```
 
 `php bin/dev --reset` starts over; `php bin/dev --empty` skips the demo, so the setup wizard asks

@@ -16,8 +16,8 @@ const FIXTURES = process.env.FIXTURES
 const SETUP_CODE = process.env.SETUP_CODE
 const FEED = process.env.FEED_URL // web address of products.csv as the node sees it
 const OUT = process.env.OUT ?? fs.mkdtempSync('/tmp/obx-ui-walk-')
-const admin = { email: 'admin@maison-noor.example', password: 'maison-noor-admin-2026' }
-const buyer = { email: 'buyer@shop.example', password: 'maison-noor-shop-2026' }
+const admin = { email: 'admin@maison-noor.example', password: 'noor-admin-2026' }
+const buyer = { email: 'buyer@shop.example', password: 'noor-shop-2026' }
 // Expected numbers come from the fixtures (expected/counts.json next to maison-noor/): every
 // product, size and image is new, and so is the second brand (the first one exists after setup).
 const COUNTS = JSON.parse(fs.readFileSync(path.join(FIXTURES, '..', 'expected', 'counts.json'), 'utf8'))
