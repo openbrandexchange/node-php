@@ -36,13 +36,13 @@ jobs:
         run: |
           ./scripts/build-release.sh
           unzip -q "build/obx-portal-php-${GITHUB_REF_NAME#v}.zip" -d build/stage-sbom
-      - uses: anchore/sbom-action@v0.24.2
+      - uses: anchore/sbom-action@v0.24.3
         with:
           path: build/stage-sbom
           format: spdx-json
           output-file: build/obx-portal-php-${{ github.ref_name }}.spdx.json
           upload-artifact: false
-      - uses: anchore/sbom-action@v0.24.2
+      - uses: anchore/sbom-action@v0.24.3
         with:
           path: build/stage-sbom
           format: cyclonedx-json
