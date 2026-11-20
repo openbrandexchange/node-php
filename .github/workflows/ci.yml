@@ -85,9 +85,12 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.14"
       - name: Install Playwright
         working-directory: tests/ui
-        run: npm ci && npx playwright install --with-deps chromium
+        run: bun install --frozen-lockfile && bunx playwright install --with-deps chromium
       - name: Walk
         env:
           OUT: ${{ runner.temp }}/ui-walk
@@ -153,12 +156,12 @@ jobs:
         run: docker run --rm -v "$PWD":/app -w /app composer:2 composer audit --no-interaction --locked
       - name: Licences of production dependencies
         run: ./scripts/check-licenses.sh
-      - uses: actions/setup-node@v7
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 24
-      - name: npm audit (browser walk only; nothing of it ships)
+          bun-version: "1.3.14"
+      - name: bun audit (browser walk only; nothing of it ships)
         working-directory: tests/ui
-        run: npm ci && npm audit --omit=dev && npm audit --audit-level=high
+        run: bun install --frozen-lockfile && bun audit --audit-level=high
 
   release-build:
     name: Release zip and Docker image build

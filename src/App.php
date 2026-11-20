@@ -492,6 +492,8 @@ final class App
         // Admin: public, session, setup
         $r->add('GET', '/admin/api/public/branding', [$s, 'branding']);
         $r->add('GET', '/admin/api/public/logo/{file}', [$ui, 'logo']);
+        $r->add('GET', '/admin/api/public/favicon/{file}', [$ui, 'favicon']);
+        $r->add('GET', '/admin/api/public/images/{id}', [$ui, 'brandingImage']);
         $r->add('GET', '/admin/api/setup', [$s, 'setupState']);
         $r->add('POST', '/admin/api/setup', [$s, 'setup']);
         $r->add('GET', '/admin/api/session', [$s, 'session']);
@@ -508,6 +510,11 @@ final class App
         $r->add('PATCH', '/admin/api/settings', [$a, 'patchSettings']);
         $r->add('PUT', '/admin/api/settings/logo', [$a, 'putLogo']);
         $r->add('DELETE', '/admin/api/settings/logo', [$a, 'deleteLogo']);
+        $r->add('PUT', '/admin/api/settings/favicon', [$a, 'putFavicon']);
+        $r->add('DELETE', '/admin/api/settings/favicon', [$a, 'deleteFavicon']);
+        $r->add('GET', '/admin/api/settings/images', [$a, 'brandingImages']);
+        $r->add('POST', '/admin/api/settings/images', [$a, 'addBrandingImage']);
+        $r->add('DELETE', '/admin/api/settings/images/{id}', [$a, 'deleteBrandingImage']);
         $r->add('GET', '/admin/api/catalog/brands', [$c, 'brands']);
         $r->add('GET', '/admin/api/catalog/products', [$c, 'products']);
         $r->add('GET', '/admin/api/catalog/products/{external_id}', [$c, 'product']);

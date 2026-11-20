@@ -42,6 +42,8 @@ final class Settings
                 'display_name' => null,
                 'logo_sha' => null,
                 'logo_type' => null,
+                'favicon_sha' => null,
+                'favicon_type' => null,
                 'accent_color' => null,
                 'welcome_text' => null,
                 'portal_name' => null,

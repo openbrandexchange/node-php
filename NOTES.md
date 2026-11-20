@@ -393,6 +393,26 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     `sr-Latn-RS`) everywhere a tag is validated; `name:<lang>` columns are matched
     case-insensitively with `_` read as `-` and stored in canonical case
     (`Validator::canonicalLanguage`); another form is an unknown column.
+74. **Portal appearance** (`Settings.branding.theme`, `login`, `home`, `favicon_url`; branding
+    images): `theme`, `login` and `home` live in their own `obx_settings` row (`appearance`) and
+    are decoded with objects kept as objects, so members and block types the node does not know
+    come back byte for byte (also `{}` versus `[]`). PATCH applies a JSON merge patch to each of
+    the three (`home.blocks` is a list, so it is replaced as a whole) and validates the result:
+    known members only, unknown ones are never an error. Further choices: block ids are unique
+    within `home.blocks`; a `tiles` block may leave out `items`, but a list has 1 to 12 entries;
+    a `products` block may have both `style_numbers` and `query` (the interface uses
+    `style_numbers`). An image counts
+    as used (listed `used: true`, delete `409 conflict`) when it is `login.background_image` or
+    the `image` of any block or block item, also of block types the node does not know; only the
+    known places are checked for existence (`422`). Images are stored as blobs plus a row in
+    `obx_branding_images`; their URLs (`/admin/api/public/images/{id}`, also `url` in the image
+    list) and the favicon URL are absolute, like `logo_url`, so they work when the portal runs in
+    a subfolder. Public branding adds `favicon_url`, `theme` and `login` with
+    `background_image_url`; the portal viewer's `branding` also has `home`, where every block or
+    item that has `image` also gets `image_url` (`null` when the image is gone). Favicons are
+    PNG or WebP, square, at most 1 MB, sent as the raw body like the logo. The 201st image is
+    `409 limit_exceeded`. This node has no demo mode, so images are always served
+    `public, max-age=31536000, immutable`.
 
 ## Known limitations (tracked)
 

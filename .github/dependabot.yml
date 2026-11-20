@@ -9,7 +9,7 @@ updates:
       development:
         dependency-type: development
     open-pull-requests-limit: 5
-  - package-ecosystem: npm
+  - package-ecosystem: bun
     directory: /tests/ui
     schedule:
       interval: weekly

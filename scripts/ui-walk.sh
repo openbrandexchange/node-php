@@ -4,7 +4,7 @@
 # import, access request -> approval -> invitation (read from a Mailpit inbox) -> retailer
 # login, browsing, EAN list, zips and CSV, a background download, API and upload keys, a
 # scheduled import from a web address and the statistics. Every main screen is checked with
-# axe (WCAG 2.1 A/AA) and the retailer logs in with the keyboard only. Needs Docker and Node.js.
+# axe (WCAG 2.1 A/AA) and the retailer logs in with the keyboard only. Needs Docker, Bun and Node.js.
 #   scripts/ui-walk.sh [path-to-spec-checkout]      (default: the fixtures in tests/fixtures/spec)
 # Environment: RENDITIONS=client for a node without server-side image versions; PORT (8091).
 set -eu
@@ -47,8 +47,8 @@ until curl -s -o /dev/null "http://localhost:$port/admin/api/public/branding"; d
   i=$((i+1)); [ $i -gt 60 ] && { echo "node did not start" >&2; exit 2; }; sleep 1
 done
 cd "$here/tests/ui"
-[ -d node_modules/playwright ] || npm install --no-audit --no-fund --silent
-npx playwright install chromium >/dev/null
+bun install --frozen-lockfile --silent
+bunx playwright install chromium >/dev/null
 until curl -s -o /dev/null http://localhost:8092/install; do sleep 1; done
 INSTALLER=http://localhost:8092 BASE="http://localhost:$port" MAILPIT=http://localhost:8025 SETUP_CODE=UI-WALK-2026 FIXTURES="$fixtures" \
   IMAGES_ZIP="$work/images.zip" FEED_URL=http://obx-ui-walk-feed:8000/products.csv node walk.mjs

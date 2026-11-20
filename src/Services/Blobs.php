@@ -136,7 +136,7 @@ final class Blobs
         return $this->store->localPath($sha);
     }
 
-    /** Deletes blobs that no asset, render or logo references and that are older than 24 h. */
+    /** Deletes blobs that no asset, render, logo, favicon or branding image references and that are older than 24 h. */
     public function collectGarbage(int $olderThanTs, int $limit = 500): int
     {
         $referenced = [];
@@ -155,8 +155,13 @@ final class Blobs
         }
         $logo = $this->db->value("SELECT v FROM obx_settings WHERE k = 'settings'");
         $settings = json_decode((string) $logo, true);
-        if (is_array($settings) && isset($settings['branding']['logo_sha'])) {
-            $referenced[$settings['branding']['logo_sha']] = true;
+        foreach (['logo_sha', 'favicon_sha'] as $k) {
+            if (is_array($settings) && isset($settings['branding'][$k])) {
+                $referenced[$settings['branding'][$k]] = true;
+            }
+        }
+        foreach ($this->db->column('SELECT sha256 FROM obx_branding_images') as $sha) {
+            $referenced[(string) $sha] = true;
         }
         $n = 0;
         foreach ($this->db->all('SELECT sha256 FROM obx_blobs WHERE used_ts < ? LIMIT ' . $limit, [$olderThanTs]) as $row) {

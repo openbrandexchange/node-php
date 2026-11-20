@@ -6,8 +6,10 @@
 FROM composer:2 AS vendor
 WORKDIR /app
 COPY composer.json composer.lock ./
+# Only vendor/ is taken from this stage; the PHP image below has the extensions. The composer
+# image's own PHP version and extensions change with its releases, so they are not checked here.
 RUN composer install --no-dev --no-interaction --no-progress --optimize-autoloader --no-scripts \
-      --ignore-platform-req=ext-gd --ignore-platform-req=ext-zip --ignore-platform-req=ext-pcntl
+      --ignore-platform-reqs
 
 FROM php:8.3-apache
 ARG VERSION=dev

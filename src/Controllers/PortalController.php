@@ -11,6 +11,7 @@ use Obx\Node\Db\Db;
 use Obx\Node\Http\ApiError;
 use Obx\Node\Http\Request;
 use Obx\Node\Http\Response;
+use Obx\Node\Services\Branding;
 use Obx\Node\Services\Downloads;
 use Obx\Node\Services\GtinLookup;
 use Obx\Node\Services\Retailers;
@@ -52,7 +53,7 @@ final class PortalController extends Controller
                 'article_data_export' => $v->preview || (bool) $this->app->settings->get('portal', 'allow_article_data_export'),
                 'api_self_service' => !$v->preview && (bool) $this->app->settings->get('portal', 'retailer_api_self_service'),
             ],
-            'branding' => (new SessionController($this->app))->brandingData(),
+            'branding' => array_merge((new SessionController($this->app))->brandingData(), ['home' => (new Branding($this->app))->resolvedHome()]),
             'languages' => $this->app->settings->languages(),
             'selection_count' => count($sel),
             'limits' => ['selection_max_products' => 1000, 'sync_zip_max_images' => Downloads::SYNC_ZIP_MAX, 'gtin_lookup_max' => 2000],

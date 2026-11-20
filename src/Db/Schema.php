@@ -209,6 +209,13 @@ final class Schema
                 'ALTER TABLE obx_jobs ADD COLUMN idem_hash {id}',
                 'ALTER TABLE obx_exports ADD COLUMN idem_hash {id}',
             ],
+            // Portal appearance (node-admin.yaml, Settings.branding): images for the login and
+            // home page. The bytes are blobs; ids are never reused.
+            8 => [
+                'CREATE TABLE obx_branding_images (
+                    id {id} NOT NULL PRIMARY KEY, sha256 {id} NOT NULL, bytes {int} NOT NULL,
+                    content_type {str} NOT NULL, width {int} NOT NULL, height {int} NOT NULL, created_at {id} NOT NULL)',
+            ],
         ];
     }
 

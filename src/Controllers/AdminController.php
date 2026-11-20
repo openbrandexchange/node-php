@@ -12,6 +12,7 @@ use Obx\Node\Http\Response;
 use Obx\Node\Images\ImageInfo;
 use Obx\Node\Import\Csv;
 use Obx\Node\Security\Crypto;
+use Obx\Node\Services\Branding;
 use Obx\Node\Services\Retailers;
 use Obx\Node\Services\Settings;
 use Obx\Node\Services\Stats;
@@ -48,6 +49,8 @@ final class AdminController extends Controller
     {
         $s = $this->app->settings->all();
         $base = $this->app->baseUrl();
+        $branding = new Branding($this->app);
+        $appearance = $branding->appearance();
         return [
             'company' => $s['company'],
             'branding' => [
@@ -56,6 +59,10 @@ final class AdminController extends Controller
                 'accent_color' => $s['branding']['accent_color'],
                 'welcome_text' => $s['branding']['welcome_text'],
                 'portal_name' => $s['branding']['portal_name'] ?? null,
+                'favicon_url' => $branding->faviconUrl(),
+                'theme' => $appearance['theme'],
+                'login' => $appearance['login'],
+                'home' => $appearance['home'],
             ],
             'portal' => [
                 'access_requests_enabled' => (bool) $s['portal']['access_requests_enabled'],
@@ -102,6 +109,7 @@ final class AdminController extends Controller
         $patch = $req->jsonObject();
         $s = $this->app->settings->all();
         $before = $s;
+        $appearance = null;
         $v = new Validator();
         if (isset($patch['company']) && is_array($patch['company'])) {
             $c = $patch['company'];
@@ -145,6 +153,11 @@ final class AdminController extends Controller
                 if (array_key_exists($k, $b)) {
                     $s['branding'][$k] = $b[$k] === null ? null : $v->localized(Validator::mergePatch($s['branding'][$k] ?? [], $b[$k]), '/branding/' . $k);
                 }
+            }
+            if (array_intersect(Branding::MEMBERS, array_keys($b)) !== []) {
+                // Decoded again with objects, so unknown members and empty objects are kept as written.
+                $raw = json_decode($req->body(), false);
+                $appearance = (new Branding($this->app))->patch($raw->branding, $s['branding']);
             }
         }
         if (isset($patch['portal']) && is_array($patch['portal'])) {
@@ -197,8 +210,11 @@ final class AdminController extends Controller
             }
             $s['retention'] = $this->app->retention->merge($patch['retention']);
         }
-        $this->app->db->tx(function () use ($s, $before) {
+        $this->app->db->tx(function () use ($s, $before, $appearance) {
             $this->app->settings->save($s);
+            if ($appearance !== null) {
+                (new Branding($this->app))->save($appearance);
+            }
             if ($before['portal']['allow_original_download'] !== $s['portal']['allow_original_download']) {
                 $this->app->grants->touchAll(true);
                 foreach ($this->app->db->column("SELECT id FROM obx_retailers WHERE status = 'active'") as $rid) {
@@ -238,6 +254,61 @@ final class AdminController extends Controller
         $s['branding']['logo_type'] = null;
         $this->app->settings->save($s);
         return Response::json($this->settingsData());
+    }
+
+    public function putFavicon(Request $req): Response
+    {
+        $this->admin($req);
+        $tmp = $req->bodyToFile($this->app->blobs->tmpDir(), Branding::MAX_FAVICON_BYTES);
+        $type = ImageInfo::sniffFile($tmp['path']);
+        if (!in_array($type, Branding::FAVICON_TYPES, true)) {
+            @unlink($tmp['path']);
+            throw new ApiError('unsupported_media_type', 'Upload a PNG or WebP favicon.');
+        }
+        $dims = ImageInfo::dimensions($tmp['path']);
+        if ($dims === null || $dims[0] !== $dims[1]) {
+            @unlink($tmp['path']);
+            throw ApiError::validation('', 'The favicon must be a square image (for example 512 × 512 pixels).');
+        }
+        $blob = $this->app->blobs->store($tmp['path'], $tmp['sha256'], $tmp['bytes'], Branding::FAVICON_TYPES);
+        $s = $this->app->settings->all();
+        $s['branding']['favicon_sha'] = $blob['sha256'];
+        $s['branding']['favicon_type'] = $blob['content_type'];
+        $this->app->settings->save($s);
+        return Response::json($this->settingsData());
+    }
+
+    public function deleteFavicon(Request $req): Response
+    {
+        $this->admin($req);
+        $s = $this->app->settings->all();
+        $s['branding']['favicon_sha'] = null;
+        $s['branding']['favicon_type'] = null;
+        $this->app->settings->save($s);
+        return Response::json($this->settingsData());
+    }
+
+    public function brandingImages(Request $req): Response
+    {
+        $this->admin($req);
+        return Response::json(['items' => (new Branding($this->app))->images()]);
+    }
+
+    public function addBrandingImage(Request $req): Response
+    {
+        $this->admin($req);
+        $file = $req->files['file'][0] ?? null;
+        if ($file === null) {
+            throw ApiError::validation('/file', 'Send the image as the multipart field "file".');
+        }
+        return Response::json((new Branding($this->app))->addImage($file['tmp']), 201);
+    }
+
+    public function deleteBrandingImage(Request $req): Response
+    {
+        $this->admin($req);
+        (new Branding($this->app))->deleteImage((string) $req->params['id']);
+        return Response::empty();
     }
 
     // ================================================================ imports

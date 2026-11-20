@@ -8,6 +8,7 @@ use Obx\Node\Http\ApiError;
 use Obx\Node\Http\Request;
 use Obx\Node\Http\Response;
 use Obx\Node\Security\Crypto;
+use Obx\Node\Services\Branding;
 use Obx\Node\Services\Users;
 use Obx\Node\Support\Clock;
 use Obx\Node\Support\Ids;
@@ -23,6 +24,7 @@ final class SessionController extends Controller
     public function brandingData(): array
     {
         $s = $this->app->settings->all();
+        $branding = new Branding($this->app);
         $brands = [];
         foreach ($this->app->db->all('SELECT id, name FROM obx_brands WHERE visible = 1 ORDER BY name') as $b) {
             $brands[] = ['id' => $b['id'], 'name' => $b['name']];
@@ -33,6 +35,9 @@ final class SessionController extends Controller
             'accent_color' => $s['branding']['accent_color'],
             'welcome_text' => $s['branding']['welcome_text'],
             'portal_name' => $s['branding']['portal_name'] ?? null,
+            'favicon_url' => $branding->faviconUrl(),
+            'theme' => $branding->appearance()['theme'],
+            'login' => $branding->resolvedLogin(),
             'languages' => $this->app->settings->languages(),
             'default_language' => $this->app->settings->defaultLanguage(),
             'access_requests_enabled' => (bool) $s['portal']['access_requests_enabled'],

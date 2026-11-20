@@ -2,6 +2,17 @@
 
 All notable changes to the PHP edition of the Open Brand Exchange portal ("Portal for web hosting"). The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [semantic versioning](https://semver.org/): while it is 0.x, a minor version may change behaviour, and the upgrade notes say what to do.
 
+## [Unreleased]
+
+### For brands
+
+- **Portal appearance**: make the portal look like your own showroom. Settings → branding takes a theme (light, dark or automatic colour scheme; primary, secondary, background, surface and text colours; heading and body font from eleven bundled open fonts; corner radius, grid density, card style, how product images fit and the colour behind them), a login page (centred or split with a background image, title and text per language) and a start page for retailers built from blocks: hero, tiles, text, image with text, products, announcement and contact. Everything is optional; without it the portal looks as before. A square favicon (PNG or WebP) can be uploaded next to the logo.
+- Branding images (PNG, JPEG or WebP, up to 10 MB and 8,000 pixels per side, at most 200) are uploaded once and used on the login and start page; an image still in use cannot be deleted.
+
+### Upgrade notes
+
+- The database gets the table `obx_branding_images` (schema version 8) on the first request after the upgrade, on SQLite and MySQL alike.
+
 ## [0.3.0] - 2026-11-17
 
 Materials and care as terms with names: this release implements Open Brand Exchange specification 0.3.0 (OBX Protocol 0.3, [proposal 0004](https://github.com/openbrandexchange/spec/blob/main/docs/proposals/0004-terms-with-names.md)). **Breaking for retailers' software** that reads `materials` or `care` (allowed before 1.0); everything else is unchanged.

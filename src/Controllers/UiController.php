@@ -7,11 +7,13 @@ namespace Obx\Node\Controllers;
 use Obx\Node\Http\ApiError;
 use Obx\Node\Http\Request;
 use Obx\Node\Http\Response;
+use Obx\Node\Images\ImageInfo;
+use Obx\Node\Services\Branding;
 use Obx\Node\Support\Clock;
 
 /**
- * Serves the vendored admin-ui build (single-page app with fallback), the public logo and the
- * cron URL for hosts that can only call a web address on a schedule.
+ * Serves the vendored admin-ui build (single-page app with fallback), the public logo, favicon and
+ * branding images, and the cron URL for hosts that can only call a web address on a schedule.
  */
 final class UiController extends Controller
 {
@@ -139,6 +141,39 @@ final class UiController extends Controller
         }
         // No CORS header: an <img> needs none, and CORS is only on the discovery document.
         return $this->serveFile($req, $path, (string) $blob['content_type'], $m[1], 'inline', 'logo.' . $m[2], 'public, max-age=31536000, immutable');
+    }
+
+    public function favicon(Request $req): Response
+    {
+        $file = (string) $req->params['file'];
+        if (!preg_match('/^([a-f0-9]{64})\.(png|webp)$/', $file, $m)
+            || ($this->app->settings->all()['branding']['favicon_sha'] ?? null) !== $m[1]) {
+            throw new ApiError('not_found', 'No such favicon.');
+        }
+        $blob = $this->app->blobs->get($m[1]);
+        $path = $this->app->blobs->path($m[1]);
+        if ($blob === null || $path === null) {
+            throw new ApiError('not_found', 'No such favicon.');
+        }
+        return $this->serveFile($req, $path, (string) $blob['content_type'], $m[1], 'inline', 'favicon.' . $m[2], 'public, max-age=31536000, immutable');
+    }
+
+    /**
+     * A branding image (login and home page), without authentication: it appears on the login
+     * page. Ids are never reused, so it is cached for a year.
+     */
+    public function brandingImage(Request $req): Response
+    {
+        $id = (string) $req->params['id'];
+        $row = (new Branding($this->app))->image($id);
+        $path = $row !== null ? $this->app->blobs->path((string) $row['sha256']) : null;
+        if ($row === null || $path === null) {
+            throw new ApiError('not_found', 'No such image.');
+        }
+        $res = $this->serveFile($req, $path, (string) $row['content_type'], (string) $row['sha256'], 'inline',
+            $id . '.' . ImageInfo::extension((string) $row['content_type']), 'public, max-age=31536000, immutable');
+        $res->header('X-Content-Type-Options', 'nosniff');
+        return $res;
     }
 
     public function cron(Request $req): Response

@@ -21,10 +21,12 @@ if [ ! -f "$stage/public/ui/index.html" ]; then
   exit 1
 fi
 # As the calling user: on Linux, files a root container writes into the bind mount could not be
-# removed afterwards (rm: Permission denied on vendor/).
+# removed afterwards (rm: Permission denied on vendor/). The composer image's own PHP version and
+# extensions change with its releases and are not the host's, so platform requirements are not
+# checked here (the web installer checks the host).
 docker run --rm --user "$(id -u):$(id -g)" -e COMPOSER_HOME=/tmp/composer -v "$stage":/app -w /app composer:2 \
   composer install --no-dev --no-interaction --no-progress --optimize-autoloader --classmap-authoritative \
-  --ignore-platform-req=ext-gd --ignore-platform-req=ext-zip --quiet
+  --ignore-platform-reqs --quiet
 rm -f "$stage/composer.phar"
 chmod +x "$stage/bin/obx"
 (cd "$here/build/stage" && zip -qr -X "$out" obx-portal)
