@@ -16,9 +16,9 @@ const FIXTURES = process.env.FIXTURES
 const SETUP_CODE = process.env.SETUP_CODE
 const FEED = process.env.FEED_URL // web address of products.csv as the node sees it
 const OUT = process.env.OUT ?? fs.mkdtempSync('/tmp/obx-ui-walk-')
-const admin = { email: 'admin@kestrel.example', password: 'kestrel-admin-2026' }
-const buyer = { email: 'buyer@shop.example', password: 'kestrel-shop-2026' }
-// Expected numbers come from the fixtures (expected/counts.json next to kestrel/): every
+const admin = { email: 'admin@maison-noor.example', password: 'maison-noor-admin-2026' }
+const buyer = { email: 'buyer@shop.example', password: 'maison-noor-shop-2026' }
+// Expected numbers come from the fixtures (expected/counts.json next to maison-noor/): every
 // product, size and image is new, and so is the second brand (the first one exists after setup).
 const COUNTS = JSON.parse(fs.readFileSync(path.join(FIXTURES, '..', 'expected', 'counts.json'), 'utf8'))
 const NEW_OBJECTS = COUNTS.brands - 1 + COUNTS.products + COUNTS.variants + COUNTS.assets
@@ -99,8 +99,8 @@ await step(p, 'setup wizard', async () => {
   await a11y(p, 'setup wizard')
   await p.getByLabel('Setup code').fill(SETUP_CODE)
   await p.getByRole('button', { name: 'Next' }).click()
-  await p.getByLabel('Company name').fill('Kestrel Outfitters')
-  await p.getByLabel('First brand').fill('Kestrel')
+  await p.getByLabel('Company name').fill('MAISON NOOR Group')
+  await p.getByLabel('First brand').fill('MAISON NOOR')
   await p.getByRole('button', { name: 'Next' }).click()
   await p.getByRole('button', { name: 'Next' }).click()
   await p.getByLabel('Your name').fill('Iris Admin')
@@ -161,7 +161,7 @@ await step(p, 'retailer accepts the invitation', async () => {
   await a11y(p, 'portal catalog')
 })
 await step(p, 'browse, search and open an article', async () => {
-  await p.getByPlaceholder(/Search by article number/).fill('KT-2001')
+  await p.getByPlaceholder(/Search by article number/).fill('NA-2001')
   await p.getByText('1 article').waitFor()
   await p.getByPlaceholder(/Search by article number/).fill('')
   await p.getByText(ARTICLES).waitFor()

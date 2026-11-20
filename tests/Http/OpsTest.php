@@ -53,7 +53,7 @@ final class OpsTest extends NodeTestCase
 
     public function testCorsOnlyOnTheDiscoveryDocument(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         [, $id, $secret] = $this->retailerClient();
         $token = $this->accessToken($id, $secret);
         $disc = $this->http('GET', '/.well-known/obx');
@@ -73,7 +73,7 @@ final class OpsTest extends NodeTestCase
 
     public function testTheWebInterfaceFollowsAdminUisIntegrationGuide(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         $placeholder = $this->http('GET', '/login', ['headers' => ['Accept' => 'text/html']]);
         $this->assertStringContainsString('not installed', $placeholder->content());
         $this->assertStringStartsWith("default-src 'none'", (string) $placeholder->getHeader('Content-Security-Policy'));
@@ -131,7 +131,7 @@ final class OpsTest extends NodeTestCase
 
     public function testMetricsNeedTheirToken(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         $this->assertProblem($this->http('GET', '/metrics'), 404, 'not_found');
         $this->app = $this->makeApp(['metrics_token' => 'metrics-token-0123456789']);
         $this->assertProblem($this->http('GET', '/metrics'), 401, 'unauthorized');
@@ -152,15 +152,15 @@ final class OpsTest extends NodeTestCase
         $this->app->db->run('DELETE FROM obx_audit_log');
         // A failed login, a successful one, a settings change, a key created, a retailer deleted.
         $this->http('GET', '/admin/api/session', ['browser' => 'other']);
-        $this->http('POST', '/admin/api/session/login', ['browser' => 'other', 'json' => ['email' => 'admin@kestrel.example', 'password' => 'wrong password here']]);
-        $this->http('POST', '/admin/api/session/login', ['browser' => 'other', 'json' => ['email' => 'admin@kestrel.example', 'password' => 'correct horse battery']]);
-        $this->json($this->http('PATCH', '/admin/api/settings', ['browser' => 'admin', 'json' => ['company' => ['website' => 'https://kestrel.example']]]));
+        $this->http('POST', '/admin/api/session/login', ['browser' => 'other', 'json' => ['email' => 'admin@maison-noor.example', 'password' => 'wrong password here']]);
+        $this->http('POST', '/admin/api/session/login', ['browser' => 'other', 'json' => ['email' => 'admin@maison-noor.example', 'password' => 'correct horse battery']]);
+        $this->json($this->http('PATCH', '/admin/api/settings', ['browser' => 'admin', 'json' => ['company' => ['website' => 'https://maison-noor.example']]]));
         $secret = $this->ingestToken();
         $r = $this->json($this->http('POST', '/admin/api/retailers', ['browser' => 'admin', 'json' => ['name' => 'Gone Shop']]), 201);
         $this->assertSame(204, $this->http('DELETE', '/admin/api/retailers/' . $r['id'], ['browser' => 'admin'])->status);
         // Reads and a retailer's working state are not actions; exports of personal data are.
         $this->http('GET', '/admin/api/retailers', ['browser' => 'admin']);
-        $uid = (string) $this->app->db->value("SELECT id FROM obx_users WHERE email = 'admin@kestrel.example'");
+        $uid = (string) $this->app->db->value("SELECT id FROM obx_users WHERE email = 'admin@maison-noor.example'");
         $this->assertSame(200, $this->http('GET', '/admin/api/users/' . $uid . '/export', ['browser' => 'admin'])->status);
 
         $log = $this->json($this->http('GET', '/admin/api/audit-log', ['browser' => 'admin']));
@@ -176,7 +176,7 @@ final class OpsTest extends NodeTestCase
         $this->assertSame($this->ip, $failed['ip']);
         $ok = $log['items'][5];
         $this->assertTrue($ok['succeeded']);
-        $this->assertSame(['type' => 'user', 'id' => $uid, 'name' => 'Ada Admin', 'role' => 'admin', 'email' => 'admin@kestrel.example'], $ok['actor']);
+        $this->assertSame(['type' => 'user', 'id' => $uid, 'name' => 'Ada Admin', 'role' => 'admin', 'email' => 'admin@maison-noor.example'], $ok['actor']);
         $settings = $log['items'][4];
         $this->assertSame(['PATCH', '/admin/api/settings'], [$settings['method'], $settings['route']]);
         $this->assertSame(['company'], $settings['details']['fields']);
@@ -186,7 +186,7 @@ final class OpsTest extends NodeTestCase
         $this->assertStringNotContainsString($secret, $raw);
         $this->assertStringNotContainsString('wrong password', $raw);
         $this->assertStringNotContainsString('correct horse', $raw);
-        $this->assertStringNotContainsString('kestrel.example"', str_replace('admin@kestrel.example', '', $raw), 'values are never logged');
+        $this->assertStringNotContainsString('maison-noor.example"', str_replace('admin@maison-noor.example', '', $raw), 'values are never logged');
 
         // Filters, paging and the admin-only rule.
         $failedOnly = $this->json($this->http('GET', '/admin/api/audit-log', ['browser' => 'admin', 'query' => ['outcome' => 'failed']]));
@@ -221,9 +221,9 @@ final class OpsTest extends NodeTestCase
 
     public function testGdprExportAndDeletion(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         $rid = $this->retailerUser('buyer', ['name' => 'Privacy Shop', 'reference' => 'C-77']);
-        $asset = (string) $this->app->db->value("SELECT id FROM obx_assets WHERE external_id = 'KO-1001_NVY_1'");
+        $asset = (string) $this->app->db->value("SELECT id FROM obx_assets WHERE external_id = 'MN-1001_NVY_1'");
         $this->assertSame(200, $this->http('GET', '/admin/api/portal/assets/' . $asset . '/download', ['browser' => 'buyer', 'query' => ['variant' => 'web']])->status);
         $this->json($this->http('POST', '/admin/api/api-clients', ['browser' => 'admin', 'json' => ['retailer_id' => $rid, 'name' => 'Shop sync']]), 201);
 
@@ -238,7 +238,7 @@ final class OpsTest extends NodeTestCase
         $this->assertArrayNotHasKey('secret_hash', $export['api_clients'][0]);
         $this->assertStringNotContainsString('password_hash', $res->content());
         $this->assertSame('image', $export['downloads'][0]['kind']);
-        $this->assertSame('Kestrel Outfitters', $export['controller']['name']);
+        $this->assertSame('MAISON NOOR Group', $export['controller']['name']);
         $this->assertSame('obx-personal-data-export/1', $export['format']);
         $this->assertSame(730, $export['retention']['download_events_days']);
 
@@ -265,7 +265,7 @@ final class OpsTest extends NodeTestCase
 
     public function testAPersonDeletesTheirOwnAccount(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         $this->retailerUser('leaver', ['name' => 'Leaving Shop']);
         $uid = (string) $this->app->db->value("SELECT id FROM obx_users WHERE email = 'leaver@shop.example'");
         $this->assertSame(204, $this->http('DELETE', '/admin/api/me', ['browser' => 'leaver'])->status);
@@ -316,11 +316,11 @@ final class OpsTest extends NodeTestCase
 
     public function testBackupAndRestoreGiveTheSameNode(): void
     {
-        ['ingest' => $ingest] = $this->kestrelNode();
+        ['ingest' => $ingest] = $this->maisonNoorNode();
         [, $id, $secret] = $this->retailerClient(['name' => 'Backup Shop']);
         $token = $this->accessToken($id, $secret);
         [$before] = $this->drainSnapshot($token);
-        $asset = $this->json($this->http('GET', '/obx/v1/assets/' . (string) $this->app->db->value("SELECT id FROM obx_assets WHERE external_id = 'KO-1001_NVY_1'"), ['bearer' => $token]));
+        $asset = $this->json($this->http('GET', '/obx/v1/assets/' . (string) $this->app->db->value("SELECT id FROM obx_assets WHERE external_id = 'MN-1001_NVY_1'"), ['bearer' => $token]));
 
         $file = $this->dir . '/backup.zip';
         $m = (new Backup($this->app))->create($file);
@@ -334,7 +334,7 @@ final class OpsTest extends NodeTestCase
         $config = Config::load(dirname(__DIR__, 2), [
             'installed' => true, 'public_url' => 'http://localhost', 'secret_key' => null, 'setup_code' => null,
             'db_dsn' => 'sqlite:' . $other . '/obx.sqlite', 'data_dir' => $other . '/data', 'jobs_inline' => true,
-            'mail_transport' => 'memory', 'mail_from' => 'portal@kestrel.example', 'ui_dir' => $other . '/ui', 'rate_limit_factor' => 100.0,
+            'mail_transport' => 'memory', 'mail_from' => 'portal@maison-noor.example', 'ui_dir' => $other . '/ui', 'rate_limit_factor' => 100.0,
         ]);
         $restored = Backup::restore($config, $file);
         $this->assertSame($m['files'], $restored['files_restored']);
@@ -352,7 +352,7 @@ final class OpsTest extends NodeTestCase
         $this->assertSame($asset['renditions']['web']['sha256'], hash('sha256', $web->content()));
         $this->assertSame(200, $this->http('GET', '/obx/v1/ingest', ['bearer' => $ingest])->status);
         $this->http('GET', '/admin/api/session', ['browser' => 'x']);
-        $login = $this->http('POST', '/admin/api/session/login', ['browser' => 'x', 'json' => ['email' => 'admin@kestrel.example', 'password' => 'correct horse battery']]);
+        $login = $this->http('POST', '/admin/api/session/login', ['browser' => 'x', 'json' => ['email' => 'admin@maison-noor.example', 'password' => 'correct horse battery']]);
         $this->assertSame(200, $login->status, $login->content());
         $this->app = $original;
     }
@@ -400,7 +400,7 @@ final class OpsTest extends NodeTestCase
         $this->app->db->run("UPDATE obx_settings SET v = '1' WHERE k = 'schema_version'");
         $app = $this->makeApp();
         $this->assertSame(Schema::latestVersion(), Schema::currentVersionOf($app->db));
-        $this->assertSame('Kestrel Outfitters', $app->settings->all()['company']['name']);
+        $this->assertSame('MAISON NOOR Group', $app->settings->all()['company']['name']);
         $this->assertSame(0, (int) $app->db->value('SELECT COUNT(*) FROM obx_audit_log'));
     }
 
@@ -435,7 +435,7 @@ final class OpsTest extends NodeTestCase
         $this->app = $this->makeApp(['jobs_inline' => false]);
         $res = $this->http('POST', '/obx/v1/ingest/imports', [
             'bearer' => $ingest,
-            'files' => ['package' => [$this->upload($this->kestrelZip(), 'kestrel.zip', 'application/zip')]],
+            'files' => ['package' => [$this->upload($this->maisonNoorZip(), 'maison-noor.zip', 'application/zip')]],
             'headers' => ['Content-Type' => 'multipart/form-data; boundary=x'],
         ]);
         $job = $this->json($res, 202);

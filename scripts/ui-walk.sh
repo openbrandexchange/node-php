@@ -10,8 +10,8 @@
 set -eu
 here=$(cd "$(dirname "$0")/.." && pwd)
 spec=${1:-"$here/tests/fixtures/spec"}
-[ -d "$spec/fixtures/kestrel" ] && spec="$spec/fixtures"
-fixtures="$spec/kestrel"
+[ -d "$spec/fixtures/maison-noor" ] && spec="$spec/fixtures"
+fixtures="$spec/maison-noor"
 [ -f "$fixtures/products.csv" ] || { echo "usage: scripts/ui-walk.sh [path-to-spec-checkout]" >&2; exit 1; }
 port=${PORT:-8091}
 net=obx-ui-walk
@@ -26,7 +26,7 @@ cleanup
 work=$(mktemp -d)
 (cd "$fixtures/images" && zip -q -r "$work/images.zip" .)
 mkdir -p "$work/feed"
-sed 's/Merino Crew Sweater,/Merino Crew Sweater (nightly),/' "$fixtures/products.csv" > "$work/feed/products.csv"
+sed 's/Fine Merino Crew-Neck Sweater,/Fine Merino Crew-Neck Sweater (nightly),/' "$fixtures/products.csv" > "$work/feed/products.csv"
 docker network create "$net" >/dev/null
 docker build -q -t obx-node-php:ui-walk "$here" >/dev/null
 docker build -q -t obx-node-php-test -f "$here/docker/test.Dockerfile" "$here/docker" >/dev/null
@@ -41,7 +41,7 @@ docker run -d --name obx-ui-walk-feed --network "$net" -v "$work/feed":/srv:ro -
 docker run -d --name obx-ui-walk-node --network "$net" -p "$port":8080 \
   -e OBX_PUBLIC_URL="http://localhost:$port" -e OBX_SETUP_CODE=UI-WALK-2026 -e OBX_ALLOW_PRIVATE_URLS=true \
   -e OBX_RENDITIONS="${RENDITIONS:-auto}" -e OBX_MAIL_TRANSPORT=smtp -e OBX_SMTP_HOST=obx-ui-walk-mail \
-  -e OBX_SMTP_PORT=1025 -e OBX_SMTP_ENCRYPTION=none -e OBX_MAIL_FROM=portal@kestrel.example obx-node-php:ui-walk >/dev/null
+  -e OBX_SMTP_PORT=1025 -e OBX_SMTP_ENCRYPTION=none -e OBX_MAIL_FROM=portal@maison-noor.example obx-node-php:ui-walk >/dev/null
 i=0
 until curl -s -o /dev/null "http://localhost:$port/admin/api/public/branding"; do
   i=$((i+1)); [ $i -gt 60 ] && { echo "node did not start" >&2; exit 2; }; sleep 1

@@ -63,7 +63,7 @@ final class XlsxImportTest extends NodeTestCase
     }
 
     /**
-     * I-IMP-9: each converting case as a dry run on a node that holds the Kestrel fixtures, with
+     * I-IMP-9: each converting case as a dry run on a node that holds the MAISON NOOR fixtures, with
      * the images_manifest of its "send" (assets-template.xlsx names two images; alone, each row
      * would be files_missing, §2.2).
      */
@@ -73,7 +73,7 @@ final class XlsxImportTest extends NodeTestCase
             if (isset($c['error'])) {
                 continue;
             }
-            $token = $this->kestrelToken();
+            $token = $this->maisonNoorToken();
             $before = $this->catalogSize();
             $field = $c['role'] === 'products' ? 'csv' : 'assets_csv';
             $options = ['dry_run' => true];
@@ -81,7 +81,7 @@ final class XlsxImportTest extends NodeTestCase
             if (isset($c['send']['images_manifest'])) {
                 $manifest = [];
                 foreach ($c['send']['images_manifest'] as $file) {
-                    $manifest[] = ['file' => $file, 'sha256' => hash_file('sha256', self::fixtures('kestrel/images/' . $file))];
+                    $manifest[] = ['file' => $file, 'sha256' => hash_file('sha256', self::fixtures('maison-noor/images/' . $file))];
                 }
                 $post['images_manifest'] = Json::encode($manifest);
             }
@@ -117,10 +117,10 @@ final class XlsxImportTest extends NodeTestCase
         return $this->ingestToken();
     }
 
-    private function kestrelToken(): string
+    private function maisonNoorToken(): string
     {
         $this->resetNode();
-        return $this->kestrelNode()['ingest'];
+        return $this->maisonNoorNode()['ingest'];
     }
 
     /**
@@ -139,9 +139,9 @@ final class XlsxImportTest extends NodeTestCase
             foreach ([false, true] as $dry) {
                 $files = ['csv' => [$this->workbook($c['file'], $c['file'])]];
                 if (!$dry) {
-                    $files['assets_csv'] = [$this->upload(self::fixtures('kestrel/assets.csv'), 'assets.csv')];
+                    $files['assets_csv'] = [$this->upload(self::fixtures('maison-noor/assets.csv'), 'assets.csv')];
                     $files['images'] = [];
-                    foreach (array_slice(glob(self::fixtures('kestrel/images') . '/*.png') ?: [], 0, 2) as $img) {
+                    foreach (array_slice(glob(self::fixtures('maison-noor/images') . '/*.png') ?: [], 0, 2) as $img) {
                         $files['images'][] = $this->upload($img, basename($img), 'image/png'); // an upload is used once
                     }
                 }
@@ -163,7 +163,7 @@ final class XlsxImportTest extends NodeTestCase
     }
 
     /**
-     * The template as it is gives the rows of fixtures/kestrel/products.csv: on an empty node it
+     * The template as it is gives the rows of fixtures/maison-noor/products.csv: on an empty node it
      * creates what the CSV would, and the CSV afterwards changes nothing (and the other way round,
      * on a node that holds the fixtures the workbook is all unchanged with no change entries).
      */
@@ -177,17 +177,17 @@ final class XlsxImportTest extends NodeTestCase
         $this->assertSame(0, $counts['errors'], Json::encode($this->results($token, $job['id'])));
         $this->assertSame(['products.xlsx'], array_column($job['import_run']['files'], 'name'));
         $this->assertGreaterThan(0, $counts['created']);
-        $csv = $this->upload(self::fixtures('kestrel/products.csv'), 'products.csv');
+        $csv = $this->upload(self::fixtures('maison-noor/products.csv'), 'products.csv');
         $again = $this->import($token, ['csv' => [$csv]]);
         $this->assertSame(0, $again['import_run']['counts']['created'] + $again['import_run']['counts']['updated'], Json::encode($again['import_run']['counts']));
         $this->assertSame($counts['created'] - 1, $again['import_run']['counts']['unchanged'], 'the same objects, less the brand the first import created');
 
         $this->resetNode(); // MySQL has no snapshots: without a reset the setup would run twice (409)
-        ['ingest' => $token] = $this->kestrelNode();
+        ['ingest' => $token] = $this->maisonNoorNode();
         [, $id, $secret] = $this->retailerClient();
         $client = $this->accessToken($id, $secret);
         [, $cursor] = $this->drainSnapshot($client);
-        $job = $this->import($token, ['csv' => [$this->workbook('products-template.xlsx', 'Kestrel catalogue.xlsx')]]);
+        $job = $this->import($token, ['csv' => [$this->workbook('products-template.xlsx', 'MAISON NOOR catalogue.xlsx')]]);
         $c = $job['import_run']['counts'];
         $this->assertSame([0, 0, 0], [$c['created'], $c['updated'], $c['errors']], Json::encode($c));
         $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $client, 'query' => ['cursor' => $cursor]]));
@@ -197,7 +197,7 @@ final class XlsxImportTest extends NodeTestCase
     /** A product from a workbook reaches retailers through /changes like any other. */
     public function testAWorkbookProductAppearsInTheChangeFeed(): void
     {
-        ['ingest' => $token] = $this->kestrelNode();
+        ['ingest' => $token] = $this->maisonNoorNode();
         [, $id, $secret] = $this->retailerClient();
         $client = $this->accessToken($id, $secret);
         [, $cursor] = $this->drainSnapshot($client);
@@ -205,10 +205,10 @@ final class XlsxImportTest extends NodeTestCase
         $this->assertSame('succeeded', $job['status']);
         $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $client, 'query' => ['cursor' => $cursor]]));
         $seen = array_map(static fn ($e) => $e['type'] . ' ' . $e['op'] . ' ' . $e['external_id'], $page['changes']);
-        $this->assertContains('product upsert KX-9001', $seen, Json::encode($seen));
+        $this->assertContains('product upsert MX-9001', $seen, Json::encode($seen));
         $gtins = array_map(static fn ($e) => $e['data']['gtin_original'] ?? null, array_values(array_filter($page['changes'], static fn ($e) => $e['type'] === 'variant')));
         $this->assertContains('02000901000022', $gtins, 'a zero-padded GTIN keeps its leading zero');
-        $this->assertNotContains('product upsert KX-9005', $seen, 'the #N/A row is skipped');
+        $this->assertNotContains('product upsert MX-9005', $seen, 'the #N/A row is skipped');
     }
 
     public function testAdminUploadPackagesAndOtherSpreadsheets(): void
@@ -220,7 +220,7 @@ final class XlsxImportTest extends NodeTestCase
         $this->assertSame('succeeded', $run['status'], Json::encode($run));
         $this->assertSame(0, $run['counts']['errors'], Json::encode($run['errors_preview']));
         $this->assertSame(['dates.xlsx'], array_column($run['files'], 'name'));
-        $attrs = Json::decode((string) $this->app->db->value("SELECT input FROM obx_products WHERE external_id = 'KX-9101'"))['attributes'] ?? null;
+        $attrs = Json::decode((string) $this->app->db->value("SELECT input FROM obx_products WHERE external_id = 'MX-9101'"))['attributes'] ?? null;
         $this->assertSame('2026-03-01', $attrs['launch_date'] ?? null, Json::encode($attrs));
 
         // A part without a file name is a workbook by its content type.
@@ -235,13 +235,13 @@ final class XlsxImportTest extends NodeTestCase
         $this->assertProblem($this->http('POST', '/obx/v1/ingest/imports', ['bearer' => $token, 'files' => ['csv' => [$this->upload($xls, 'old.xls')]]]), 415, 'unsupported_media_type');
 
         // A package: products.xlsx and assets.xlsx take the place of the CSV files.
-        $token = $this->kestrelToken();
+        $token = $this->maisonNoorToken();
         $zipPath = $this->dir . '/wb.zip';
         $zip = new \ZipArchive();
         $zip->open($zipPath, \ZipArchive::CREATE);
         $zip->addFile(self::fixtures('imports/xlsx/products-template.xlsx'), 'export/products.xlsx');
         $zip->addFile(self::fixtures('imports/xlsx/assets-template.xlsx'), 'export/assets.xlsx');
-        foreach (glob(self::fixtures('kestrel/images') . '/*') ?: [] as $img) {
+        foreach (glob(self::fixtures('maison-noor/images') . '/*') ?: [] as $img) {
             $zip->addFile($img, 'images/' . basename($img));
         }
         $zip->close();
@@ -256,7 +256,7 @@ final class XlsxImportTest extends NodeTestCase
         $zip = new \ZipArchive();
         $zip->open($other, \ZipArchive::CREATE);
         $zip->addFile(self::fixtures('imports/xlsx/products-template.xlsx'), 'products.xlsx');
-        $zip->addFromString('export.csv', "style_number,name:en\r\nKX-7777,Not imported\r\n");
+        $zip->addFromString('export.csv', "style_number,name:en\r\nMX-7777,Not imported\r\n");
         $zip->close();
         $job = $this->import($token, ['package' => [$this->upload($other, 'wb-other.zip', 'application/zip')]], ['dry_run' => true]);
         $this->assertSame('succeeded', $job['status'], Json::encode($job));
@@ -264,7 +264,7 @@ final class XlsxImportTest extends NodeTestCase
         $this->assertSame(0, $job['import_run']['counts']['created'], 'export.csv is not read');
 
         // Both products.csv and products.xlsx in one package: import_invalid.
-        $both = $this->kestrelZip(null, ['products.xlsx' => (string) file_get_contents(self::fixtures('imports/xlsx/products-template.xlsx'))]);
+        $both = $this->maisonNoorZip(null, ['products.xlsx' => (string) file_get_contents(self::fixtures('imports/xlsx/products-template.xlsx'))]);
         $job = $this->import($token, ['package' => [$this->upload($both, 'both.zip', 'application/zip')]]);
         $this->assertSame('failed', $job['status']);
         $this->assertSame('import_invalid', $job['import_run']['error']['obx_error']);

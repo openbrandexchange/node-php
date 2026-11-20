@@ -98,10 +98,10 @@ final class BrandingTest extends NodeTestCase
         // Merge patch: one colour changes, the rest stays; null brings back the node default.
         $patched = $this->patch(['theme' => ['colors' => ['primary' => '#000000'], 'radius' => null]])['branding'];
         $this->assertSame('#000000', $patched['theme']['colors']['primary']);
-        $this->assertSame('#c8a46a', $patched['theme']['colors']['secondary']);
+        $this->assertSame('#a8705a', $patched['theme']['colors']['secondary']);
         $this->assertArrayNotHasKey('radius', $patched['theme']);
         $this->assertNull($this->patch(['home' => null])['branding']['home']);
-        $this->assertSame('fraunces', $this->patch(['login' => null])['branding']['theme']['heading_font']);
+        $this->assertSame('cormorant-garamond', $this->patch(['login' => null])['branding']['theme']['heading_font']);
     }
 
     public function testUnknownMembersAndBlockTypesAreKeptAsWritten(): void
@@ -178,9 +178,9 @@ final class BrandingTest extends NodeTestCase
         $this->assertNull($b['home']);
         // Good links pass.
         $ok = $this->patch(['home' => ['blocks' => [
-            ['id' => 'h', 'type' => 'hero', 'link' => '/products/KO-1001'],
-            ['id' => 'i', 'type' => 'image_text', 'link' => 'https://kestrel.example/story?x=1'],
-            ['id' => 'p', 'type' => 'products', 'style_numbers' => ['KO-1001'], 'query' => 'category=jeans'],
+            ['id' => 'h', 'type' => 'hero', 'link' => '/products/MN-1001'],
+            ['id' => 'i', 'type' => 'image_text', 'link' => 'https://maison-noor.example/story?x=1'],
+            ['id' => 'p', 'type' => 'products', 'style_numbers' => ['MN-1001'], 'query' => 'category=jeans'],
         ]]]);
         $this->assertCount(3, $ok['branding']['home']['blocks']);
     }

@@ -14,14 +14,14 @@ use Obx\Node\Tests\Support\NodeTestCase;
  */
 final class PortalTest extends NodeTestCase
 {
-    private string $kestrelId;
+    private string $maisonNoorId;
     private string $ingest;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->ingest = (string) $this->kestrelNode()["ingest"];
-        $this->kestrelId = (string) $this->app->db->value("SELECT id FROM obx_brands WHERE external_id = 'kestrel'");
+        $this->ingest = (string) $this->maisonNoorNode()["ingest"];
+        $this->maisonNoorId = (string) $this->app->db->value("SELECT id FROM obx_brands WHERE external_id = 'maison-noor'");
     }
 
     /** Invites and logs in a retailer user in browser $browser. */
@@ -53,7 +53,7 @@ final class PortalTest extends NodeTestCase
     public function testAProductZipCarriesTheEmbargoInAssetsCsv(): void
     {
         $this->retailerUser('r1', ['name' => 'Shop One']);
-        $id = (string) $this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'KO-1002'");
+        $id = (string) $this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'MN-1002'");
         $zip = $this->http('GET', '/admin/api/portal/products/' . $id . '/download.zip', ['browser' => 'r1', 'query' => ['variant' => 'web']]);
         $this->assertSame(200, $zip->status);
         $f = $this->dir . '/p-' . bin2hex(random_bytes(3)) . '.zip';
@@ -68,13 +68,13 @@ final class PortalTest extends NodeTestCase
         $this->assertCount($images + 1, $lines, 'one row per image');
         $blk = null;
         foreach (array_slice($lines, 1) as $l) {
-            if (str_starts_with($l[$head['file']], 'KO-1002_BLK_2_')) {
+            if (str_starts_with($l[$head['file']], 'MN-1002_BLK_2_')) {
                 $blk = $l;
             }
         }
-        $this->assertNotNull($blk, 'KO-1002_BLK_2 has a row');
+        $this->assertNotNull($blk, 'MN-1002_BLK_2 has a row');
         $this->assertStringStartsWith('2030-01-01', $blk[$head['embargo_until']]);
-        $this->assertSame('Photo: Kestrel Studio', $blk[$head['credit']]);
+        $this->assertSame('Photo: MAISON NOOR Studio', $blk[$head['credit']]);
         $this->assertSame('false', $blk[$head['ai_generated']]);
     }
 
@@ -84,24 +84,24 @@ final class PortalTest extends NodeTestCase
         $viewer = $this->json($this->http('GET', '/admin/api/portal/viewer', ['browser' => 'r1']));
         $this->assertFalse($viewer['preview']);
         $this->assertTrue($viewer['permissions']['original_download']);
-        $this->assertSame('Kestrel Outfitters', $viewer['branding']['name']);
+        $this->assertSame('MAISON NOOR Group', $viewer['branding']['name']);
         $list = $this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'r1']));
         $this->assertSame(11, $list['total']);
         $first = $list['items'][0];
-        $this->assertSame('KO-1001', $first['style_number']);
+        $this->assertSame('MN-1001', $first['style_number']);
         $this->assertSame(['NVY', 'OAT'], array_column($first['colors'], 'code'));
         $this->assertSame(4, $first['image_count']);
         $this->assertNotNull($first['thumb_url']);
         $thumb = $this->http('GET', substr($first['thumb_url'], strlen('http://localhost')));
         $this->assertSame(200, $thumb->status);
-        $filtered = $this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'r1', 'query' => ['item_type' => ['jacket'], 'q' => 'shell']]));
-        $this->assertSame(['KT-2002'], array_column($filtered['items'], 'style_number'));
+        $filtered = $this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'r1', 'query' => ['item_type' => ['jacket'], 'q' => 'raincoat']]));
+        $this->assertSame(['NA-2002'], array_column($filtered['items'], 'style_number'));
         $byColor = $this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'r1', 'query' => ['color' => ['RST']]]));
-        $this->assertSame(['KO-1003', 'KO-1006'], array_column($byColor['items'], 'style_number'));
+        $this->assertSame(['MN-1003', 'MN-1006'], array_column($byColor['items'], 'style_number'));
         $byEan = $this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'r1', 'query' => ['q' => '2000100501016']]));
-        $this->assertSame(['KO-1005'], array_column($byEan['items'], 'style_number'));
+        $this->assertSame(['MN-1005'], array_column($byEan['items'], 'style_number'));
         $facets = $this->json($this->http('GET', '/admin/api/portal/facets', ['browser' => 'r1', 'query' => ['item_type' => ['jacket']]]));
-        $this->assertSame(['Kestrel', 'Kestrel Trail'], array_column($facets['brands'], 'label'));
+        $this->assertSame(['MAISON NOOR', 'NOOR ATELIER'], array_column($facets['brands'], 'label'));
         $types = array_column($facets['item_types'], 'count', 'value');
         $this->assertSame(1, $types['sweater'], 'own facet ignores its own filter');
         $this->assertSame(2, $types['jacket']);
@@ -122,10 +122,10 @@ final class PortalTest extends NodeTestCase
         $this->retailerUser('r1', ['name' => 'Shop One']);
         $styles = fn (array $query) => array_column($this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'r1', 'query' => $query]))['items'], 'style_number');
         // Any fibre of any part with any of the codes; OR within the parameter, AND across.
-        $this->assertSame(['KO-1009'], $styles(['qualifier' => ['post_consumer']]));
-        $this->assertSame(['KO-1003', 'KO-1009'], $styles(['qualifier' => ['post_consumer', 'regenerative']]));
-        $this->assertSame(['KO-1008', 'KO-1009', 'KT-2001', 'KT-2002'], $styles(['qualifier' => ['recycled']]), 'also the 0.1 key recycled_polyester and a lining');
-        $this->assertSame(['KO-1009'], $styles(['qualifier' => ['recycled'], 'item_type' => ['bag']]));
+        $this->assertSame(['MN-1009'], $styles(['qualifier' => ['post_consumer']]));
+        $this->assertSame(['MN-1003', 'MN-1009'], $styles(['qualifier' => ['post_consumer', 'regenerative']]));
+        $this->assertSame(['MN-1008', 'MN-1009', 'NA-2001', 'NA-2002'], $styles(['qualifier' => ['recycled']]), 'also the 0.1 key recycled_polyester and a lining');
+        $this->assertSame(['MN-1009'], $styles(['qualifier' => ['recycled'], 'item_type' => ['bag']]));
         $this->assertSame([], $styles(['qualifier' => ['post%consumer']]));
         $this->assertSame([], $styles(['qualifier' => ['postXconsumer']]), '_ is no wildcard');
         $this->assertSame([], $styles(['qualifier' => ['recycled|post_consumer']]));
@@ -144,16 +144,16 @@ final class PortalTest extends NodeTestCase
         $this->assertSame(['bag' => 1], array_column($facets['item_types'], 'count', 'value'));
         // A code outside the vocabulary: the name it was given, or no label.
         $token = $this->ingestToken();
-        $body = ['brand_external_id' => 'kestrel', 'style_number' => 'KX-9', 'name' => ['en' => 'Yak scarf'], 'item_type' => 'scarf', 'materials' => [
+        $body = ['brand_external_id' => 'maison-noor', 'style_number' => 'MX-9', 'name' => ['en' => 'Yak scarf'], 'item_type' => 'scarf', 'materials' => [
             ['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'yak_wool'], 'percentage' => 100, 'qualifiers' => [['code' => 'wild_harvested', 'name' => ['en' => 'Wild harvested']], ['code' => 'nomadic']]]]],
         ]];
-        $this->json($this->http('PUT', '/obx/v1/ingest/products/KX-9', ['bearer' => $token, 'json' => $body]), 201);
+        $this->json($this->http('PUT', '/obx/v1/ingest/products/MX-9', ['bearer' => $token, 'json' => $body]), 201);
         $facets = $this->json($this->http('GET', '/admin/api/portal/facets', ['browser' => 'r1', 'query' => ['q' => 'yak']]));
         $this->assertSame([['value' => 'nomadic', 'count' => 1], ['value' => 'wild_harvested', 'count' => 1, 'label' => ['en' => 'Wild harvested']]], $facets['qualifiers']);
-        $this->assertSame(['KX-9'], $styles(['qualifier' => ['nomadic', 'organic'], 'q' => 'yak']));
+        $this->assertSame(['MX-9'], $styles(['qualifier' => ['nomadic', 'organic'], 'q' => 'yak']));
         // Writing the product without qualifiers takes it out of the filter.
         $body['materials'][0]['fibers'][0]['qualifiers'] = [];
-        $this->json($this->http('PUT', '/obx/v1/ingest/products/KX-9', ['bearer' => $token, 'json' => $body]));
+        $this->json($this->http('PUT', '/obx/v1/ingest/products/MX-9', ['bearer' => $token, 'json' => $body]));
         $this->assertSame([], $styles(['qualifier' => ['nomadic']]));
 
         // The same filter in a background download.
@@ -166,7 +166,7 @@ final class PortalTest extends NodeTestCase
             }
         }
         ksort($dirs);
-        $this->assertSame(['KO-1003', 'KO-1009'], array_keys($dirs));
+        $this->assertSame(['MN-1003', 'MN-1009'], array_keys($dirs));
     }
 
     public function testEanPasteSelectionZipsAndCsv(): void
@@ -183,13 +183,13 @@ final class PortalTest extends NodeTestCase
         $this->assertSame(200, $zip->status);
         $entries = $this->zipEntries($zip->content());
         sort($entries);
-        $this->assertContains('KO-1001/KO-1001_NVY_1_front_web.jpg', $entries);
-        $this->assertContains('KT-2002/KT-2002_YLW_1_front_web.jpg', $entries);
+        $this->assertContains('MN-1001/MN-1001_NVY_1_front_web.jpg', $entries);
+        $this->assertContains('NA-2002/NA-2002_YLW_1_front_web.jpg', $entries);
         $this->assertContains('assets.csv', $entries, 'the rights, embargo and AI provenance travel with the files');
         $this->assertCount(13 + 1, $entries);
         $one = $this->http('GET', '/admin/api/portal/products/' . $ids[0] . '/download.zip', ['browser' => 'r1']);
         $origEntries = $this->zipEntries($one->content());
-        $this->assertContains('KO-1001_NVY_1_front.png', $origEntries);
+        $this->assertContains('MN-1001_NVY_1_front.png', $origEntries);
         $csv = $this->http('GET', '/admin/api/portal/selection/data.csv', ['browser' => 'r1', 'query' => ['delimiter' => 'semicolon']]);
         $body = $csv->content();
         $this->assertStringStartsWith("\xEF\xBB\xBF", $body);
@@ -199,8 +199,8 @@ final class PortalTest extends NodeTestCase
         $this->assertSame('image_files', end($header));
         $this->assertCount(1 + 8 + 12 + 3, $lines);
         // Formula injection is neutralised, GTINs stay numeric.
-        $this->http('PUT', '/obx/v1/ingest/products/KO-1001', ['bearer' => $this->ingest, 'json' => [
-            'brand_external_id' => 'kestrel', 'style_number' => 'KO-1001', 'name' => ['en' => '=HYPERLINK("x")', 'nl' => 'Trui'],
+        $this->http('PUT', '/obx/v1/ingest/products/MN-1001', ['bearer' => $this->ingest, 'json' => [
+            'brand_external_id' => 'maison-noor', 'style_number' => 'MN-1001', 'name' => ['en' => '=HYPERLINK("x")', 'nl' => 'Trui'],
         ]]);
         $csv2 = $this->http('GET', '/admin/api/portal/selection/data.csv', ['browser' => 'r1'])->content();
         $this->assertStringContainsString("'=HYPERLINK", $csv2);
@@ -216,7 +216,7 @@ final class PortalTest extends NodeTestCase
     public function testBackgroundDownloadJob(): void
     {
         $this->retailerUser('r1', ['name' => 'Shop One']);
-        $job = $this->json($this->http('POST', '/admin/api/portal/download-jobs', ['browser' => 'r1', 'json' => ['source' => 'filter', 'filter' => ['brand_id' => [$this->kestrelId]], 'variant' => 'square']]), 202);
+        $job = $this->json($this->http('POST', '/admin/api/portal/download-jobs', ['browser' => 'r1', 'json' => ['source' => 'filter', 'filter' => ['brand_id' => [$this->maisonNoorId]], 'variant' => 'square']]), 202);
         $got = $this->json($this->http('GET', '/admin/api/portal/download-jobs/' . $job['id'], ['browser' => 'r1']));
         $this->assertSame('succeeded', $got['status']);
         $this->assertSame(31, $got['files']);
@@ -224,7 +224,7 @@ final class PortalTest extends NodeTestCase
         $entries = $this->zipEntries($file->content());
         $this->assertContains('data.csv', $entries);
         $this->assertContains('assets.csv', $entries);
-        $this->assertContains('KO-1002/KO-1002_OLV_1_front_square.jpg', $entries);
+        $this->assertContains('MN-1002/MN-1002_OLV_1_front_square.jpg', $entries);
         $mail = end($this->app->mailer->sent);
         $this->assertSame('r1@shop.example', $mail['to']);
         $this->assertStringContainsString('31', $mail['text']);
@@ -239,7 +239,7 @@ final class PortalTest extends NodeTestCase
     {
         $this->retailerUser('f1', ['name' => 'Facet Shop']);
         $keys = ['brands' => 'brand_id', 'item_types' => 'item_type', 'colors' => 'color', 'seasons' => 'season', 'collections' => 'collection', 'target_groups' => 'target_group'];
-        $combos = [[], ['item_type' => ['jacket']], ['color' => ['BLK'], 'season' => ['AW26']], ['brand_id' => [$this->kestrelId], 'q' => 'o'], ['color' => ['NVY', 'RST'], 'target_group' => ['men']]];
+        $combos = [[], ['item_type' => ['jacket']], ['color' => ['BLK'], 'season' => ['AW26']], ['brand_id' => [$this->maisonNoorId], 'q' => 'o'], ['color' => ['NVY', 'RST'], 'target_group' => ['men']]];
         foreach ($combos as $filters) {
             $facets = $this->json($this->http('GET', '/admin/api/portal/facets', ['browser' => 'f1', 'query' => $filters]));
             if ($filters === []) {
@@ -260,27 +260,27 @@ final class PortalTest extends NodeTestCase
 
     public function testRestrictedRetailerNeverSeesTheOtherBrand(): void
     {
-        $this->retailerUser('rr', ['name' => 'Kestrel only', 'brand_ids' => [$this->kestrelId], 'allow_original' => false]);
+        $this->retailerUser('rr', ['name' => 'MAISON NOOR only', 'brand_ids' => [$this->maisonNoorId], 'allow_original' => false]);
         $list = $this->json($this->http('GET', '/admin/api/portal/products', ['browser' => 'rr']));
         $this->assertSame(9, $list['total']);
-        $trail = (string) $this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'KT-2001'");
+        $trail = (string) $this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'NA-2001'");
         $this->assertProblem($this->http('GET', '/admin/api/portal/products/' . $trail, ['browser' => 'rr']), 404, 'not_found');
         $lookup = $this->json($this->http('POST', '/admin/api/portal/gtin-lookup', ['browser' => 'rr', 'json' => ['gtins' => ['2000200101017']]]));
         $this->assertSame('unmatched', $lookup['results'][0]['status']);
         $facets = $this->json($this->http('GET', '/admin/api/portal/facets', ['browser' => 'rr']));
-        $this->assertSame(['Kestrel'], array_column($facets['brands'], 'label'));
-        $asset = (string) $this->app->db->value("SELECT id FROM obx_assets WHERE external_id = 'KO-1001_NVY_1'");
+        $this->assertSame(['MAISON NOOR'], array_column($facets['brands'], 'label'));
+        $asset = (string) $this->app->db->value("SELECT id FROM obx_assets WHERE external_id = 'MN-1001_NVY_1'");
         $this->assertProblem($this->http('GET', '/admin/api/portal/assets/' . $asset . '/download', ['browser' => 'rr', 'query' => ['variant' => 'original']]), 403, 'original_not_allowed');
         $this->assertSame(200, $this->http('GET', '/admin/api/portal/assets/' . $asset . '/download', ['browser' => 'rr'])->status);
-        $detail = $this->json($this->http('GET', '/admin/api/portal/products/' . (string) $this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'KO-1001'"), ['browser' => 'rr']));
+        $detail = $this->json($this->http('GET', '/admin/api/portal/products/' . (string) $this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'MN-1001'"), ['browser' => 'rr']));
         $this->assertArrayNotHasKey('original', $detail['assets'][0]['renditions']);
 
         // The same restriction on the API: snapshot, lookups.
-        [, $id, $secret] = $this->retailerClient(['name' => 'Kestrel only API', 'brand_ids' => [$this->kestrelId]]);
+        [, $id, $secret] = $this->retailerClient(['name' => 'MAISON NOOR only API', 'brand_ids' => [$this->maisonNoorId]]);
         $token = $this->accessToken($id, $secret);
         [$entries] = $this->drainSnapshot($token);
         foreach ($entries as $e) {
-            $this->assertSame($this->kestrelId, $e['brand_id']);
+            $this->assertSame($this->maisonNoorId, $e['brand_id']);
         }
         $this->assertSame(1, count(array_filter($entries, static fn ($e) => $e['type'] === 'brand')));
         $this->assertProblem($this->http('GET', '/obx/v1/products/' . $trail, ['bearer' => $token]), 404, 'not_found');
@@ -291,18 +291,18 @@ final class PortalTest extends NodeTestCase
         [$rid, $id, $secret] = $this->retailerClient(['name' => 'Grant Shop']);
         $token = $this->accessToken($id, $secret);
         [, $cursor] = $this->drainSnapshot($token);
-        $this->json($this->http('PATCH', '/admin/api/retailers/' . $rid, ['browser' => 'admin', 'json' => ['brand_ids' => [$this->kestrelId]]]));
+        $this->json($this->http('PATCH', '/admin/api/retailers/' . $rid, ['browser' => 'admin', 'json' => ['brand_ids' => [$this->maisonNoorId]]]));
         $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $token, 'query' => ['cursor' => $cursor]]));
         $this->assertCount(1, $page['changes']);
         $this->assertSame('grant', $page['changes'][0]['type']);
         $this->assertTrue($page['changes'][0]['resync']);
-        $this->assertSame([$this->kestrelId], $page['changes'][0]['data']['brand_ids']);
+        $this->assertSame([$this->maisonNoorId], $page['changes'][0]['data']['brand_ids']);
     }
 
     public function testDownloadsAreCountedForRetailersNotForAdminPreview(): void
     {
         $this->retailerUser('r1', ['name' => 'Counted Shop']);
-        $asset = (string) $this->app->db->value("SELECT id FROM obx_assets WHERE external_id = 'KO-1001_NVY_1'");
+        $asset = (string) $this->app->db->value("SELECT id FROM obx_assets WHERE external_id = 'MN-1001_NVY_1'");
         $this->assertSame(200, $this->http('GET', '/admin/api/portal/assets/' . $asset . '/download', ['browser' => 'r1', 'query' => ['variant' => 'web']])->status);
         $this->assertSame(200, $this->http('GET', '/admin/api/portal/assets/' . $asset . '/download', ['browser' => 'admin', 'query' => ['variant' => 'web']])->status);
         // Reporting usage needs a key that asked for usage:write (new keys do not get it by default).
@@ -342,9 +342,9 @@ final class PortalTest extends NodeTestCase
     {
         [, $id, $secret] = $this->retailerClient(['name' => 'Export Shop']);
         $token = $this->accessToken($id, $secret);
-        $export = $this->json($this->http('POST', '/obx/v1/exports', ['bearer' => $token, 'json' => ['filter' => ['brand_ids' => [$this->kestrelId]], 'renditions' => ['web']], 'headers' => ['Idempotency-Key' => 'exp-1']]), 202);
+        $export = $this->json($this->http('POST', '/obx/v1/exports', ['bearer' => $token, 'json' => ['filter' => ['brand_ids' => [$this->maisonNoorId]], 'renditions' => ['web']], 'headers' => ['Idempotency-Key' => 'exp-1']]), 202);
         // Idempotency-Key: the same body is the same export; another body is 409.
-        $this->assertSame($export['id'], $this->json($this->http('POST', '/obx/v1/exports', ['bearer' => $token, 'json' => ['filter' => ['brand_ids' => [$this->kestrelId]], 'renditions' => ['web']], 'headers' => ['Idempotency-Key' => 'exp-1']]), 202)['id']);
+        $this->assertSame($export['id'], $this->json($this->http('POST', '/obx/v1/exports', ['bearer' => $token, 'json' => ['filter' => ['brand_ids' => [$this->maisonNoorId]], 'renditions' => ['web']], 'headers' => ['Idempotency-Key' => 'exp-1']]), 202)['id']);
         $this->assertProblem($this->http('POST', '/obx/v1/exports', ['bearer' => $token, 'json' => ['renditions' => []], 'headers' => ['Idempotency-Key' => 'exp-1']]), 409, 'idempotency_key_reused');
         $done = $this->json($this->http('GET', '/obx/v1/exports/' . $export['id'], ['bearer' => $token]));
         $this->assertSame('succeeded', $done['status'], Json::encode($done));
@@ -363,7 +363,7 @@ final class PortalTest extends NodeTestCase
         foreach ($lines as $l) {
             if ($l['type'] === 'file') {
                 $this->assertSame($l['sha256'], hash('sha256', (string) $z->getFromName($l['path'])), $l['path']);
-                $this->assertMatchesRegularExpression('#^KO-\d+/web/.+_web\.jpg$#', $l['path']);
+                $this->assertMatchesRegularExpression('#^MN-\d+/web/.+_web\.jpg$#', $l['path']);
             }
         }
         $z->close();
@@ -380,16 +380,16 @@ final class PortalTest extends NodeTestCase
         [, $id, $secret] = $this->retailerClient(['name' => 'Expiry Shop']);
         $token = $this->accessToken($id, $secret);
         $ingest = $this->ingest;
-        $rec = $this->json($this->http('GET', '/obx/v1/ingest/assets/KO-1001_NVY_2', ['bearer' => $ingest]));
+        $rec = $this->json($this->http('GET', '/obx/v1/ingest/assets/MN-1001_NVY_2', ['bearer' => $ingest]));
         $data = $rec['data'];
         unset($data['status']);
         $data['rights'] = ['expires_at' => gmdate('Y-m-d\TH:i:s\Z', time() + 60)];
-        $this->json($this->http('PUT', '/obx/v1/ingest/assets/KO-1001_NVY_2', ['bearer' => $ingest, 'json' => $data]));
+        $this->json($this->http('PUT', '/obx/v1/ingest/assets/MN-1001_NVY_2', ['bearer' => $ingest, 'json' => $data]));
         [, $cursor] = $this->drainSnapshot($token);
         \Obx\Node\Support\Clock::$offset = 120;
         $this->app->worker()->tick(5);
         $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $token, 'query' => ['cursor' => $cursor]]));
-        $this->assertSame([['asset', 'delete', 'KO-1001_NVY_2']], array_map(static fn ($c) => [$c['type'], $c['op'], $c['external_id']], $page['changes']));
+        $this->assertSame([['asset', 'delete', 'MN-1001_NVY_2']], array_map(static fn ($c) => [$c['type'], $c['op'], $c['external_id']], $page['changes']));
         $this->assertProblem($this->http('GET', '/obx/v1/assets/' . $rec['id'], ['bearer' => $token]), 404, 'not_found');
     }
 
@@ -427,7 +427,7 @@ final class PortalTest extends NodeTestCase
         [, $id, $secret] = $this->retailerClient(['name' => 'Cursor Shop']);
         $token = $this->accessToken($id, $secret);
         [, $cursor] = $this->drainSnapshot($token);
-        $this->app->writer->setStatus('product', 'KO-1006', false);
+        $this->app->writer->setStatus('product', 'MN-1006', false);
         $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $token, 'query' => ['cursor' => $cursor]]));
         $this->assertNotEmpty($page['changes']);
         $this->app->db->run('UPDATE obx_changes SET created_ts = 1');

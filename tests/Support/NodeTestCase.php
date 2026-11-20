@@ -98,7 +98,7 @@ abstract class NodeTestCase extends TestCase
             'data_dir' => $this->dir . '/data',
             'jobs_inline' => true,
             'mail_transport' => 'memory',
-            'mail_from' => 'portal@kestrel.example',
+            'mail_from' => 'portal@maison-noor.example',
             'allow_private_urls' => true,
             'rate_limit_factor' => 100.0,
             'ui_dir' => $this->dir . '/ui',
@@ -133,7 +133,7 @@ abstract class NodeTestCase extends TestCase
     private static array $snapshots = [];
 
     /**
-     * Restores a node state built once per test process (e.g. "set up + Kestrel imported"),
+     * Restores a node state built once per test process (e.g. "set up + MAISON NOOR imported"),
      * so slow steps (image rendering, password hashing) do not repeat for every test.
      * $build runs on a fresh node and returns extra values to keep (tokens etc.).
      *
@@ -178,13 +178,13 @@ abstract class NodeTestCase extends TestCase
         }
     }
 
-    /** Setup done, Kestrel imported; returns ['ingest' => token]. */
-    protected function kestrelNode(): array
+    /** Setup done, MAISON NOOR imported; returns ['ingest' => token]. */
+    protected function maisonNoorNode(): array
     {
-        return $this->snapshot('kestrel', function (): array {
+        return $this->snapshot('maison-noor', function (): array {
             $this->setupNode();
             $ingest = $this->ingestToken();
-            $job = $this->importKestrel($ingest);
+            $job = $this->importMaisonNoor($ingest);
             $this->assertSame('succeeded', $job['status'], Json::encode($job));
             $this->assertSame(0, $job['import_run']['counts']['errors'], Json::encode($job['import_run']));
             if ($this->app->db->isSqlite()) {
@@ -194,7 +194,7 @@ abstract class NodeTestCase extends TestCase
         });
     }
 
-    /** Setup done (empty catalog, first brand "kestrel"). */
+    /** Setup done (empty catalog, first brand "maison-noor"). */
     protected function freshNode(): array
     {
         return $this->snapshot('fresh', function (): array {
@@ -316,8 +316,8 @@ abstract class NodeTestCase extends TestCase
         $this->http('GET', '/admin/api/session', ['browser' => 'admin']);
         $res = $this->http('POST', '/admin/api/setup', ['browser' => 'admin', 'json' => [
             'setup_code' => self::SETUP_CODE,
-            'company' => ['name' => 'Kestrel Outfitters', 'first_brand_name' => 'Kestrel', 'default_language' => 'nl', 'languages' => ['nl', 'en']],
-            'admin' => ['name' => 'Ada Admin', 'email' => 'admin@kestrel.example', 'password' => 'correct horse battery'],
+            'company' => ['name' => 'MAISON NOOR Group', 'first_brand_name' => 'MAISON NOOR', 'default_language' => 'nl', 'languages' => ['nl', 'en']],
+            'admin' => ['name' => 'Ada Admin', 'email' => 'admin@maison-noor.example', 'password' => 'correct horse battery'],
         ]]);
         $this->json($res, 201);
     }
@@ -362,15 +362,15 @@ abstract class NodeTestCase extends TestCase
         return ['name' => $name, 'tmp' => $tmp, 'size' => (int) filesize($tmp), 'type' => $type];
     }
 
-    /** Builds the Kestrel package zip (products.csv + assets.csv + images/). */
-    protected function kestrelZip(?string $productsCsv = null, array $extra = []): string
+    /** Builds the MAISON NOOR package zip (products.csv + assets.csv + images/). */
+    protected function maisonNoorZip(?string $productsCsv = null, array $extra = []): string
     {
-        $zipPath = $this->dir . '/kestrel-' . bin2hex(random_bytes(3)) . '.zip';
+        $zipPath = $this->dir . '/maison-noor-' . bin2hex(random_bytes(3)) . '.zip';
         $zip = new \ZipArchive();
         $zip->open($zipPath, \ZipArchive::CREATE);
-        $zip->addFromString('products.csv', $productsCsv ?? (string) file_get_contents(self::fixtures('kestrel/products.csv')));
-        $zip->addFile(self::fixtures('kestrel/assets.csv'), 'assets.csv');
-        foreach (glob(self::fixtures('kestrel/images/*.png')) as $img) {
+        $zip->addFromString('products.csv', $productsCsv ?? (string) file_get_contents(self::fixtures('maison-noor/products.csv')));
+        $zip->addFile(self::fixtures('maison-noor/assets.csv'), 'assets.csv');
+        foreach (glob(self::fixtures('maison-noor/images/*.png')) as $img) {
             $zip->addFile($img, 'images/' . basename($img));
         }
         foreach ($extra as $name => $content) {
@@ -380,12 +380,12 @@ abstract class NodeTestCase extends TestCase
         return $zipPath;
     }
 
-    /** Imports the Kestrel fixtures through the Ingest API as a package; returns the job. */
-    protected function importKestrel(string $token, array $options = []): array
+    /** Imports the MAISON NOOR fixtures through the Ingest API as a package; returns the job. */
+    protected function importMaisonNoor(string $token, array $options = []): array
     {
         $res = $this->http('POST', '/obx/v1/ingest/imports', [
             'bearer' => $token,
-            'files' => ['package' => [$this->upload($this->kestrelZip(), 'kestrel.zip', 'application/zip')]],
+            'files' => ['package' => [$this->upload($this->maisonNoorZip(), 'maison-noor.zip', 'application/zip')]],
             'post' => $options !== [] ? ['options' => Json::encode($options)] : [],
             'headers' => ['Content-Type' => 'multipart/form-data; boundary=x'],
         ]);

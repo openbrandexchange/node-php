@@ -43,12 +43,12 @@ final class ImportTest extends NodeTestCase
 
     public function testPackageImportThenRepeatIsUnchanged(): void
     {
-        ['ingest' => $token] = $this->kestrelNode();
+        ['ingest' => $token] = $this->maisonNoorNode();
         $this->assertSame($this->expectedCounts(), $this->counts());
         [, $id, $secret] = $this->retailerClient();
         $client = $this->accessToken($id, $secret);
         [, $cursor] = $this->drainSnapshot($client);
-        $again = $this->importKestrel($token);
+        $again = $this->importMaisonNoor($token);
         $this->assertSame('succeeded', $again['status']);
         $counts = $again['import_run']['counts'];
         $this->assertSame(0, $counts['created'], Json::encode($counts));
@@ -63,12 +63,12 @@ final class ImportTest extends NodeTestCase
         $this->freshNode();
         $token = $this->ingestToken();
         $images = [];
-        foreach (glob(self::fixtures('kestrel/images/*.png')) as $img) {
+        foreach (glob(self::fixtures('maison-noor/images/*.png')) as $img) {
             $images[] = $this->upload($img, basename($img), 'image/png');
         }
         $job = $this->import($token, [
-            'csv' => [$this->upload(self::fixtures('kestrel/products.csv'), 'products.csv', 'text/csv')],
-            'assets_csv' => [$this->upload(self::fixtures('kestrel/assets.csv'), 'assets.csv', 'text/csv')],
+            'csv' => [$this->upload(self::fixtures('maison-noor/products.csv'), 'products.csv', 'text/csv')],
+            'assets_csv' => [$this->upload(self::fixtures('maison-noor/assets.csv'), 'assets.csv', 'text/csv')],
             'images' => $images,
         ]);
         $this->assertSame('succeeded', $job['status'], Json::encode($job));
@@ -80,42 +80,42 @@ final class ImportTest extends NodeTestCase
         $this->setupNode();
         $token = $this->ingestToken();
         $manifest = [];
-        foreach (glob(self::fixtures('kestrel/images/*.png')) as $img) {
+        foreach (glob(self::fixtures('maison-noor/images/*.png')) as $img) {
             $sha = hash_file('sha256', $img);
             $this->http('PUT', '/obx/v1/ingest/blobs/' . $sha, ['bearer' => $token, 'body' => file_get_contents($img)]);
             $manifest[] = ['file' => basename($img), 'sha256' => $sha];
         }
         $job = $this->import($token, [
-            'csv' => [$this->upload(self::fixtures('kestrel/products.csv'), 'products.csv', 'text/csv')],
-            'assets_csv' => [$this->upload(self::fixtures('kestrel/assets.csv'), 'assets.csv', 'text/csv')],
+            'csv' => [$this->upload(self::fixtures('maison-noor/products.csv'), 'products.csv', 'text/csv')],
+            'assets_csv' => [$this->upload(self::fixtures('maison-noor/assets.csv'), 'assets.csv', 'text/csv')],
         ], [], ['images_manifest' => Json::encode($manifest)]);
         $this->assertSame('succeeded', $job['status']);
         $this->assertSame(0, $job['import_run']['counts']['errors'], Json::encode($job['import_run']['errors_preview']));
         $this->assertSame($this->expectedCounts(), $this->counts());
-        $ai = Json::decode((string) $this->app->db->value("SELECT rep FROM obx_assets WHERE external_id = 'KO-1003_RST_3'"));
+        $ai = Json::decode((string) $this->app->db->value("SELECT rep FROM obx_assets WHERE external_id = 'MN-1003_RST_3'"));
         $this->assertTrue($ai['provenance']['ai_generated']);
         $this->assertSame('generated', $ai['provenance']['source']);
     }
 
     public function testMirrorUnpublishesMissingProductsAndRefusesMassUnpublish(): void
     {
-        ['ingest' => $token] = $this->kestrelNode();
-        $lines = file(self::fixtures('kestrel/products.csv'), FILE_IGNORE_NEW_LINES);
-        $withoutBeanie = implode("\n", array_filter($lines, static fn ($l) => !str_contains($l, 'KO-1006'))) . "\n";
+        ['ingest' => $token] = $this->maisonNoorNode();
+        $lines = file(self::fixtures('maison-noor/products.csv'), FILE_IGNORE_NEW_LINES);
+        $withoutBeanie = implode("\n", array_filter($lines, static fn ($l) => !str_contains($l, 'MN-1006'))) . "\n";
         $csv = $this->dir . '/mirror.csv';
         file_put_contents($csv, $withoutBeanie);
         $job = $this->import($token, ['csv' => [$this->upload($csv, 'products.csv', 'text/csv')]], ['mode' => 'mirror']);
         $this->assertSame('succeeded', $job['status'], Json::encode($job));
         $this->assertSame(1, $job['import_run']['counts']['unpublished']);
-        $this->assertSame('unpublished', $this->app->db->value("SELECT status FROM obx_products WHERE external_id = 'KO-1006'"));
-        $this->assertSame('published', $this->app->db->value("SELECT status FROM obx_products WHERE external_id = 'KO-1001'"));
+        $this->assertSame('unpublished', $this->app->db->value("SELECT status FROM obx_products WHERE external_id = 'MN-1006'"));
+        $this->assertSame('published', $this->app->db->value("SELECT status FROM obx_products WHERE external_id = 'MN-1001'"));
 
-        $onlyOne = implode("\n", array_filter($lines, static fn ($l) => str_starts_with($l, 'brand,') || str_contains($l, 'KO-1001'))) . "\n";
+        $onlyOne = implode("\n", array_filter($lines, static fn ($l) => str_starts_with($l, 'brand,') || str_contains($l, 'MN-1001'))) . "\n";
         file_put_contents($csv, $onlyOne);
         $job = $this->import($token, ['csv' => [$this->upload($csv, 'products.csv', 'text/csv')]], ['mode' => 'mirror']);
         $this->assertSame('failed', $job['status']);
         $this->assertSame('mass_unpublish_refused', $job['import_run']['error']['obx_error']);
-        $this->assertSame(0, (int) $this->app->db->value("SELECT COUNT(*) FROM obx_products WHERE status = 'unpublished' AND external_id <> 'KO-1006'"));
+        $this->assertSame(0, (int) $this->app->db->value("SELECT COUNT(*) FROM obx_products WHERE status = 'unpublished' AND external_id <> 'MN-1006'"));
 
         // Mirror needs the delete scope.
         $writeOnly = $this->ingestToken(['ingest:read', 'ingest:write']);
@@ -125,66 +125,66 @@ final class ImportTest extends NodeTestCase
 
     public function testAnImageNamedAllBelongsToEveryColour(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         $token = $this->ingestToken();
-        $png = self::fixtures('kestrel/images/KO-1005_COG_1_front.png');
+        $png = self::fixtures('maison-noor/images/MN-1005_COG_1_front.png');
         $job = $this->import($token, ['images' => [
-            $this->upload($png, 'KO-1005_ALL_4_size_chart.png', 'image/png'),
-            $this->upload($png, 'ko-1001_all_9.png', 'image/png'),
+            $this->upload($png, 'MN-1005_ALL_4_size_chart.png', 'image/png'),
+            $this->upload($png, 'mn-1001_all_9.png', 'image/png'),
         ]]);
         $this->assertSame(0, $job['import_run']['counts']['errors'], Json::encode($job['import_run']));
-        $a = $this->app->db->one("SELECT * FROM obx_assets WHERE external_id = 'KO-1005_ALL_4'");
+        $a = $this->app->db->one("SELECT * FROM obx_assets WHERE external_id = 'MN-1005_ALL_4'");
         $this->assertNotNull($a, 'the asset id is {style}_ALL_{position}');
         $this->assertNull($a['color_code']);
         $rep = Json::decode((string) $a['input']);
         $this->assertSame('size_chart', $rep['role']);
-        $this->assertNotNull($this->app->db->one("SELECT id FROM obx_assets WHERE external_id = 'KO-1001_ALL_9' AND color_code IS NULL"));
+        $this->assertNotNull($this->app->db->one("SELECT id FROM obx_assets WHERE external_id = 'MN-1001_ALL_9' AND color_code IS NULL"));
     }
 
     /** Import rule 8: an import of the images without their assets.csv row keeps what they have. */
     public function testAnImportWithoutAssetsCsvKeepsWhatTheImagesHave(): void
     {
-        ['ingest' => $token] = $this->kestrelNode();
+        ['ingest' => $token] = $this->maisonNoorNode();
         // A credit set through the Ingest API, as the admin would set it.
-        $this->json($this->http('PATCH', '/obx/v1/ingest/assets/KO-1001_NVY_1', ['bearer' => $token, 'json' => ['rights' => ['credit' => 'Photo: Test Studio']]]));
+        $this->json($this->http('PATCH', '/obx/v1/ingest/assets/MN-1001_NVY_1', ['bearer' => $token, 'json' => ['rights' => ['credit' => 'Photo: Test Studio']]]));
         $images = [];
-        foreach (glob(self::fixtures('kestrel/images/*.png')) as $img) {
+        foreach (glob(self::fixtures('maison-noor/images/*.png')) as $img) {
             $images[] = $this->upload($img, basename($img), 'image/png');
         }
-        $job = $this->import($token, ['csv' => [$this->upload(self::fixtures('kestrel/products.csv'), 'products.csv', 'text/csv')], 'images' => $images]);
+        $job = $this->import($token, ['csv' => [$this->upload(self::fixtures('maison-noor/products.csv'), 'products.csv', 'text/csv')], 'images' => $images]);
         $this->assertSame('succeeded', $job['status'], Json::encode($job));
         $counts = $job['import_run']['counts'];
         $this->assertSame([0, 0, 0], [$counts['created'], $counts['updated'], $counts['errors']], Json::encode($counts));
         $data = fn (string $ext): array => $this->json($this->http('GET', '/obx/v1/ingest/assets/' . $ext, ['bearer' => $token]))['data'];
-        $blk = $data('KO-1002_BLK_2');
+        $blk = $data('MN-1002_BLK_2');
         $this->assertStringStartsWith('2030-01-01', (string) $blk['rights']['embargo_until'], 'the embargo stays');
-        $this->assertSame('Photo: Kestrel Studio', $blk['rights']['credit']);
-        $rst = $data('KO-1003_RST_3');
+        $this->assertSame('Photo: MAISON NOOR Studio', $blk['rights']['credit']);
+        $rst = $data('MN-1003_RST_3');
         $this->assertTrue($rst['provenance']['ai_generated'], 'the AI label stays');
         $this->assertNotEmpty($rst['alt_text']['nl'] ?? null);
-        $this->assertSame('Photo: Test Studio', $data('KO-1001_NVY_1')['rights']['credit'], 'a credit set in the admin stays');
+        $this->assertSame('Photo: Test Studio', $data('MN-1001_NVY_1')['rights']['credit'], 'a credit set in the admin stays');
     }
 
     /** Import rule 9: a column the file does not have keeps the field; an empty cell removes it. */
     public function testAMissingColumnKeepsTheFieldAndAnEmptyCellRemovesIt(): void
     {
-        ['ingest' => $token] = $this->kestrelNode();
+        ['ingest' => $token] = $this->maisonNoorNode();
         $csv = function (string $text): array {
             $path = $this->dir . '/products-' . bin2hex(random_bytes(3)) . '.csv';
             file_put_contents($path, $text);
             return ['csv' => [$this->upload($path, 'products.csv', 'text/csv')]];
         };
-        $job = $this->import($token, $csv("brand,style_number,name:en\nKestrel,KO-1001,Merino Crew Sweater\nKestrel,KO-1002,Waxed Field Jacket\n"));
+        $job = $this->import($token, $csv("brand,style_number,name:en\nMAISON NOOR,MN-1001,Fine Merino Crew-Neck Sweater\nMAISON NOOR,MN-1002,Cropped Waxed Cotton Jacket\n"));
         $this->assertSame('succeeded', $job['status'], Json::encode($job));
         $c = $job['import_run']['counts'];
         $this->assertSame([0, 0], [$c['created'], $c['updated']], Json::encode($c));
-        $data = fn (): array => $this->json($this->http('GET', '/obx/v1/ingest/products/KO-1001', ['bearer' => $token]))['data'];
+        $data = fn (): array => $this->json($this->http('GET', '/obx/v1/ingest/products/MN-1001', ['bearer' => $token]))['data'];
         $p = $data();
-        $this->assertSame('Merino trui met ronde hals', $p['name']['nl'] ?? null, 'a language without its column keeps its text');
+        $this->assertSame('Fijne merino trui met ronde hals', $p['name']['nl'] ?? null, 'a language without its column keeps its text');
         $this->assertNotEmpty($p['description']['en'] ?? null);
         $this->assertNotEmpty($p['materials'] ?? null);
         $this->assertNotEmpty($p['care'] ?? null);
-        $job = $this->import($token, $csv("brand,style_number,name:en,season\nKestrel,KO-1001,Merino Crew Sweater,\n"));
+        $job = $this->import($token, $csv("brand,style_number,name:en,season\nMAISON NOOR,MN-1001,Fine Merino Crew-Neck Sweater,\n"));
         $this->assertSame(1, $job['import_run']['counts']['updated'], Json::encode($job['import_run']['counts']));
         $p = $data();
         $this->assertArrayNotHasKey('season', array_filter($p, static fn ($v) => $v !== null), 'an empty cell removes the season');
@@ -195,7 +195,7 @@ final class ImportTest extends NodeTestCase
     {
         $this->freshNode();
         $token = $this->ingestToken();
-        $zipPath = $this->kestrelZip(null, ['../evil.jpg' => 'x']);
+        $zipPath = $this->maisonNoorZip(null, ['../evil.jpg' => 'x']);
         $job = $this->import($token, ['package' => [$this->upload($zipPath, 'bad.zip', 'application/zip')]]);
         $this->assertSame('failed', $job['status']);
         $this->assertSame('import_invalid', $job['import_run']['error']['obx_error']);
@@ -213,7 +213,7 @@ final class ImportTest extends NodeTestCase
             . "ER-3,Third,2000100101026,RED,S,Red,x\n";
         $file = $this->dir . '/errors.csv';
         file_put_contents($file, $csv);
-        $job = $this->import($token, ['csv' => [$this->upload($file, 'products.csv')], 'images' => [$this->upload(self::fixtures('kestrel/images/KO-1001_NVY_1_front.png'), 'ZZ-9_NVY_1.png')]]);
+        $job = $this->import($token, ['csv' => [$this->upload($file, 'products.csv')], 'images' => [$this->upload(self::fixtures('maison-noor/images/MN-1001_NVY_1_front.png'), 'ZZ-9_NVY_1.png')]]);
         $this->assertSame('succeeded', $job['status']);
         $errors = $this->json($this->http('GET', '/obx/v1/ingest/jobs/' . $job['id'] . '/results', ['bearer' => $token]))['items'];
         $find = static function (array $errors, ?int $row, ?string $col, string $code) {
@@ -247,7 +247,7 @@ final class ImportTest extends NodeTestCase
     {
         $this->freshNode();
         $token = $this->ingestToken();
-        $job = $this->import($token, ['package' => [$this->upload($this->kestrelZip(), 'kestrel.zip')]], ['dry_run' => true]);
+        $job = $this->import($token, ['package' => [$this->upload($this->maisonNoorZip(), 'maison-noor.zip')]], ['dry_run' => true]);
         $this->assertSame('succeeded', $job['status'], Json::encode($job));
         $this->assertTrue($job['import_run']['dry_run']);
         $this->assertSame(11 + 46 + 35 + 1, $job['import_run']['counts']['created']);

@@ -90,7 +90,7 @@ final class RealServerTest extends NodeTestCase
 
     public function testWebhooksAreSignedAndDelivered(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         $captured = $this->dir . '/received.ndjson';
         $receiver = $this->serve([dirname(__DIR__) . '/fixtures/receiver.php'], ['OBX_RECEIVER_FILE' => $captured]);
         [, $id, $secret] = $this->retailerClient(['name' => 'Hook Shop']);
@@ -111,7 +111,7 @@ final class RealServerTest extends NodeTestCase
         $this->assertNull($list['items'][0]['secret']);
 
         // A catalog change wakes the subscriber.
-        $this->app->writer->setStatus('product', 'KO-1006', false);
+        $this->app->writer->setStatus('product', 'MN-1006', false);
         $this->app->worker()->tick(10);
         $events = array_map(static fn ($r) => Json::decode($r['body'])['type'], $this->received($captured));
         $this->assertContains('changes.available', $events);
@@ -177,8 +177,8 @@ final class RealServerTest extends NodeTestCase
         $session = Json::decode($this->curl('GET', $base . '/admin/api/session', null, [], $jar)['body']);
         $setup = $this->curl('POST', $base . '/admin/api/setup', Json::encode([
             'setup_code' => $code,
-            'company' => ['name' => 'Kestrel Outfitters', 'default_language' => 'en'],
-            'admin' => ['name' => 'Ada', 'email' => 'ada@kestrel.example', 'password' => 'correct horse battery'],
+            'company' => ['name' => 'MAISON NOOR Group', 'default_language' => 'en'],
+            'admin' => ['name' => 'Ada', 'email' => 'ada@maison-noor.example', 'password' => 'correct horse battery'],
         ]), ['Content-Type' => 'application/json', 'X-CSRF-Token' => $session['csrf_token']], $jar);
         $this->assertSame(201, $setup['status'], $setup['body']);
         $disc = $this->curl('GET', $base . '/.well-known/obx');
@@ -199,20 +199,20 @@ final class RealServerTest extends NodeTestCase
         // Repeated "images" fields in one multipart request all arrive (own multipart parser).
         $csrf = Json::decode($this->curl('GET', $base . '/admin/api/session', null, [], $jar)['body'])['csrf_token'];
         $tok = Json::decode($this->curl('POST', $base . '/admin/api/ingest-tokens', Json::encode(['name' => 'CLI', 'scopes' => ['ingest:read', 'ingest:write']]), ['Content-Type' => 'application/json', 'X-CSRF-Token' => $csrf], $jar)['body'])['secret'];
-        $fields = ['csv' => new \CURLFile(self::fixtures('kestrel/products.csv'), 'text/csv', 'products.csv')];
+        $fields = ['csv' => new \CURLFile(self::fixtures('maison-noor/products.csv'), 'text/csv', 'products.csv')];
         $ch = curl_init($base . '/obx/v1/ingest/imports');
         $boundary = 'obxtest' . bin2hex(random_bytes(4));
         $body = '';
-        foreach (['KO-1001_NVY_1_front.png', 'KO-1001_NVY_2_back.png', 'KO-1002_BLK_1_front.png'] as $img) {
-            $body .= "--$boundary\r\nContent-Disposition: form-data; name=\"images\"; filename=\"$img\"\r\nContent-Type: image/png\r\n\r\n" . file_get_contents(self::fixtures('kestrel/images/' . $img)) . "\r\n";
+        foreach (['MN-1001_NVY_1_front.png', 'MN-1001_NVY_2_back.png', 'MN-1002_BLK_1_front.png'] as $img) {
+            $body .= "--$boundary\r\nContent-Disposition: form-data; name=\"images\"; filename=\"$img\"\r\nContent-Type: image/png\r\n\r\n" . file_get_contents(self::fixtures('maison-noor/images/' . $img)) . "\r\n";
         }
-        $body .= "--$boundary\r\nContent-Disposition: form-data; name=\"csv\"; filename=\"products.csv\"\r\nContent-Type: text/csv\r\n\r\n" . file_get_contents(self::fixtures('kestrel/products.csv')) . "\r\n";
+        $body .= "--$boundary\r\nContent-Disposition: form-data; name=\"csv\"; filename=\"products.csv\"\r\nContent-Type: text/csv\r\n\r\n" . file_get_contents(self::fixtures('maison-noor/products.csv')) . "\r\n";
         $body .= "--$boundary\r\nContent-Disposition: form-data; name=\"options\"\r\n\r\n{\"mode\":\"upsert\"}\r\n--$boundary--\r\n";
         unset($fields, $ch);
         $imp = $this->curl('POST', $base . '/obx/v1/ingest/imports', $body, ['Authorization' => 'Bearer ' . $tok, 'Content-Type' => 'multipart/form-data; boundary=' . $boundary]);
         $this->assertSame(202, $imp['status'], $imp['body']);
         $files = array_column(Json::decode($imp['body'])['import_run']['files'], 'name');
-        $this->assertSame(['products.csv', 'KO-1001_NVY_1_front.png', 'KO-1001_NVY_2_back.png', 'KO-1002_BLK_1_front.png'], $files);
+        $this->assertSame(['products.csv', 'MN-1001_NVY_1_front.png', 'MN-1001_NVY_2_back.png', 'MN-1002_BLK_1_front.png'], $files);
 
         // Bearer tokens reach PHP.
         $unauth = $this->curl('GET', $base . '/obx/v1/changes', null, ['Authorization' => 'Bearer nope']);

@@ -143,13 +143,13 @@ final class IngestTest extends NodeTestCase
 
     public function testIdempotentRepeatsAndIdempotencyKey(): void
     {
-        $body = ['style_number' => 'KO-7000', 'name' => ['en' => 'Idempotent tee']];
-        $this->assertSame('created', $this->json($this->http('PUT', '/obx/v1/ingest/products/KO-7000', ['bearer' => $this->ingest, 'json' => $body]), 201)['result']);
+        $body = ['style_number' => 'MN-7000', 'name' => ['en' => 'Idempotent tee']];
+        $this->assertSame('created', $this->json($this->http('PUT', '/obx/v1/ingest/products/MN-7000', ['bearer' => $this->ingest, 'json' => $body]), 201)['result']);
         [, $cursor] = $this->drainSnapshot($this->client);
-        $again = $this->json($this->http('PUT', '/obx/v1/ingest/products/KO-7000', ['bearer' => $this->ingest, 'json' => $body]));
+        $again = $this->json($this->http('PUT', '/obx/v1/ingest/products/MN-7000', ['bearer' => $this->ingest, 'json' => $body]));
         $this->assertSame('unchanged', $again['result']);
         $this->assertSame([], $this->liveEntries($cursor));
-        $ops = Json::encode([['op' => 'upsert', 'kind' => 'product', 'external_id' => 'KO-7001', 'data' => ['style_number' => 'KO-7001', 'name' => ['en' => 'x']]]]);
+        $ops = Json::encode([['op' => 'upsert', 'kind' => 'product', 'external_id' => 'MN-7001', 'data' => ['style_number' => 'MN-7001', 'name' => ['en' => 'x']]]]);
         $one = $this->http('POST', '/obx/v1/ingest/batch', ['bearer' => $this->ingest, 'body' => $ops, 'headers' => ['Content-Type' => 'application/json', 'Prefer' => 'respond-async', 'Idempotency-Key' => 'k1']]);
         $two = $this->http('POST', '/obx/v1/ingest/batch', ['bearer' => $this->ingest, 'body' => $ops, 'headers' => ['Content-Type' => 'application/json', 'Prefer' => 'respond-async', 'Idempotency-Key' => 'k1']]);
         $this->assertSame($this->json($one, 202)['id'], $this->json($two, 202)['id']);
@@ -159,9 +159,9 @@ final class IngestTest extends NodeTestCase
         $results = $this->json($this->http('GET', '/obx/v1/ingest/jobs/' . $job['id'] . '/results', ['bearer' => $this->ingest]));
         $this->assertSame('created', $results['items'][0]['result']);
         // The same key with another body is 409 idempotency_key_reused and writes nothing.
-        $other = Json::encode([['op' => 'upsert', 'kind' => 'product', 'external_id' => 'KO-7002', 'data' => ['style_number' => 'KO-7002', 'name' => ['en' => 'y']]]]);
+        $other = Json::encode([['op' => 'upsert', 'kind' => 'product', 'external_id' => 'MN-7002', 'data' => ['style_number' => 'MN-7002', 'name' => ['en' => 'y']]]]);
         $this->assertProblem($this->http('POST', '/obx/v1/ingest/batch', ['bearer' => $this->ingest, 'body' => $other, 'headers' => ['Content-Type' => 'application/json', 'Idempotency-Key' => 'k1']]), 409, 'idempotency_key_reused');
-        $this->assertNull($this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'KO-7002'"));
+        $this->assertNull($this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'MN-7002'"));
         $sync = fn (string $body) => $this->http('POST', '/obx/v1/ingest/batch', ['bearer' => $this->ingest, 'body' => $body, 'headers' => ['Content-Type' => 'application/json', 'Idempotency-Key' => 'k2']]);
         $this->assertSame($this->json($sync($other))['results'][0]['id'], $this->json($sync($other))['results'][0]['id']);
         $this->assertProblem($this->http('POST', '/obx/v1/ingest/batch', ['bearer' => $this->ingest, 'body' => $other, 'headers' => ['Content-Type' => 'application/json', 'Idempotency-Key' => str_repeat('k', 201)]]), 400, 'invalid_request');
@@ -172,14 +172,14 @@ final class IngestTest extends NodeTestCase
             return ['csv' => [$this->upload($path, 'products.csv', 'text/csv')]];
         };
         $import = fn (array $files) => $this->http('POST', '/obx/v1/ingest/imports', ['bearer' => $this->ingest, 'files' => $files, 'headers' => ['Idempotency-Key' => 'imp-1']]);
-        $first = $this->json($import($csv("style_number,name:en\nKO-7003,One\n")), 202);
-        $this->assertSame($first['id'], $this->json($import($csv("style_number,name:en\nKO-7003,One\n")), 202)['id']);
-        $this->assertProblem($import($csv("style_number,name:en\nKO-7003,Two\n")), 409, 'idempotency_key_reused');
+        $first = $this->json($import($csv("style_number,name:en\nMN-7003,One\n")), 202);
+        $this->assertSame($first['id'], $this->json($import($csv("style_number,name:en\nMN-7003,One\n")), 202)['id']);
+        $this->assertProblem($import($csv("style_number,name:en\nMN-7003,Two\n")), 409, 'idempotency_key_reused');
     }
 
     public function testBlobsDedupeChecksumAndMissingBlob(): void
     {
-        $file = self::fixtures('ingest/files/KL-9001_GRN_1.png');
+        $file = self::fixtures('ingest/files/ML-9001_GRN_1.png');
         $sha = hash_file('sha256', $file);
         $this->assertSame(404, $this->http('HEAD', '/obx/v1/ingest/blobs/' . $sha, ['bearer' => $this->ingest])->status);
         $put = $this->json($this->http('PUT', '/obx/v1/ingest/blobs/' . $sha, ['bearer' => $this->ingest, 'body' => file_get_contents($file)]), 201);
@@ -224,7 +224,7 @@ final class IngestTest extends NodeTestCase
     public function testResumableMultipartUpload(): void
     {
         // A 12 MiB valid PNG: tiny image plus a large ancillary chunk.
-        $png = (string) file_get_contents(self::fixtures('ingest/files/KL-9001_GRN_2.png'));
+        $png = (string) file_get_contents(self::fixtures('ingest/files/ML-9001_GRN_2.png'));
         $pad = str_repeat("\0", 12 * 1024 * 1024 - strlen($png) - 12);
         $chunk = pack('N', strlen($pad)) . 'zzZz' . $pad;
         $big = substr($png, 0, 33) . $chunk . pack('N', crc32('zzZz' . $pad)) . substr($png, 33);
@@ -267,7 +267,7 @@ final class IngestTest extends NodeTestCase
         $this->assertSame(['updated', 'updated'], array_column($order, 'result'));
         $this->assertProblem($this->http('PUT', '/obx/v1/ingest/products/V1/asset-order', ['bearer' => $this->ingest, 'json' => ['color_code' => 'A', 'asset_external_ids' => ['V1_A_2']]]), 422, 'validation_failed');
         // Deleting a brand with products.
-        $this->assertProblem($this->http('DELETE', '/obx/v1/ingest/brands/kestrel', ['bearer' => $this->ingest]), 409, 'conflict');
+        $this->assertProblem($this->http('DELETE', '/obx/v1/ingest/brands/maison-noor', ['bearer' => $this->ingest]), 409, 'conflict');
         // If-Match.
         $this->assertProblem($this->http('PUT', '/obx/v1/ingest/products/V4', ['bearer' => $this->ingest, 'json' => ['style_number' => 'V4', 'name' => ['en' => 'y']], 'headers' => ['If-Match' => '"nope"']]), 412, 'precondition_failed');
     }
@@ -281,15 +281,15 @@ final class IngestTest extends NodeTestCase
         $this->assertGreaterThanOrEqual(1000, $info['limits']['max_batch_operations']);
         $this->assertTrue($info['renditions']['server_generated']);
         $this->json($this->http('PUT', '/obx/v1/ingest/brands/other', ['bearer' => $this->ingest, 'json' => ['name' => 'Other']]), 201);
-        $restricted = $this->ingestToken(['ingest:read', 'ingest:write'], ['kestrel']);
-        $this->json($this->http('PUT', '/obx/v1/ingest/products/R1', ['bearer' => $restricted, 'json' => ['brand_external_id' => 'kestrel', 'style_number' => 'R1', 'name' => ['en' => 'x']]]), 201);
+        $restricted = $this->ingestToken(['ingest:read', 'ingest:write'], ['maison-noor']);
+        $this->json($this->http('PUT', '/obx/v1/ingest/products/R1', ['bearer' => $restricted, 'json' => ['brand_external_id' => 'maison-noor', 'style_number' => 'R1', 'name' => ['en' => 'x']]]), 201);
         $this->assertProblem($this->http('PUT', '/obx/v1/ingest/products/R2', ['bearer' => $restricted, 'json' => ['brand_external_id' => 'other', 'style_number' => 'R2', 'name' => ['en' => 'x']]]), 403, 'forbidden');
         $this->assertProblem($this->http('DELETE', '/obx/v1/ingest/products/R1', ['bearer' => $restricted]), 403, 'insufficient_scope');
         // Revoked token.
         $tokens = $this->json($this->http('GET', '/admin/api/ingest-tokens', ['browser' => 'admin']))['items'];
         $id = null;
         foreach ($tokens as $t) {
-            if ($t['brand_external_ids'] === ['kestrel']) {
+            if ($t['brand_external_ids'] === ['maison-noor']) {
                 $id = $t['id'];
             }
         }

@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # Runs the scheduled-import tests against real servers in Docker: an S3-compatible store
-# (SeaweedFS) and an SFTP server (atmoz/sftp) holding the Kestrel fixtures.
+# (SeaweedFS) and an SFTP server (atmoz/sftp) holding the MAISON NOOR fixtures.
 # The server images are pinned so a new upstream release cannot turn CI red overnight;
 # SEAWEEDFS_IMAGE / SFTP_IMAGE override them to try a newer one. Every bucket is a SeaweedFS
 # collection that grows its own volumes: small volumes and an explicit maximum keep the
@@ -16,8 +16,8 @@ trap 'docker rm -f obx-php-s3 obx-php-sftp >/dev/null 2>&1 || true; rm -rf "$wor
 docker network create "$net" >/dev/null 2>&1 || true
 printf '{"identities":[{"name":"obx","credentials":[{"accessKey":"obxtest","secretKey":"obxtestsecret"}],"actions":["Admin","Read","Write","List","Tagging"]}]}' > "$work/s3.json"
 mkdir -p "$work/sftp/export/images"
-cp "$here/tests/fixtures/spec/kestrel/products.csv" "$here/tests/fixtures/spec/kestrel/assets.csv" "$work/sftp/export/"
-cp "$here"/tests/fixtures/spec/kestrel/images/*.png "$work/sftp/export/images/"
+cp "$here/tests/fixtures/spec/maison-noor/products.csv" "$here/tests/fixtures/spec/maison-noor/assets.csv" "$work/sftp/export/"
+cp "$here"/tests/fixtures/spec/maison-noor/images/*.png "$work/sftp/export/images/"
 docker rm -f obx-php-s3 obx-php-sftp >/dev/null 2>&1 || true
 docker run -d --name obx-php-s3 --network "$net" -v "$work/s3.json:/etc/s3.json:ro" "$seaweedfs" server -s3 -s3.config=/etc/s3.json -s3.port=8333 \
   -master.volumeSizeLimitMB=64 -volume.max=100 >/dev/null

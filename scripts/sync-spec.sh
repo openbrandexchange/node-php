@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Copies the spec fixtures (Kestrel Outfitters catalog, expected objects, ingest replay script,
+# Copies the spec fixtures (MAISON NOOR catalog, expected objects, ingest replay script,
 # import cases) from a checkout of openbrandexchange/spec into tests/fixtures/spec, and the
 # vocabularies (names of material, part, qualifier and care codes) into resources/vocabularies,
 # where the node reads them at runtime. Tests use these copies so they run without the spec
@@ -14,7 +14,7 @@ fi
 dest="$here/tests/fixtures/spec"
 rm -rf "$dest"
 mkdir -p "$dest"
-cp -R "$spec/fixtures/kestrel" "$spec/fixtures/expected" "$spec/fixtures/ingest" "$spec/fixtures/examples" "$spec/fixtures/imports" "$dest/"
+cp -R "$spec/fixtures/maison-noor" "$spec/fixtures/expected" "$spec/fixtures/ingest" "$spec/fixtures/examples" "$spec/fixtures/imports" "$dest/"
 (cd "$spec" && git rev-parse HEAD 2>/dev/null || echo unknown) > "$dest/SPEC_COMMIT"
 vocab="$here/resources/vocabularies"
 rm -rf "$vocab"

@@ -22,8 +22,8 @@ final class AdminTest extends NodeTestCase
         $this->assertFalse($session['authenticated']);
         $body = [
             'setup_code' => 'WRONG-CODE-0000',
-            'company' => ['name' => 'Kestrel Outfitters', 'first_brand_name' => 'Kestrel', 'default_language' => 'nl', 'languages' => ['nl', 'en']],
-            'admin' => ['name' => 'Ada', 'email' => 'admin@kestrel.example', 'password' => 'correct horse battery'],
+            'company' => ['name' => 'MAISON NOOR Group', 'first_brand_name' => 'MAISON NOOR', 'default_language' => 'nl', 'languages' => ['nl', 'en']],
+            'admin' => ['name' => 'Ada', 'email' => 'admin@maison-noor.example', 'password' => 'correct horse battery'],
         ];
         $this->assertProblem($this->http('POST', '/admin/api/setup', ['browser' => 'admin', 'json' => $body]), 403, 'forbidden');
         $weak = $body;
@@ -34,7 +34,7 @@ final class AdminTest extends NodeTestCase
         $done = $this->json($this->http('POST', '/admin/api/setup', ['browser' => 'admin', 'json' => $body]), 201);
         $this->assertTrue($done['authenticated']);
         $this->assertSame('admin', $done['user']['role']);
-        $this->assertSame('kestrel', $this->app->db->value('SELECT external_id FROM obx_brands'));
+        $this->assertSame('maison-noor', $this->app->db->value('SELECT external_id FROM obx_brands'));
         $this->assertProblem($this->http('POST', '/admin/api/setup', ['browser' => 'admin', 'json' => $body]), 409, 'setup_completed');
         $this->assertSame(200, $this->http('GET', '/.well-known/obx')->status);
     }
@@ -43,9 +43,9 @@ final class AdminTest extends NodeTestCase
     {
         $this->freshNode();
         $this->http('GET', '/admin/api/session', ['browser' => 'b']);
-        $this->assertProblem($this->http('POST', '/admin/api/session/login', ['browser' => 'b', 'json' => ['email' => 'admin@kestrel.example', 'password' => 'wrong password!']]), 401, 'invalid_credentials');
-        $this->assertProblem($this->http('POST', '/admin/api/session/login', ['browser' => 'b', 'csrf' => false, 'json' => ['email' => 'admin@kestrel.example', 'password' => 'correct horse battery']]), 403, 'csrf_failed');
-        $res = $this->http('POST', '/admin/api/session/login', ['browser' => 'b', 'json' => ['email' => 'admin@kestrel.example', 'password' => 'correct horse battery']]);
+        $this->assertProblem($this->http('POST', '/admin/api/session/login', ['browser' => 'b', 'json' => ['email' => 'admin@maison-noor.example', 'password' => 'wrong password!']]), 401, 'invalid_credentials');
+        $this->assertProblem($this->http('POST', '/admin/api/session/login', ['browser' => 'b', 'csrf' => false, 'json' => ['email' => 'admin@maison-noor.example', 'password' => 'correct horse battery']]), 403, 'csrf_failed');
+        $res = $this->http('POST', '/admin/api/session/login', ['browser' => 'b', 'json' => ['email' => 'admin@maison-noor.example', 'password' => 'correct horse battery']]);
         $s = $this->json($res);
         $this->assertTrue($s['authenticated']);
         $cookie = implode("\n", $res->cookies);
@@ -67,7 +67,7 @@ final class AdminTest extends NodeTestCase
         $mail = end($this->app->mailer->sent);
         $this->assertSame('buyer@shop.example', $mail['to']);
         $this->assertStringContainsString($inv['invite_url'], $mail['text']);
-        $this->assertStringContainsString('Kestrel Outfitters · Beeldbank', $mail['subject']);
+        $this->assertStringContainsString('MAISON NOOR Group · Beeldbank', $mail['subject']);
         $token = substr($inv['invite_url'], strrpos($inv['invite_url'], '/') + 1);
         $info = $this->json($this->http('GET', '/admin/api/invites/' . $token));
         $this->assertSame('Shop Invite', $info['retailer_name']);
@@ -92,8 +92,8 @@ final class AdminTest extends NodeTestCase
         $this->assertSame('pending', $req['status']);
         $this->assertStringStartsWith('obxr_', $req['request_token']);
         $to = array_column($this->app->mailer->sent, 'subject', 'to');
-        $this->assertSame('New access request from Stad & Land Mode', $to['admin@kestrel.example']);
-        $this->assertSame('We received your request for Kestrel Outfitters · Händlerportal', $to['sam@stadland.example']);
+        $this->assertSame('New access request from Stad & Land Mode', $to['admin@maison-noor.example']);
+        $this->assertSame('We received your request for MAISON NOOR Group · Händlerportal', $to['sam@stadland.example']);
         $poll = $this->json($this->http('GET', '/obx/v1/access-requests/' . $req['id'], ['bearer' => $req['request_token']]));
         $this->assertSame('pending', $poll['status']);
         $this->assertProblem($this->http('GET', '/obx/v1/access-requests/' . $req['id'], ['bearer' => 'obxr_wrong']), 404, 'not_found');
@@ -151,7 +151,7 @@ final class AdminTest extends NodeTestCase
 
     public function testNewKeysGetCatalogAndMediaScopesAndUsageOnlyWhenAsked(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         $r = $this->json($this->http('POST', '/admin/api/retailers', ['browser' => 'admin', 'json' => ['name' => 'Scope Shop']]), 201);
         $default = $this->json($this->http('POST', '/admin/api/api-clients', ['browser' => 'admin', 'json' => ['retailer_id' => $r['id'], 'name' => 'PIM']]), 201);
         $this->assertSame(['catalog:read', 'media:read', 'media:original'], $default['client']['scopes']);
@@ -170,7 +170,7 @@ final class AdminTest extends NodeTestCase
             'contact' => ['name' => 'Sam', 'email' => 'buyer@harbour.example'],
             'access' => ['portal'],
         ]]), 202);
-        $toAdmin = array_values(array_filter($this->app->mailer->sent, fn ($m) => $m['to'] === 'admin@kestrel.example'));
+        $toAdmin = array_values(array_filter($this->app->mailer->sent, fn ($m) => $m['to'] === 'admin@maison-noor.example'));
         // The link opens the admin's list of access requests, a page the web interface has.
         $this->assertStringContainsString('http://localhost/admin/requests', end($toAdmin)['text']);
         $before = count($this->app->mailer->sent);
@@ -183,7 +183,7 @@ final class AdminTest extends NodeTestCase
 
     public function testBlockingARetailerRevokesSessionsAndApiAccess(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         [$rid, $id, $secret] = $this->retailerClient(['name' => 'Blocked Shop']);
         $token = $this->accessToken($id, $secret);
         $inv = $this->json($this->http('POST', '/admin/api/users/invites', ['browser' => 'admin', 'json' => ['email' => 'b@blocked.example', 'role' => 'retailer', 'retailer_id' => $rid]]), 201);
@@ -200,7 +200,7 @@ final class AdminTest extends NodeTestCase
 
     public function testKeysAreShownOnceRotateAndRevoke(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         [, $id, $secret] = $this->retailerClient(['name' => 'Key Shop']);
         $list = $this->json($this->http('GET', '/admin/api/api-clients', ['browser' => 'admin']));
         $this->assertStringNotContainsString($secret, Json::encode($list));
@@ -247,7 +247,7 @@ final class AdminTest extends NodeTestCase
         $detail = $this->json($this->http('GET', '/admin/api/catalog/products/AC-1', ['browser' => 'admin']));
         $this->assertSame('unpublished', $detail['record']['status']);
         $brands = $this->json($this->http('GET', '/admin/api/catalog/brands', ['browser' => 'admin']));
-        $this->assertSame('kestrel', $brands['items'][0]['external_id']);
+        $this->assertSame('maison-noor', $brands['items'][0]['external_id']);
     }
 
     public function testImportSourcesRefusePrivateAddressesAndHideCredentials(): void
@@ -260,7 +260,7 @@ final class AdminTest extends NodeTestCase
         $this->assertProblem($res, 422, 'unsafe_url');
         $src = $this->json($this->http('POST', '/admin/api/import-sources', ['browser' => 'admin', 'json' => [
             'name' => 'Bucket', 'kind' => 's3', 'schedule' => ['frequency' => 'daily', 'time' => '03:30', 'timezone' => 'Europe/Amsterdam'],
-            'config' => ['region' => 'eu-west-1', 'bucket' => 'kestrel-exports', 'prefix' => 'obx/'],
+            'config' => ['region' => 'eu-west-1', 'bucket' => 'maison-noor-exports', 'prefix' => 'obx/'],
             'credentials' => ['access_key_id' => 'AKIAEXAMPLE', 'secret_access_key' => 'very-secret-value'],
         ]]), 201);
         $this->assertTrue($src['credentials_set']['secret_access_key']);
@@ -276,7 +276,7 @@ final class AdminTest extends NodeTestCase
 
     public function testSettingsBrandingAndOriginalToggleWritesGrantResync(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         [, $id, $secret] = $this->retailerClient();
         $client = $this->accessToken($id, $secret);
         [, $cursor] = $this->drainSnapshot($client);
@@ -293,7 +293,7 @@ final class AdminTest extends NodeTestCase
         $branding = $this->json($this->http('GET', '/admin/api/public/branding'));
         $this->assertSame(['en' => 'Welcome', 'nl' => 'Welkom'], $branding['welcome_text']);
         // Logo upload (PNG), public URL, no SVG.
-        $png = (string) file_get_contents(self::fixtures('kestrel/images/KO-1001_NVY_1_front.png'));
+        $png = (string) file_get_contents(self::fixtures('maison-noor/images/MN-1001_NVY_1_front.png'));
         $withLogo = $this->json($this->http('PUT', '/admin/api/settings/logo', ['browser' => 'admin', 'body' => $png, 'headers' => ['Content-Type' => 'image/png']]));
         $logo = $withLogo['branding']['logo_url'];
         $this->assertNotNull($logo);
@@ -324,13 +324,13 @@ final class AdminTest extends NodeTestCase
         $r = $this->json($this->http('POST', '/admin/api/retailers', ['browser' => 'admin', 'json' => ['name' => 'Winkel']]), 201);
         $this->json($this->http('POST', '/admin/api/users/invites', ['browser' => 'admin', 'json' => ['email' => 'nl@shop.example', 'name' => 'Noor', 'role' => 'retailer', 'retailer_id' => $r['id'], 'language' => 'nl']]), 201);
         $mail = end($this->app->mailer->sent);
-        $this->assertSame('Kestrel Outfitters nodigt je uit voor Kestrel Outfitters · Beeldbank', $mail['subject']);
+        $this->assertSame('MAISON NOOR Group nodigt je uit voor MAISON NOOR Group · Beeldbank', $mail['subject']);
         $this->assertStringContainsString('Hallo Noor,', $mail['text']);
         $this->assertStringContainsString('Kies je wachtwoord', $mail['html']);
         $this->assertStringContainsString('Not expecting this?', $mail['text'], 'missing keys fall back to English');
         $this->json($this->http('PATCH', '/admin/api/settings', ['browser' => 'admin', 'json' => ['branding' => ['portal_name' => ['nl' => 'Mediatheek']]]]));
         $this->json($this->http('POST', '/admin/api/users/invites', ['browser' => 'admin', 'json' => ['email' => 'nl2@shop.example', 'role' => 'retailer', 'retailer_id' => $r['id'], 'language' => 'nl']]), 201);
-        $this->assertSame('Kestrel Outfitters nodigt je uit voor Kestrel Outfitters · Mediatheek', end($this->app->mailer->sent)['subject']);
+        $this->assertSame('MAISON NOOR Group nodigt je uit voor MAISON NOOR Group · Mediatheek', end($this->app->mailer->sent)['subject']);
         $branding = $this->json($this->http('GET', '/admin/api/public/branding'));
         $this->assertSame(['nl' => 'Mediatheek'], $branding['portal_name']);
     }
@@ -340,9 +340,9 @@ final class AdminTest extends NodeTestCase
         $this->freshNode();
         $this->http('GET', '/admin/api/session', ['browser' => 'anon']);
         $this->assertSame(202, $this->http('POST', '/admin/api/password/forgot', ['browser' => 'anon', 'json' => ['email' => 'nobody@nowhere.example']])->status);
-        $this->assertSame(202, $this->http('POST', '/admin/api/password/forgot', ['browser' => 'anon', 'json' => ['email' => 'admin@kestrel.example']])->status);
+        $this->assertSame(202, $this->http('POST', '/admin/api/password/forgot', ['browser' => 'anon', 'json' => ['email' => 'admin@maison-noor.example']])->status);
         $mail = end($this->app->mailer->sent);
-        $this->assertSame('admin@kestrel.example', $mail['to']);
+        $this->assertSame('admin@maison-noor.example', $mail['to']);
         $this->assertSame(1, preg_match('#/reset-password/(\S+)#', $mail['text'], $m));
         $token = $m[1];
         $s = $this->json($this->http('POST', '/admin/api/password/reset', ['browser' => 'anon', 'json' => ['token' => $token, 'password' => 'another good passphrase']]));
@@ -363,7 +363,7 @@ final class AdminTest extends NodeTestCase
         $this->app = $this->makeApp(['public_url' => null]);
         $this->setupNode();
         $this->http('GET', '/admin/api/session', ['browser' => 'x', 'host' => 'evil.example']);
-        $this->http('POST', '/admin/api/password/forgot', ['browser' => 'x', 'host' => 'evil.example', 'json' => ['email' => 'admin@kestrel.example']]);
+        $this->http('POST', '/admin/api/password/forgot', ['browser' => 'x', 'host' => 'evil.example', 'json' => ['email' => 'admin@maison-noor.example']]);
         $mail = end($this->app->mailer->sent);
         $this->assertStringContainsString('http://localhost/reset-password/', $mail['text']);
         $this->assertStringNotContainsString('evil.example', $mail['text']);

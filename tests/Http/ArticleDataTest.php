@@ -66,7 +66,7 @@ final class ArticleDataTest extends NodeTestCase
 
     public function testImportCasesOfTheSpecFixtures(): void
     {
-        ['ingest' => $token] = $this->kestrelNode();
+        ['ingest' => $token] = $this->maisonNoorNode();
         [, $id, $secret] = $this->retailerClient();
         $client = $this->accessToken($id, $secret);
         [, $cursor] = $this->drainSnapshot($client);
@@ -108,7 +108,7 @@ final class ArticleDataTest extends NodeTestCase
 
     public function testLabelWarningsOfADryRun(): void
     {
-        ['ingest' => $token] = $this->kestrelNode();
+        ['ingest' => $token] = $this->maisonNoorNode();
         $job = $this->importCsv($token, (string) file_get_contents(self::fixtures('imports/label-warnings.csv')), ['mode' => 'upsert', 'dry_run' => true]);
         $all = $this->rowErrors($job);
         $this->assertSame([], array_values(array_filter($all, static fn ($e) => $e['severity'] === 'error')));
@@ -123,13 +123,13 @@ final class ArticleDataTest extends NodeTestCase
         $this->assertSame(0, (int) $this->app->db->value("SELECT COUNT(*) FROM obx_products WHERE external_id LIKE 'KL-%'"));
 
         // The fixture catalog itself is complete.
-        $again = $this->importKestrel($token);
+        $again = $this->importMaisonNoor($token);
         $this->assertSame([], array_values(array_filter($this->rowErrors($again), static fn ($e) => in_array($e['obx_error'], $codes, true))));
     }
 
     public function testEveryProtocolObjectHasTheArticleDataShape(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         [, $id, $secret] = $this->retailerClient();
         [$entries] = $this->drainSnapshot($this->accessToken($id, $secret));
         foreach ($entries as $e) {
@@ -173,7 +173,7 @@ final class ArticleDataTest extends NodeTestCase
     }
 
     /**
-     * A term of the Kestrel catalog has exactly the vocabulary's name; main has none.
+     * A term of the MAISON NOOR catalog has exactly the vocabulary's name; main has none.
      *
      * @param array{code: string, name: mixed} $term
      */
@@ -192,11 +192,11 @@ final class ArticleDataTest extends NodeTestCase
 
     public function testIngestWritesNormaliseValidateAndWarn(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         $token = $this->ingestToken();
         $put = fn (string $kind, string $ext, array $body) => $this->http('PUT', '/obx/v1/ingest/' . $kind . 's/' . rawurlencode($ext), ['bearer' => $token, 'json' => $body]);
         $body = [
-            'brand_external_id' => 'kestrel', 'style_number' => 'KX-1', 'name' => ['en' => 'Test scarf'], 'item_type' => 'scarf',
+            'brand_external_id' => 'maison-noor', 'style_number' => 'MX-1', 'name' => ['en' => 'Test scarf'], 'item_type' => 'scarf',
             'materials' => [['part' => ['code' => 'main'], 'fibers' => [
                 ['material' => ['code' => 'organic_cotton'], 'percentage' => 60],
                 ['material' => ['code' => 'wool', 'name' => ['en' => 'Sheep']], 'percentage' => 30, 'qualifiers' => []],
@@ -204,14 +204,14 @@ final class ArticleDataTest extends NodeTestCase
             'care' => [['code' => 'wash_30', 'text' => ['en' => 'Inside out']], ['code' => 'steam_only', 'category' => 'ironing', 'name' => ['en' => 'Steam only']]],
             'features' => ['fit' => 'regular', 'fringe_cm' => 5], 'certifications' => [],
         ];
-        $res = $this->json($put('product', 'KX-1', $body), 201);
+        $res = $this->json($put('product', 'MX-1', $body), 201);
         $this->assertSame([
             ['code' => 'animal_origin_unknown', 'pointer' => '/contains_animal_origin'],
             ['code' => 'fibre_percentages_not_100', 'pointer' => '/materials/0'],
         ], array_map(static fn ($w) => ['code' => $w['code'], 'pointer' => $w['pointer']], $res['warning_details']));
         $this->assertCount(2, array_filter($res['warnings'], static fn ($w) => str_starts_with($w, 'animal_origin_unknown') || str_starts_with($w, 'fibre_percentages_not_100')));
         $this->assertStringContainsString('contain wool', implode(' ', $res['warnings']), 'the label warning names the material code');
-        $rec = $this->json($this->http('GET', '/obx/v1/ingest/products/KX-1', ['bearer' => $token]));
+        $rec = $this->json($this->http('GET', '/obx/v1/ingest/products/MX-1', ['bearer' => $token]));
         // Known codes get the vocabulary's names (a name sent for one is not kept), the 0.1 key
         // its qualifier; an unknown care code keeps what was sent.
         $vocab = static fn (string $v, string $code) => ArticleData::vocabulary($v)[$code]['name'];
@@ -225,24 +225,24 @@ final class ArticleDataTest extends NodeTestCase
         $this->assertSame(['fit' => 'regular', 'fringe_cm' => 5], $rec['data']['features']);
         $this->assertNull($rec['data']['certifications']);
         // The data of a GET written back is unchanged; so is the qualifier form of the 0.1 key.
-        $this->assertSame('unchanged', $this->json($put('product', 'KX-1', $rec['data']))['result']);
+        $this->assertSame('unchanged', $this->json($put('product', 'MX-1', $rec['data']))['result']);
         $body['materials'][0]['fibers'][0] = ['material' => ['code' => 'cotton'], 'percentage' => 60, 'qualifiers' => [['code' => 'organic', 'name' => ['en' => 'Bio']], ['code' => 'organic']]];
-        $this->assertSame('unchanged', $this->json($put('product', 'KX-1', $body))['result']);
+        $this->assertSame('unchanged', $this->json($put('product', 'MX-1', $body))['result']);
         // Several qualifiers keep their order; the 0.1 key's comes first and counts once.
         $several = $body;
         $several['materials'][0]['fibers'][0] = ['material' => ['code' => 'recycled_polyester'], 'percentage' => 60, 'qualifiers' => [['code' => 'post_consumer'], ['code' => 'recycled']]];
-        $this->json($put('product', 'KX-1', $several));
-        $f = $this->json($this->http('GET', '/obx/v1/ingest/products/KX-1', ['bearer' => $token]))['data']['materials'][0]['fibers'][0];
+        $this->json($put('product', 'MX-1', $several));
+        $f = $this->json($this->http('GET', '/obx/v1/ingest/products/MX-1', ['bearer' => $token]))['data']['materials'][0]['fibers'][0];
         $this->assertSame(['material' => ['code' => 'polyester', 'name' => $vocab('materials', 'polyester')], 'percentage' => 60, 'qualifiers' => [
             ['code' => 'recycled', 'name' => $vocab('qualifiers', 'recycled')], ['code' => 'post_consumer', 'name' => $vocab('qualifiers', 'post_consumer')]]], $f);
         // An unknown material and qualifier keep the name they were given.
         $odd = $body;
         $odd['materials'][0]['fibers'][1] = ['material' => ['code' => 'yak_wool', 'name' => ['en' => 'Yak wool']], 'percentage' => 30, 'qualifiers' => [['code' => 'wild_harvested', 'name' => ['en' => 'Wild harvested']], ['code' => 'in_conversion', 'name' => ['en' => 'Not kept']]]];
-        $this->json($put('product', 'KX-1', $odd));
-        $f = $this->json($this->http('GET', '/obx/v1/ingest/products/KX-1', ['bearer' => $token]))['data']['materials'][0]['fibers'][1];
+        $this->json($put('product', 'MX-1', $odd));
+        $f = $this->json($this->http('GET', '/obx/v1/ingest/products/MX-1', ['bearer' => $token]))['data']['materials'][0]['fibers'][1];
         $this->assertSame(['material' => ['code' => 'yak_wool', 'name' => ['en' => 'Yak wool']], 'percentage' => 30, 'qualifiers' => [
             ['code' => 'wild_harvested', 'name' => ['en' => 'Wild harvested']], ['code' => 'in_conversion', 'name' => $vocab('qualifiers', 'in_conversion')]]], $f);
-        $this->json($put('product', 'KX-1', $body));
+        $this->json($put('product', 'MX-1', $body));
 
         // 0.2 shapes and invalid terms are refused.
         foreach ([
@@ -252,7 +252,7 @@ final class ArticleDataTest extends NodeTestCase
             '/materials/0/fibers/0/qualifiers' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100, 'qualifiers' => ['code' => 'organic']]]]],
             '/materials/0/fibers/0/material/name/en' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton', 'name' => ['en' => '']], 'percentage' => 100]]]],
         ] as $pointer => $bad) {
-            $p = $this->assertProblem($put('product', 'KX-1', ['materials' => $bad] + $body), 422, 'validation_failed');
+            $p = $this->assertProblem($put('product', 'MX-1', ['materials' => $bad] + $body), 422, 'validation_failed');
             $this->assertSame($pointer, $p['errors'][0]['pointer']);
         }
         // The draft single qualifier (ingest.md §3.1, conformance I-MAT-1): a list of one, null =
@@ -264,13 +264,13 @@ final class ArticleDataTest extends NodeTestCase
         ]]]] + $body;
         $asString = $draft;
         $asString['materials'][0]['fibers'][0]['qualifier'] = 'recycled';
-        $this->json($put('product', 'KX-1', $asString));
-        $this->assertSame('unchanged', $this->json($put('product', 'KX-1', $draft))['result'], 'a plain string is the code');
-        $res = $this->json($put('product', 'KX-1', $draft));
+        $this->json($put('product', 'MX-1', $asString));
+        $this->assertSame('unchanged', $this->json($put('product', 'MX-1', $draft))['result'], 'a plain string is the code');
+        $res = $this->json($put('product', 'MX-1', $draft));
         $this->assertSame([['code' => 'qualifier_deprecated', 'pointer' => '/materials/0/fibers/0/qualifier']],
             array_map(static fn ($w) => ['code' => $w['code'], 'pointer' => $w['pointer']], array_values(array_filter($res['warning_details'], static fn ($w) => $w['code'] === 'qualifier_deprecated'))));
         $this->assertCount(1, array_filter($res['warnings'], static fn ($w) => str_starts_with($w, 'qualifier_deprecated')));
-        $stored = $this->json($this->http('GET', '/obx/v1/ingest/products/KX-1', ['bearer' => $token]))['data']['materials'][0]['fibers'];
+        $stored = $this->json($this->http('GET', '/obx/v1/ingest/products/MX-1', ['bearer' => $token]))['data']['materials'][0]['fibers'];
         $this->assertSame([['recycled'], ['regenerative'], []], array_map(static fn ($f) => array_column($f['qualifiers'], 'code'), $stored));
         $this->assertStringNotContainsString('"qualifier"', Json::encode($stored));
         $plain = $draft;
@@ -279,51 +279,51 @@ final class ArticleDataTest extends NodeTestCase
             return $f;
         }, $plain['materials'][0]['fibers']);
         $plain['materials'][0]['fibers'][0]['qualifiers'] = [['code' => 'recycled']];
-        $this->assertSame('unchanged', $this->json($put('product', 'KX-1', $plain))['result']);
-        $this->assertSame('unchanged', $this->json($put('product', 'KX-1', $draft))['result'], 'the draft form that gives the stored list is unchanged');
-        $this->json($put('product', 'KX-1', $body));
+        $this->assertSame('unchanged', $this->json($put('product', 'MX-1', $plain))['result']);
+        $this->assertSame('unchanged', $this->json($put('product', 'MX-1', $draft))['result'], 'the draft form that gives the stored list is unchanged');
+        $this->json($put('product', 'MX-1', $body));
 
         foreach (['/care/0/category' => ['code' => 'x_care', 'category' => 'folding'], '/care/0/symbol' => ['code' => 'x_care', 'symbol' => 'C40']] as $pointer => $bad) {
-            $p = $this->assertProblem($put('product', 'KX-1', ['care' => [$bad]] + $body), 422, 'validation_failed');
+            $p = $this->assertProblem($put('product', 'MX-1', ['care' => [$bad]] + $body), 422, 'validation_failed');
             $this->assertSame($pointer, $p['errors'][0]['pointer']);
         }
 
         foreach ([['wheels' => 3], ['shell' => 'glass'], ['detachable_parts' => ['hood', 'hood']], ['expandable' => 'yes']] as $bad) {
-            $p = $this->assertProblem($put('product', 'KX-1', ['features' => $bad] + $body), 422, 'validation_failed');
+            $p = $this->assertProblem($put('product', 'MX-1', ['features' => $bad] + $body), 422, 'validation_failed');
             $this->assertSame('/features/' . array_key_first($bad), $p['errors'][0]['pointer']);
         }
-        $this->assertProblem($put('product', 'KX-1', ['footwear_materials' => ['upper' => 'plastic']] + $body), 422, 'validation_failed');
-        $this->assertProblem($put('product', 'KX-1', ['certifications' => [['scheme' => 'GOTS', 'scope' => 'product']]] + $body), 422, 'validation_failed');
-        $this->assertProblem($put('product', 'KX-1', ['contains_animal_origin' => 'no'] + $body), 422, 'validation_failed');
-        $ok = $this->json($put('product', 'KX-1', ['features' => [], 'contains_animal_origin' => false, 'materials' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100]]]]] + $body));
+        $this->assertProblem($put('product', 'MX-1', ['footwear_materials' => ['upper' => 'plastic']] + $body), 422, 'validation_failed');
+        $this->assertProblem($put('product', 'MX-1', ['certifications' => [['scheme' => 'GOTS', 'scope' => 'product']]] + $body), 422, 'validation_failed');
+        $this->assertProblem($put('product', 'MX-1', ['contains_animal_origin' => 'no'] + $body), 422, 'validation_failed');
+        $ok = $this->json($put('product', 'MX-1', ['features' => [], 'contains_animal_origin' => false, 'materials' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100]]]]] + $body));
         $this->assertArrayNotHasKey('warning_details', $ok, 'a complete label has no warning details');
-        $this->assertNull($this->json($this->http('GET', '/obx/v1/ingest/products/KX-1', ['bearer' => $token]))['data']['features']);
+        $this->assertNull($this->json($this->http('GET', '/obx/v1/ingest/products/MX-1', ['bearer' => $token]))['data']['features']);
 
-        $v = ['product_external_id' => 'KX-1', 'gtin' => '2000199901018', 'color' => ['code' => 'RED', 'family' => 'red'], 'measurements' => []];
+        $v = ['product_external_id' => 'MX-1', 'gtin' => '2000199901018', 'color' => ['code' => 'RED', 'family' => 'red'], 'measurements' => []];
         $this->json($put('variant', '2000199901018', $v), 201);
         $this->assertProblem($put('variant', '2000199901018', ['measurements' => ['weight_kg' => 0]] + $v), 422, 'validation_failed');
         $p = $this->assertProblem($put('variant', '2000199901018', ['measurements' => ['strap_length_cm' => ['min' => 130, 'max' => 80]]] + $v), 422, 'validation_failed');
         $this->assertSame('/measurements/strap_length_cm', $p['errors'][0]['pointer']);
         // The same in an import: the row is skipped with validation_failed in that column.
-        $job = $this->importCsv($token, "brand,style_number,name:en,gtin,color_code,strap_length_cm\nKestrel,KX-1,Test scarf,2000199901018,RED,130-80\n");
+        $job = $this->importCsv($token, "brand,style_number,name:en,gtin,color_code,strap_length_cm\nMAISON NOOR,MX-1,Test scarf,2000199901018,RED,130-80\n");
         $this->assertSame(1, $job['import_run']['counts']['errors']);
         $err = array_values(array_filter($this->rowErrors($job), static fn ($e) => $e['severity'] === 'error'))[0];
         $this->assertSame(['strap_length_cm', 'validation_failed'], [$err['column'], $err['obx_error']]);
         // One code per bracket (import-format.md §1.4): "(a, b)" skips the row; "(a) (b)" is two.
-        $job = $this->importCsv($token, "brand,style_number,name:en,materials\nKestrel,KX-1,Test scarf,\"100% cotton (organic, recycled)\"\n");
+        $job = $this->importCsv($token, "brand,style_number,name:en,materials\nMAISON NOOR,MX-1,Test scarf,\"100% cotton (organic, recycled)\"\n");
         $this->assertSame(1, $job['import_run']['counts']['errors']);
         $err = array_values(array_filter($this->rowErrors($job), static fn ($e) => $e['severity'] === 'error'))[0];
         $this->assertSame(['materials', 'validation_failed'], [$err['column'], $err['obx_error']]);
-        $job = $this->importCsv($token, "brand,style_number,name:en,materials\nKestrel,KX-1,Test scarf,100% cotton (organic) (in conversion) (organic)\n");
+        $job = $this->importCsv($token, "brand,style_number,name:en,materials\nMAISON NOOR,MX-1,Test scarf,100% cotton (organic) (in conversion) (organic)\n");
         $this->assertSame([0, 1], [$job['import_run']['counts']['errors'], $job['import_run']['counts']['updated']], Json::encode($job['import_run']));
-        $this->assertSame(['organic', 'in_conversion'], array_column(Json::decode((string) $this->app->db->value("SELECT input FROM obx_products WHERE external_id = 'KX-1'"))['materials'][0]['fibers'][0]['qualifiers'], 'code'));
-        $this->json($put('product', 'KX-1', ['features' => [], 'contains_animal_origin' => false, 'materials' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100]]]]] + $body));
+        $this->assertSame(['organic', 'in_conversion'], array_column(Json::decode((string) $this->app->db->value("SELECT input FROM obx_products WHERE external_id = 'MX-1'"))['materials'][0]['fibers'][0]['qualifiers'], 'code'));
+        $this->json($put('product', 'MX-1', ['features' => [], 'contains_animal_origin' => false, 'materials' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100]]]]] + $body));
         $this->assertProblem($put('variant', '2000199901018', ['color' => ['code' => 'RED', 'family' => 'navy']] + $v), 422, 'validation_failed');
         $this->json($put('variant', '2000199901018', ['size_length' => '34', 'measurements' => ['strap_length_cm' => ['min' => 120, 'max' => 120], 'weight_kg' => 0.9]] + $v));
 
         [, $id, $secret] = $this->retailerClient();
         $client = $this->accessToken($id, $secret);
-        $pid = (string) $this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'KX-1'");
+        $pid = (string) $this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'MX-1'");
         $p = $this->json($this->http('GET', '/obx/v1/products/' . $pid, ['bearer' => $client]));
         foreach (['item_subtype', 'footwear_materials', 'certifications', 'features'] as $k) {
             $this->assertNull($p[$k], $k);
@@ -338,7 +338,7 @@ final class ArticleDataTest extends NodeTestCase
 
     public function testPortalCsvHasTheImportColumnsAndImportsBackUnchanged(): void
     {
-        ['ingest' => $token] = $this->kestrelNode();
+        ['ingest' => $token] = $this->maisonNoorNode();
         $r = $this->json($this->http('POST', '/admin/api/retailers', ['browser' => 'admin', 'json' => ['name' => 'Shop One']]), 201);
         $inv = $this->json($this->http('POST', '/admin/api/users/invites', ['browser' => 'admin', 'json' => ['email' => 'r1@shop.example', 'role' => 'retailer', 'retailer_id' => $r['id']]]), 201);
         $this->http('GET', '/admin/api/session', ['browser' => 'r1']);
@@ -360,16 +360,16 @@ final class ArticleDataTest extends NodeTestCase
             $rows[] = array_combine($header, $cells);
         }
         $boot = array_values(array_filter($rows, static fn ($r) => $r['gtin'] === '2000101001027'))[0];
-        $this->assertSame('KO-1010-BRN-42', $boot['variant_id'], 'the export fills variant_id with the external id');
+        $this->assertSame('MN-1010-BRN-42', $boot['variant_id'], 'the export fills variant_id with the external id');
         $this->assertSame('upper: leather; lining_and_sock: leather; outer_sole: other', $boot['footwear_materials']);
         $this->assertSame('lwg:LWG-200-1010 (material)', $boot['certifications']);
         $this->assertSame('14.5', $boot['shaft_height_cm']);
         $this->assertSame('insole', $boot['feature:detachable_parts']);
-        $bag = array_values(array_filter($rows, static fn ($r) => $r['style_number'] === 'KO-1009'))[0];
+        $bag = array_values(array_filter($rows, static fn ($r) => $r['style_number'] === 'MN-1009'))[0];
         $this->assertSame('85-140', $bag['strap_length_cm']);
         $this->assertSame('yes', $bag['feature:laptop_compartment']);
         $this->assertSame('outer: 100% polyester (recycled) (post_consumer); lining: 100% polyamide', $bag['materials']);
-        $tee = array_values(array_filter($rows, static fn ($r) => $r['style_number'] === 'KO-1003'))[0];
+        $tee = array_values(array_filter($rows, static fn ($r) => $r['style_number'] === 'MN-1003'))[0];
         $this->assertSame('main: 100% cotton (organic) (regenerative)', $tee['materials']);
 
         // The export is an import file: importing it changes nothing.
@@ -380,16 +380,16 @@ final class ArticleDataTest extends NodeTestCase
 
     public function testUpgradeOfA01AndA02Database(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         [, $id, $secret] = $this->retailerClient();
         $client = $this->accessToken($id, $secret);
         [, $cursor] = $this->drainSnapshot($client);
         $db = $this->app->db;
         $productOf = fn (string $ext) => $this->json($this->http('GET', '/obx/v1/products/' . $db->value('SELECT id FROM obx_products WHERE external_id = ?', [$ext]), ['bearer' => $client]));
-        $before = ['KT-2001' => $productOf('KT-2001'), 'KO-1006' => $productOf('KO-1006')];
-        // Write KT-2001 back as 0.1 stored it (without the 0.2 fields that are not stated, the
-        // 0.1 fibre key), KO-1006 as 0.2 stored it (part and fibre as strings, the flags, care
-        // without names), and KO-1006's sizes without the 0.2 fields.
+        $before = ['NA-2001' => $productOf('NA-2001'), 'MN-1006' => $productOf('MN-1006')];
+        // Write NA-2001 back as 0.1 stored it (without the 0.2 fields that are not stated, the
+        // 0.1 fibre key), MN-1006 as 0.2 stored it (part and fibre as strings, the flags, care
+        // without names), and MN-1006's sizes without the 0.2 fields.
         $unsetNull = static function (array &$a, array $keys): void {
             foreach ($keys as $k) {
                 if (array_key_exists($k, $a) && $a[$k] === null) {
@@ -411,8 +411,8 @@ final class ArticleDataTest extends NodeTestCase
             }
             return $out;
         };
-        foreach ($db->all("SELECT * FROM obx_products WHERE external_id IN ('KT-2001', 'KO-1006')") as $p) {
-            $v01 = $p['external_id'] === 'KT-2001';
+        foreach ($db->all("SELECT * FROM obx_products WHERE external_id IN ('NA-2001', 'MN-1006')") as $p) {
+            $v01 = $p['external_id'] === 'NA-2001';
             $in = Json::decode((string) $p['input']);
             $in['materials'] = $legacy($in['materials'], $v01);
             $in['care'] = array_map(static fn ($c) => ['code' => $c['code'], 'text' => $c['text']], (array) $in['care']);
@@ -425,8 +425,8 @@ final class ArticleDataTest extends NodeTestCase
             }
             $db->update('obx_products', ['input' => Json::encode($in), 'rep' => Json::encode($rep), 'rep_hash' => hash('sha256', Json::canonical($rep)), 'etag' => '"old"'], ['id' => $p['id']]);
         }
-        $this->assertStringContainsString('"fiber":"recycled_polyester"', (string) $db->value("SELECT input FROM obx_products WHERE external_id = 'KT-2001'"));
-        foreach ($db->all("SELECT v.* FROM obx_variants v JOIN obx_products p ON p.id = v.product_id WHERE p.external_id = 'KO-1006'") as $v) {
+        $this->assertStringContainsString('"fiber":"recycled_polyester"', (string) $db->value("SELECT input FROM obx_products WHERE external_id = 'NA-2001'"));
+        foreach ($db->all("SELECT v.* FROM obx_variants v JOIN obx_products p ON p.id = v.product_id WHERE p.external_id = 'MN-1006'") as $v) {
             $in = Json::decode((string) $v['input']);
             $unsetNull($in, ['size_length', 'measurements']);
             $rep = Json::decode((string) $v['rep']);
@@ -445,7 +445,7 @@ final class ArticleDataTest extends NodeTestCase
         $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $client, 'query' => ['cursor' => $cursor]]));
         $got = array_map(static fn ($e) => $e['type'] . ' ' . $e['op'] . ' ' . $e['external_id'], $page['changes']);
         sort($got);
-        $this->assertSame(['product upsert KO-1006', 'product upsert KT-2001'], $got);
+        $this->assertSame(['product upsert MN-1006', 'product upsert NA-2001'], $got);
         foreach ($page['changes'] as $e) {
             $after = $e['data'];
             $want = $before[$after['external_id']];
@@ -453,21 +453,21 @@ final class ArticleDataTest extends NodeTestCase
             $this->assertEquals($want['materials'], $after['materials'], $after['external_id']);
             $this->assertEquals($want['care'], $after['care'], $after['external_id']);
         }
-        $this->assertSame([['code' => 'recycled', 'name' => ArticleData::vocabulary('qualifiers')['recycled']['name']]], $before['KT-2001']['materials'][0]['fibers'][0]['qualifiers']);
+        $this->assertSame([['code' => 'recycled', 'name' => ArticleData::vocabulary('qualifiers')['recycled']['name']]], $before['NA-2001']['materials'][0]['fibers'][0]['qualifiers']);
         // The same file again is all unchanged: the stored model is the 0.3 one.
         $token = $this->ingestToken();
-        $job = $this->importCsv($token, (string) file_get_contents(self::fixtures('kestrel/products.csv')));
+        $job = $this->importCsv($token, (string) file_get_contents(self::fixtures('maison-noor/products.csv')));
         $this->assertSame(0, $job['import_run']['counts']['updated'], Json::encode($job['import_run']['counts']));
     }
 
     public function testUpgradeOfADraft03DatabaseWithOneQualifierPerFibre(): void
     {
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         [, $id, $secret] = $this->retailerClient();
         $client = $this->accessToken($id, $secret);
         [, $cursor] = $this->drainSnapshot($client);
         $db = $this->app->db;
-        $row = $db->one("SELECT * FROM obx_products WHERE external_id = 'KO-1008'");
+        $row = $db->one("SELECT * FROM obx_products WHERE external_id = 'MN-1008'");
         $this->assertSame('|recycled|', $row['qualifiers']);
         $before = $this->json($this->http('GET', '/obx/v1/products/' . $row['id'], ['bearer' => $client]));
         // As the 0.3 draft stored it: "qualifier" (a term or null) instead of "qualifiers", and
@@ -490,16 +490,16 @@ final class ArticleDataTest extends NodeTestCase
         $this->assertSame(Schema::latestVersion(), Schema::currentVersionOf($db));
         Schema::migrate($db);
 
-        $this->assertSame('|recycled|', $db->value("SELECT qualifiers FROM obx_products WHERE external_id = 'KO-1008'"));
+        $this->assertSame('|recycled|', $db->value("SELECT qualifiers FROM obx_products WHERE external_id = 'MN-1008'"));
         $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $client, 'query' => ['cursor' => $cursor]]));
-        $this->assertSame(['product upsert KO-1008'], array_map(static fn ($e) => $e['type'] . ' ' . $e['op'] . ' ' . $e['external_id'], $page['changes']));
+        $this->assertSame(['product upsert MN-1008'], array_map(static fn ($e) => $e['type'] . ' ' . $e['op'] . ' ' . $e['external_id'], $page['changes']));
         $this->assertEquals($before['materials'], $page['changes'][0]['data']['materials']);
-        $this->assertSame('unchanged', $this->json($this->http('PUT', '/obx/v1/ingest/products/KO-1008', ['bearer' => $this->ingestToken(), 'json' => Json::decode((string) $db->value("SELECT input FROM obx_products WHERE external_id = 'KO-1008'"))]))['result']);
+        $this->assertSame('unchanged', $this->json($this->http('PUT', '/obx/v1/ingest/products/MN-1008', ['bearer' => $this->ingestToken(), 'json' => Json::decode((string) $db->value("SELECT input FROM obx_products WHERE external_id = 'MN-1008'"))]))['result']);
     }
 
     public function testVariantIdentityOfTheSpecFixtures(): void
     {
-        ['ingest' => $token] = $this->kestrelNode();
+        ['ingest' => $token] = $this->maisonNoorNode();
         [, $id, $secret] = $this->retailerClient();
         $client = $this->accessToken($id, $secret);
         [, $cursor] = $this->drainSnapshot($client);
@@ -538,102 +538,102 @@ final class ArticleDataTest extends NodeTestCase
         }
         // The same EAN on two sizes of one file: the later row is gtin_conflict; a product whose
         // size rows are all refused is not written.
-        $job = $this->importCsv($token, "brand,style_number,name:en,gtin,color_code,size\nKestrel,KL-8102,Twins,2000810201015,RED,S\nKestrel,KL-8102,Twins,2000810201015,RED,M\n");
+        $job = $this->importCsv($token, "brand,style_number,name:en,gtin,color_code,size\nMAISON NOOR,ML-8102,Twins,2000810201015,RED,S\nMAISON NOOR,ML-8102,Twins,2000810201015,RED,M\n");
         $errors = array_values(array_filter($this->rowErrors($job), static fn ($e) => $e['severity'] === 'error'));
         $this->assertSame([[2, 'gtin', 'gtin_conflict']], array_map(static fn ($e) => [$e['row'], $e['column'], $e['obx_error']], $errors));
-        $job = $this->importCsv($token, "brand,style_number,name:en,gtin,color_code,size\nKestrel,KL-8103,Nobody,2000810201015,RED,S\n");
+        $job = $this->importCsv($token, "brand,style_number,name:en,gtin,color_code,size\nMAISON NOOR,ML-8103,Nobody,2000810201015,RED,S\n");
         $this->assertSame([0, 0, 1], [$job['import_run']['counts']['created'], $job['import_run']['counts']['unchanged'], $job['import_run']['counts']['errors']]);
-        $this->assertNull($this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'KL-8103'"));
-        $this->assertSame('KL-8101-IND-32_34', \Obx\Node\Import\ImportEngine::defaultVariantId('KL-8101', 'IND', '32/34', null));
-        $this->assertSame('KO-1005-COG-ONE SIZE', \Obx\Node\Import\ImportEngine::defaultVariantId('KO-1005', 'COG', 'ONE SIZE', ''));
-        $this->assertSame('KX-1-RED-34', \Obx\Node\Import\ImportEngine::defaultVariantId('KX-1', 'RED', null, '34'));
+        $this->assertNull($this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'ML-8103'"));
+        $this->assertSame('ML-8101-IND-32_34', \Obx\Node\Import\ImportEngine::defaultVariantId('ML-8101', 'IND', '32/34', null));
+        $this->assertSame('MN-1005-COG-ONE SIZE', \Obx\Node\Import\ImportEngine::defaultVariantId('MN-1005', 'COG', 'ONE SIZE', ''));
+        $this->assertSame('MX-1-RED-34', \Obx\Node\Import\ImportEngine::defaultVariantId('MX-1', 'RED', null, '34'));
         // Ingest: gtin_conflict names the variant that has the GTIN and its product.
         $p = $this->assertProblem($this->http('PUT', '/obx/v1/ingest/variants/KX-OTHER', ['bearer' => $token, 'json' => [
-            'product_external_id' => 'KL-8101', 'gtin' => '2000100101025', 'color' => ['code' => 'IND'],
+            'product_external_id' => 'ML-8101', 'gtin' => '2000100101025', 'color' => ['code' => 'IND'],
         ]]), 409, 'gtin_conflict');
         $this->assertSame('/gtin', $p['errors'][0]['pointer']);
-        $this->assertStringContainsString('KO-1001-NVY-M', $p['errors'][0]['detail']);
-        $this->assertStringContainsString('KO-1001', $p['errors'][0]['detail']);
+        $this->assertStringContainsString('MN-1001-NVY-M', $p['errors'][0]['detail']);
+        $this->assertStringContainsString('MN-1001', $p['errors'][0]['detail']);
     }
 
     public function testExtensionMembersAreKeptAndUnknownMembersWarn(): void
     {
-        ['ingest' => $token] = $this->kestrelNode();
+        ['ingest' => $token] = $this->maisonNoorNode();
         [, $id, $secret] = $this->retailerClient();
         $client = $this->accessToken($id, $secret);
         [, $cursor] = $this->drainSnapshot($client);
         $put = fn (string $kind, string $ext, array $body) => $this->http('PUT', '/obx/v1/ingest/' . $kind . 's/' . rawurlencode($ext), ['bearer' => $token, 'json' => $body]);
         $body = Json::decode((string) file_get_contents(self::fixtures('examples/ProductInput.extension.json')));
-        $body['brand_external_id'] = 'kestrel';
+        $body['brand_external_id'] = 'maison-noor';
         $body['colour_typo'] = 'blue';
         $body['materials'][0]['fibers'][0]['grade'] = 'A';
-        $body['x-kestrel-big'] = str_repeat('x', 9000);
-        $res = $this->json($put('product', 'KO-1007', $body), 201);
+        $body['x-noor-big'] = str_repeat('x', 9000);
+        $res = $this->json($put('product', 'MN-1007', $body), 201);
         $this->assertContains('Unknown member "/colour_typo" ignored.', $res['warnings']);
         $this->assertContains('Unknown member "/materials/0/fibers/0/grade" ignored.', $res['warnings']);
-        $rec = $this->json($this->http('GET', '/obx/v1/ingest/products/KO-1007', ['bearer' => $token]))['data'];
-        $this->assertSame(180, $rec['x-kestrel-fabric-weight-gsm']);
-        $this->assertSame(['en' => 'Wrinkles are part of the look'], $rec['x-kestrel-care-note']);
-        $this->assertSame('Mill 7', $rec['materials'][0]['fibers'][0]['material']['x-kestrel-mill']);
+        $rec = $this->json($this->http('GET', '/obx/v1/ingest/products/MN-1007', ['bearer' => $token]))['data'];
+        $this->assertSame(180, $rec['x-noor-fabric-weight-gsm']);
+        $this->assertSame(['en' => 'Wrinkles are part of the look'], $rec['x-noor-care-note']);
+        $this->assertSame('Mill 7', $rec['materials'][0]['fibers'][0]['material']['x-noor-mill']);
         $this->assertArrayNotHasKey('colour_typo', $rec);
-        $this->assertSame('unchanged', $this->json($put('product', 'KO-1007', $rec))['result']);
-        $pid = (string) $this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'KO-1007'");
+        $this->assertSame('unchanged', $this->json($put('product', 'MN-1007', $rec))['result']);
+        $pid = (string) $this->app->db->value("SELECT id FROM obx_products WHERE external_id = 'MN-1007'");
         $p = $this->json($this->http('GET', '/obx/v1/products/' . $pid, ['bearer' => $client]));
-        $this->assertSame(180, $p['x-kestrel-fabric-weight-gsm']);
-        $this->assertSame('Mill 7', $p['materials'][0]['fibers'][0]['material']['x-kestrel-mill']);
+        $this->assertSame(180, $p['x-noor-fabric-weight-gsm']);
+        $this->assertSame('Mill 7', $p['materials'][0]['fibers'][0]['material']['x-noor-mill']);
         $page = $this->json($this->http('GET', '/obx/v1/changes', ['bearer' => $client, 'query' => ['cursor' => $cursor]]));
-        $this->assertSame(180, $page['changes'][0]['data']['x-kestrel-fabric-weight-gsm']);
+        $this->assertSame(180, $page['changes'][0]['data']['x-noor-fabric-weight-gsm']);
         // A change of an extension is an update; PATCH null removes it.
-        $rec['x-kestrel-fabric-weight-gsm'] = 190;
-        $this->assertSame('updated', $this->json($put('product', 'KO-1007', $rec))['result']);
-        $res = $this->json($this->http('PATCH', '/obx/v1/ingest/products/KO-1007', ['bearer' => $token, 'json' => ['x-kestrel-care-note' => null], 'headers' => ['Content-Type' => 'application/merge-patch+json']]));
+        $rec['x-noor-fabric-weight-gsm'] = 190;
+        $this->assertSame('updated', $this->json($put('product', 'MN-1007', $rec))['result']);
+        $res = $this->json($this->http('PATCH', '/obx/v1/ingest/products/MN-1007', ['bearer' => $token, 'json' => ['x-noor-care-note' => null], 'headers' => ['Content-Type' => 'application/merge-patch+json']]));
         $this->assertSame('updated', $res['result']);
-        $rec = $this->json($this->http('GET', '/obx/v1/ingest/products/KO-1007', ['bearer' => $token]))['data'];
-        $this->assertArrayNotHasKey('x-kestrel-care-note', $rec);
+        $rec = $this->json($this->http('GET', '/obx/v1/ingest/products/MN-1007', ['bearer' => $token]))['data'];
+        $this->assertArrayNotHasKey('x-noor-care-note', $rec);
         // An import leaves extension members alone, also those of a fibre it states again.
-        $job = $this->importCsv($token, "brand,style_number,name:en,materials\nKestrel,KO-1007,Linen Shirt,main: 100% linen\n");
+        $job = $this->importCsv($token, "brand,style_number,name:en,materials\nMAISON NOOR,MN-1007,Linen Shirt,main: 100% linen\n");
         $this->assertSame(0, $job['import_run']['counts']['errors']);
-        $rec = $this->json($this->http('GET', '/obx/v1/ingest/products/KO-1007', ['bearer' => $token]))['data'];
-        $this->assertSame(190, $rec['x-kestrel-fabric-weight-gsm']);
-        $this->assertSame('Mill 7', $rec['materials'][0]['fibers'][0]['material']['x-kestrel-mill']);
+        $rec = $this->json($this->http('GET', '/obx/v1/ingest/products/MN-1007', ['bearer' => $token]))['data'];
+        $this->assertSame(190, $rec['x-noor-fabric-weight-gsm']);
+        $this->assertSame('Mill 7', $rec['materials'][0]['fibers'][0]['material']['x-noor-mill']);
         // Variants, colours and assets keep theirs too; too many is refused.
-        $v = ['product_external_id' => 'KO-1007', 'color' => ['code' => 'SND', 'x-kestrel-dye' => 'natural'], 'size' => 'M', 'x-kestrel-plu' => 4711];
-        $this->json($put('variant', 'KO-1007-SND-M', $v), 201);
+        $v = ['product_external_id' => 'MN-1007', 'color' => ['code' => 'SND', 'x-noor-dye' => 'natural'], 'size' => 'M', 'x-noor-plu' => 4711];
+        $this->json($put('variant', 'MN-1007-SND-M', $v), 201);
         $pv = $this->json($this->http('GET', '/obx/v1/products/' . $pid, ['bearer' => $client]))['variants'][0];
-        $this->assertSame([4711, 'natural'], [$pv['x-kestrel-plu'], $pv['color']['x-kestrel-dye']]);
-        $this->assertProblem($put('variant', 'KO-1007-SND-M', ['x-kestrel-huge' => str_repeat('y', 70000)] + $v), 422, 'validation_failed');
+        $this->assertSame([4711, 'natural'], [$pv['x-noor-plu'], $pv['color']['x-noor-dye']]);
+        $this->assertProblem($put('variant', 'MN-1007-SND-M', ['x-noor-huge' => str_repeat('y', 70000)] + $v), 422, 'validation_failed');
     }
 
     public function testPercentageMayBeNullAndUnknownMaterialsWarn(): void
     {
-        ['ingest' => $token] = $this->kestrelNode();
-        $body = ['brand_external_id' => 'kestrel', 'style_number' => 'KX-2', 'name' => ['en' => 'Bag'], 'item_type' => 'bag', 'contains_animal_origin' => true,
+        ['ingest' => $token] = $this->maisonNoorNode();
+        $body = ['brand_external_id' => 'maison-noor', 'style_number' => 'MX-2', 'name' => ['en' => 'Bag'], 'item_type' => 'bag', 'contains_animal_origin' => true,
             'materials' => [
                 ['part' => ['code' => 'outer'], 'fibers' => [['material' => ['code' => 'leather']]]],
                 ['part' => ['code' => 'lining'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 60], ['material' => ['code' => 'katoen'], 'percentage' => null]]],
             ]];
-        $res = $this->json($this->http('PUT', '/obx/v1/ingest/products/KX-2', ['bearer' => $token, 'json' => $body]), 201);
+        $res = $this->json($this->http('PUT', '/obx/v1/ingest/products/MX-2', ['bearer' => $token, 'json' => $body]), 201);
         $this->assertSame([['code' => 'material_unknown', 'pointer' => '/materials/1/fibers/1/material/code']],
             array_map(static fn ($w) => ['code' => $w['code'], 'pointer' => $w['pointer']], $res['warning_details']));
-        $rec = $this->json($this->http('GET', '/obx/v1/ingest/products/KX-2', ['bearer' => $token]))['data'];
+        $rec = $this->json($this->http('GET', '/obx/v1/ingest/products/MX-2', ['bearer' => $token]))['data'];
         $this->assertSame([null, 60, null], [$rec['materials'][0]['fibers'][0]['percentage'], $rec['materials'][1]['fibers'][0]['percentage'], $rec['materials'][1]['fibers'][1]['percentage']]);
-        $this->assertSame('unchanged', $this->json($this->http('PUT', '/obx/v1/ingest/products/KX-2', ['bearer' => $token, 'json' => $rec]))['result']);
+        $this->assertSame('unchanged', $this->json($this->http('PUT', '/obx/v1/ingest/products/MX-2', ['bearer' => $token, 'json' => $rec]))['result']);
         $this->assertSame('outer: leather; lining: 60% cotton, katoen', ArticleData::formatMaterials($rec['materials']));
         $over = ArticleData::labelWarnings(['item_type' => 'shirt', 'contains_animal_origin' => false, 'materials' => [['part' => ['code' => 'main'], 'fibers' => [
             ['material' => ['code' => 'cotton'], 'percentage' => 70], ['material' => ['code' => 'polyester'], 'percentage' => 40], ['material' => ['code' => 'elastane'], 'percentage' => null]]]]]);
         $this->assertSame(['fibre_percentages_not_100'], array_column($over, 'code'));
-        $this->assertProblem($this->http('PUT', '/obx/v1/ingest/products/KX-2', ['bearer' => $token, 'json' => ['materials' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 0]]]]] + $body]), 422, 'validation_failed');
+        $this->assertProblem($this->http('PUT', '/obx/v1/ingest/products/MX-2', ['bearer' => $token, 'json' => ['materials' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 0]]]]] + $body]), 422, 'validation_failed');
     }
 
     public function testLanguageTagsWithScriptAndNumericRegion(): void
     {
-        ['ingest' => $token] = $this->kestrelNode();
-        $body = ['brand_external_id' => 'kestrel', 'style_number' => 'KX-3', 'name' => ['en' => 'Scarf', 'zh-Hant' => '圍巾', 'es-419' => 'Bufanda', 'sr-Latn-RS' => 'Šal']];
-        $this->json($this->http('PUT', '/obx/v1/ingest/products/KX-3', ['bearer' => $token, 'json' => $body]), 201);
-        $this->assertProblem($this->http('PUT', '/obx/v1/ingest/products/KX-3', ['bearer' => $token, 'json' => ['name' => ['zh-hant' => 'x']] + $body]), 422, 'validation_failed');
-        $job = $this->importCsv($token, "brand,style_number,name:en,name:ZH_hant,name:es-419,name:x-klingon\nKestrel,KX-3,Scarf,圍巾 2,Bufanda 2,nope\n");
+        ['ingest' => $token] = $this->maisonNoorNode();
+        $body = ['brand_external_id' => 'maison-noor', 'style_number' => 'MX-3', 'name' => ['en' => 'Scarf', 'zh-Hant' => '圍巾', 'es-419' => 'Bufanda', 'sr-Latn-RS' => 'Šal']];
+        $this->json($this->http('PUT', '/obx/v1/ingest/products/MX-3', ['bearer' => $token, 'json' => $body]), 201);
+        $this->assertProblem($this->http('PUT', '/obx/v1/ingest/products/MX-3', ['bearer' => $token, 'json' => ['name' => ['zh-hant' => 'x']] + $body]), 422, 'validation_failed');
+        $job = $this->importCsv($token, "brand,style_number,name:en,name:ZH_hant,name:es-419,name:x-klingon\nMAISON NOOR,MX-3,Scarf,圍巾 2,Bufanda 2,nope\n");
         $this->assertSame(0, $job['import_run']['counts']['errors']);
-        $name = Json::decode((string) $this->app->db->value("SELECT input FROM obx_products WHERE external_id = 'KX-3'"))['name'];
+        $name = Json::decode((string) $this->app->db->value("SELECT input FROM obx_products WHERE external_id = 'MX-3'"))['name'];
         $this->assertSame(['en' => 'Scarf', 'es-419' => 'Bufanda 2', 'sr-Latn-RS' => 'Šal', 'zh-Hant' => '圍巾 2'], $name);
         $this->assertSame('sr-Latn-RS', \Obx\Node\Catalog\Validator::canonicalLanguage('SR_latn_rs'));
         $this->assertNull(\Obx\Node\Catalog\Validator::canonicalLanguage('english'));

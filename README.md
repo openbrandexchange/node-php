@@ -25,13 +25,13 @@ composer dev                # or: php bin/dev --port 8090
 ```
 
 It starts the portal with PHP's built-in web server and SQLite in `data/dev/`, sets it up and
-loads the Kestrel demo catalog of the specification (11 articles with sizes, composition, care
+loads the MAISON NOOR demo catalog of the specification (11 articles with sizes, composition, care
 and images), and prints the address and the logins:
 
 ```
 Open Brand Exchange portal (PHP), local: http://localhost:8080/
-  Admin:     admin@kestrel.example / kestrel demo admin
-  Retailer:  retailer@shop.example / kestrel demo retailer (the portal of Demo Shop)
+  Admin:     admin@maison-noor.example / maison-noor demo admin
+  Retailer:  retailer@shop.example / maison-noor demo retailer (the portal of Demo Shop)
 ```
 
 `php bin/dev --reset` starts over; `php bin/dev --empty` skips the demo, so the setup wizard asks
@@ -40,7 +40,7 @@ development only; for a real portal see the hosting options below.
 
 **What you get**
 
-- **A portal for your retailers** ("Kestrel · Beeldbank" in Dutch, "Händlerportal" in German,
+- **A portal for your retailers** ("MAISON NOOR · Beeldbank" in Dutch, "Händlerportal" in German,
   …; 25 languages): request access, browse and filter, paste a list of EANs, pick products,
   download single images, a zip per product, a zip of a selection, or everything in a filter in
   the background, and the article data as a spreadsheet (CSV). Every download is counted for you.

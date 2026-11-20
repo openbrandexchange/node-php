@@ -46,9 +46,9 @@ final class SupportTest extends TestCase
         $this->assertSame('2030-01-01T08:00:00Z', Clock::normalize('2030-01-01T10:00:00 02:00'));
         $this->assertSame('2030-01-01T00:00:00.500Z', Clock::normalize('2030-01-01T00:00:00.5Z'));
         $this->assertNull(Clock::normalize('2030-02-30'));
-        $this->assertSame('kestrel-trail', Str::slug('Kestrel Trail'));
+        $this->assertSame('noor-atelier', Str::slug('NOOR ATELIER'));
         $this->assertSame('etoile-du-nord', Str::slug('Étoile du Nord!'));
-        $this->assertSame('KO-1001_NVY_1_web.jpg', Str::renditionFilename('KO-1001_NVY_1.png', 'web'));
+        $this->assertSame('MN-1001_NVY_1_web.jpg', Str::renditionFilename('MN-1001_NVY_1.png', 'web'));
         $this->assertSame('attachment; filename="caf_.jpg"; filename*=UTF-8\'\'caf%C3%A9.jpg', Str::contentDisposition('attachment', 'café.jpg'));
         $safe = Str::safeFilename('../../evil');
         $this->assertStringNotContainsString('/', $safe);
@@ -64,20 +64,20 @@ final class SupportTest extends TestCase
     public function testValidatorNormalisesAndReportsPointers(): void
     {
         [$model, $status] = (new Validator())->product([
-            'style_number' => ' KO-1 ',
+            'style_number' => ' MN-1 ',
             'name' => ['nl' => 'Trui', 'en' => 'Sweater'],
             'care' => [['code' => 'wash_30']],
             'materials' => [['part' => ['code' => 'main'], 'fibers' => [['material' => ['code' => 'cotton'], 'percentage' => 100.0]]]],
             'status' => 'unpublished',
         ]);
-        $this->assertSame('KO-1', $model['style_number']);
+        $this->assertSame('MN-1', $model['style_number']);
         $this->assertSame(['en' => 'Sweater', 'nl' => 'Trui'], $model['name']);
         $this->assertSame(['code' => 'wash_30', 'category' => 'washing', 'symbol' => '1_D_30'], array_slice($model['care'][0], 0, 3));
         $this->assertSame([null, 'Cotton'], [$model['materials'][0]['part']['name'], $model['materials'][0]['fibers'][0]['material']['name']['en']]);
         $this->assertSame(100, $model['materials'][0]['fibers'][0]['percentage']);
         $this->assertSame('unpublished', $status);
         try {
-            (new Validator())->variant(['product_external_id' => 'KO-1', 'gtin' => '2000100101019', 'color' => ['code' => 'A']]);
+            (new Validator())->variant(['product_external_id' => 'MN-1', 'gtin' => '2000100101019', 'color' => ['code' => 'A']]);
             $this->fail('invalid check digit');
         } catch (ApiError $e) {
             $this->assertSame('invalid_gtin', $e->obxError);
@@ -100,8 +100,8 @@ final class SupportTest extends TestCase
         file_put_contents($src, str_repeat('abc', 1000));
         $fh = fopen($path, 'wb');
         $zip = new ZipWriter($fh);
-        $zip->addFile($zip->uniqueName('KO-1/a.jpg'), $src);
-        $zip->addFile($zip->uniqueName('KO-1/a.jpg'), $src);
+        $zip->addFile($zip->uniqueName('MN-1/a.jpg'), $src);
+        $zip->addFile($zip->uniqueName('MN-1/a.jpg'), $src);
         $zip->addString($zip->uniqueName('../../data.csv'), "a,b\n");
         $zip->addString($zip->uniqueName('ünïcode/ß.txt'), 'x');
         $zip->finish();
@@ -112,8 +112,8 @@ final class SupportTest extends TestCase
         for ($i = 0; $i < $z->numFiles; $i++) {
             $names[] = $z->getNameIndex($i);
         }
-        $this->assertSame(['KO-1/a.jpg', 'KO-1/a (2).jpg', 'data.csv', 'ünïcode/ß.txt'], $names);
-        $this->assertSame(str_repeat('abc', 1000), $z->getFromName('KO-1/a (2).jpg'));
+        $this->assertSame(['MN-1/a.jpg', 'MN-1/a (2).jpg', 'data.csv', 'ünïcode/ß.txt'], $names);
+        $this->assertSame(str_repeat('abc', 1000), $z->getFromName('MN-1/a (2).jpg'));
         $this->assertSame("a,b\n", $z->getFromName('data.csv'));
         $z->close();
         unlink($path);

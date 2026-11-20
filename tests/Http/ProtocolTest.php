@@ -10,7 +10,7 @@ use Obx\Node\Support\Json;
 use Obx\Node\Tests\Support\NodeTestCase;
 
 /**
- * The read side against the Kestrel fixtures (conformance profile "protocol").
+ * The read side against the MAISON NOOR fixtures (conformance profile "protocol").
  */
 final class ProtocolTest extends NodeTestCase
 {
@@ -19,7 +19,7 @@ final class ProtocolTest extends NodeTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->kestrelNode();
+        $this->maisonNoorNode();
         [, $id, $secret] = $this->retailerClient();
         $this->token = $this->accessToken($id, $secret);
     }
@@ -32,7 +32,7 @@ final class ProtocolTest extends NodeTestCase
         $this->assertSame('http://localhost/obx/v1', $doc['api_base']);
         $this->assertSame('0.3', $doc['obx_version']);
         $this->assertSame(['nl', 'en'], $doc['languages']);
-        $this->assertSame('Kestrel Outfitters', $doc['publisher']['name']);
+        $this->assertSame('MAISON NOOR Group', $doc['publisher']['name']);
         foreach (['changes', 'products', 'by_gtin', 'renditions', 'exports', 'webhooks', 'usage', 'ingest', 'portal'] as $cap) {
             $this->assertContains($cap, $doc['capabilities']);
         }
@@ -110,7 +110,7 @@ final class ProtocolTest extends NodeTestCase
     public function testProductsMatchExpectedFixtures(): void
     {
         // P-CAT-1 and, with the 0.2 article data, P-CAT-5.
-        foreach (['KO-1001', 'KO-1005', 'KO-1008', 'KO-1009', 'KO-1010', 'KT-2001'] as $style) {
+        foreach (['MN-1001', 'MN-1005', 'MN-1008', 'MN-1009', 'MN-1010', 'NA-2001'] as $style) {
             $expected = Json::decode((string) file_get_contents(self::fixtures('expected/product-' . $style . '.json')));
             $id = $this->productId($style);
             $res = $this->http('GET', '/obx/v1/products/' . $id, ['bearer' => $this->token]);
@@ -146,7 +146,7 @@ final class ProtocolTest extends NodeTestCase
         $expected = Json::decode((string) file_get_contents(self::fixtures('expected/gtin-lookup.json')));
         $actual = $this->json($this->http('POST', '/obx/v1/products:by-gtin', ['bearer' => $this->token, 'json' => $request]));
         $products = [];
-        foreach (['KO-1001', 'KT-2001'] as $style) {
+        foreach (['MN-1001', 'NA-2001'] as $style) {
             $products[$style] = $this->json($this->http('GET', '/obx/v1/products/' . $this->productId($style), ['bearer' => $this->token]));
         }
         $this->assertMatches($expected, $actual, '$', $products);
@@ -157,13 +157,13 @@ final class ProtocolTest extends NodeTestCase
 
     public function testRenditionsServeExactBytesRangesAndSignedUrls(): void
     {
-        $images = Json::decode((string) file_get_contents(self::fixtures('kestrel/images.json')));
-        $assetId = $this->assetId('KO-1002_OLV_1');
+        $images = Json::decode((string) file_get_contents(self::fixtures('maison-noor/images.json')));
+        $assetId = $this->assetId('MN-1002_OLV_1');
         $asset = $this->json($this->http('GET', '/obx/v1/assets/' . $assetId, ['bearer' => $this->token]));
         $orig = $this->http('GET', '/obx/v1/assets/' . $assetId . '/renditions/original', ['bearer' => $this->token]);
         $this->assertSame(200, $orig->status);
-        $this->assertSame(file_get_contents(self::fixtures('kestrel/images/KO-1002_OLV_1_front.png')), $orig->content());
-        $this->assertSame('"' . $images['KO-1002_OLV_1_front.png']['sha256'] . '"', $orig->getHeader('ETag'));
+        $this->assertSame(file_get_contents(self::fixtures('maison-noor/images/MN-1002_OLV_1_front.png')), $orig->content());
+        $this->assertSame('"' . $images['MN-1002_OLV_1_front.png']['sha256'] . '"', $orig->getHeader('ETag'));
         $this->assertSame('bytes', $orig->getHeader('Accept-Ranges'));
         foreach (['web' => 2000, 'square' => 2000, 'thumb' => 600] as $name => $max) {
             $res = $this->http('GET', '/obx/v1/assets/' . $assetId . '/renditions/' . $name, ['bearer' => $this->token]);

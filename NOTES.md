@@ -344,7 +344,7 @@ extensions. Each is the simplest reading; the spec repository is the source of t
     it, and absent when there is none.
 67. **Running without Docker.** `composer dev` (`bin/dev`) runs the portal with PHP's built-in
     web server in `data/dev/` and sets it up in-process through the portal's own API (setup,
-    upload key, Kestrel import from `tests/fixtures/spec/kestrel`, a retailer with a portal
+    upload key, MAISON NOOR import from `tests/fixtures/spec/maison-noor`, a retailer with a portal
     account), so the demo exercises the same code as a real first run. It never reads
     `config/config.php`, so it cannot touch a real install in the same folder; it is not in the
     release zip. `LOCAL=1 scripts/conformance.sh` runs the suite the same way, with

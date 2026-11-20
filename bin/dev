@@ -12,8 +12,8 @@ declare(strict_types=1);
  *
  * PHP's built-in web server, SQLite and the files in data/dev/ (not used by a real install in
  * data/), the web interface from public/ui, e-mails switched off. On the first start the portal
- * is set up with a known admin login, the Kestrel demo catalog of the specification (products,
- * sizes and images from tests/fixtures/spec/kestrel) and a retailer account for the portal.
+ * is set up with a known admin login, the MAISON NOOR demo catalog of the specification (products,
+ * sizes and images from tests/fixtures/spec/maison-noor) and a retailer account for the portal.
  * Not for production: see README.md for hosting.
  */
 
@@ -23,8 +23,8 @@ use Obx\Node\Http\Request;
 use Obx\Node\Http\Response;
 
 const SETUP_CODE = 'OBX-DEV-SETUP';
-const ADMIN = ['name' => 'Ada Admin', 'email' => 'admin@kestrel.example', 'password' => 'kestrel demo admin'];
-const RETAILER = ['name' => 'Rita Retailer', 'email' => 'retailer@shop.example', 'password' => 'kestrel demo retailer', 'shop' => 'Demo Shop'];
+const ADMIN = ['name' => 'Ada Admin', 'email' => 'admin@maison-noor.example', 'password' => 'maison-noor demo admin'];
+const RETAILER = ['name' => 'Rita Retailer', 'email' => 'retailer@shop.example', 'password' => 'maison-noor demo retailer', 'shop' => 'Demo Shop'];
 
 $root = dirname(__DIR__);
 $args = array_slice((array) ($_SERVER['argv'] ?? []), 1);
@@ -98,12 +98,12 @@ foreach ($env as $k => $v) {
 $app = new App(Config::load($root, ['jobs_inline' => true]));
 $out = static fn (string $line) => fwrite(STDOUT, $line . "\n");
 if (!$empty && !$app->settings->setupDone()) {
-    $fixtures = $root . '/tests/fixtures/spec/kestrel';
+    $fixtures = $root . '/tests/fixtures/spec/maison-noor';
     if (!is_file($fixtures . '/products.csv')) {
-        fwrite(STDERR, "The Kestrel demo data is not here ($fixtures); use a git checkout, or --empty.\n");
+        fwrite(STDERR, "The MAISON NOOR demo data is not here ($fixtures); use a git checkout, or --empty.\n");
         exit(66);
     }
-    $out('Setting up the local portal with the Kestrel demo catalog ...');
+    $out('Setting up the local portal with the MAISON NOOR demo catalog ...');
     try {
         demoSetup($app, $fixtures, $data);
     } catch (RuntimeException $e) {
@@ -135,7 +135,7 @@ exit((int) $code);
 
 /**
  * First-run setup through the portal's own API, in this process: the admin, an upload key, the
- * Kestrel import (products.csv, assets.csv and the images), a retailer with a portal account.
+ * MAISON NOOR import (products.csv, assets.csv and the images), a retailer with a portal account.
  */
 function demoSetup(App $app, string $fixtures, string $data): void
 {
@@ -183,7 +183,7 @@ function demoSetup(App $app, string $fixtures, string $data): void
     $call('GET', '/admin/api/session', ['browser' => 'admin']);
     $call('POST', '/admin/api/setup', ['browser' => 'admin', 'json' => [
         'setup_code' => SETUP_CODE,
-        'company' => ['name' => 'Kestrel Outfitters', 'first_brand_name' => 'Kestrel', 'default_language' => 'en', 'languages' => ['en', 'nl', 'de', 'fr']],
+        'company' => ['name' => 'MAISON NOOR Group', 'first_brand_name' => 'MAISON NOOR', 'default_language' => 'en', 'languages' => ['en', 'nl', 'de', 'fr']],
         'admin' => ['name' => ADMIN['name'], 'email' => ADMIN['email'], 'password' => ADMIN['password']],
     ]]);
     $token = (string) $call('POST', '/admin/api/ingest-tokens', ['browser' => 'admin', 'json' => [
@@ -208,7 +208,7 @@ function demoSetup(App $app, string $fixtures, string $data): void
     @rmdir($tmp);
     $counts = $job['import_run']['counts'] ?? [];
     if (($job['status'] ?? '') !== 'succeeded' || ($counts['errors'] ?? 1) !== 0) {
-        throw new RuntimeException('the Kestrel import did not succeed: ' . json_encode($job['import_run'] ?? $job));
+        throw new RuntimeException('the MAISON NOOR import did not succeed: ' . json_encode($job['import_run'] ?? $job));
     }
     $retailer = $call('POST', '/admin/api/retailers', ['browser' => 'admin', 'json' => ['name' => RETAILER['shop']]]);
     $invite = $call('POST', '/admin/api/users/invites', ['browser' => 'admin', 'json' => [

@@ -14,6 +14,10 @@ All notable changes to the PHP edition of the Open Brand Exchange portal ("Porta
 - `docs/hosting.md` now walks through ordinary web hosting step by step for DirectAdmin, cPanel and Plesk: create the subdomain, upload and extract the zip, DNS (an A record when the domain's DNS is elsewhere), Let's Encrypt in the panel, the installer, cron jobs.
 - Docker and Google Cloud Run are no longer production routes: the Docker files are labelled for local development and CI, and `deploy/cloudrun.sh` is removed. For a VPS of your own, the docs point to the one-command installer of the Portal for your own server (node-go).
 
+### Hosting and development
+
+- The demo catalog (`composer dev`, tests, UI walk) is now the fictional fashion house MAISON NOOR of spec 0.3.1 (spec 7a4c9ef) instead of Kestrel: brands `maison-noor` and `noor-atelier`, article numbers MN-/NA-, logins `admin@maison-noor.example`. The spec fixtures are copied from `fixtures/maison-noor`.
+
 ### Upgrade notes
 
 - The database gets the table `obx_branding_images` (schema version 8) on the first request after the upgrade, on SQLite and MySQL alike.

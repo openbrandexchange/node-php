@@ -123,10 +123,10 @@ final class InstallerTest extends TestCase
             self::page($i);
             $code = (string) file_get_contents($dir . '/data/SETUP-CODE.txt');
             preg_match('/[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}/', $code, $m);
-            [$errors, $html] = $i->install(['setup_code' => $m[0], 'public_url' => 'https://brands.kestrel.example', 'db' => 'sqlite'], $m[0]);
+            [$errors, $html] = $i->install(['setup_code' => $m[0], 'public_url' => 'https://brands.maison-noor.example', 'db' => 'sqlite'], $m[0]);
             $this->assertSame([], $errors);
-            $this->assertStringContainsString('href="https://brands.kestrel.example/setup#code=' . $m[0] . '"', (string) $html);
-            $this->assertStringContainsString('https://brands.kestrel.example/cron?key=', (string) $html);
+            $this->assertStringContainsString('href="https://brands.maison-noor.example/setup#code=' . $m[0] . '"', (string) $html);
+            $this->assertStringContainsString('https://brands.maison-noor.example/cron?key=', (string) $html);
             $this->assertSame($otherUser ? 0644 : 0640, fileperms($dir . '/config/config.php') & 0777, 'the FTP account can open its own settings');
             if ($otherUser) {
                 $this->assertStringNotContainsString('bin/obx cron', (string) $html, 'a cron job as the FTP account could not read config.php');
@@ -143,7 +143,7 @@ final class InstallerTest extends TestCase
             $this->markTestSkipped('Needs root and su to run the command line as another user.');
         }
         $dir = self::tempDir();
-        file_put_contents($dir . '/config/config.php', "<?php return ['public_url' => 'https://brands.kestrel.example'];\n");
+        file_put_contents($dir . '/config/config.php', "<?php return ['public_url' => 'https://brands.maison-noor.example'];\n");
         chmod($dir . '/config/config.php', 0600);
         chmod($dir, 0755);
         chmod($dir . '/config', 0755);

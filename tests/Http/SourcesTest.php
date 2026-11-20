@@ -50,7 +50,7 @@ final class SourcesTest extends NodeTestCase
         return $this->json($this->http('GET', '/admin/api/imports/' . $run['id'], ['browser' => 'admin']));
     }
 
-    private function expectKestrel(array $run): void
+    private function expectMaisonNoor(array $run): void
     {
         $this->assertSame('succeeded', $run['status'], Json::encode($run));
         $this->assertSame(0, $run['counts']['errors'], Json::encode($run['errors_preview']));
@@ -62,7 +62,7 @@ final class SourcesTest extends NodeTestCase
         $this->freshNode();
         $site = $this->dir . '/site';
         mkdir($site);
-        copy($this->kestrelZip(), $site . '/export.zip');
+        copy($this->maisonNoorZip(), $site . '/export.zip');
         $base = $this->serveDir($site);
         $src = $this->json($this->http('POST', '/admin/api/import-sources', ['browser' => 'admin', 'json' => [
             'name' => 'Nightly export', 'kind' => 'https_url', 'config' => ['url' => $base . '/export.zip'],
@@ -73,7 +73,7 @@ final class SourcesTest extends NodeTestCase
         $this->assertTrue($test['ok'], Json::encode($test));
         $this->assertNull($test['message'], 'no English-only text next to the UI\'s own "Connected" message');
         $this->assertSame('export.zip', $test['files'][0]['name']);
-        $this->expectKestrel($this->runSource($src['id']));
+        $this->expectMaisonNoor($this->runSource($src['id']));
         $again = $this->runSource($src['id']);
         $this->assertSame('succeeded', $again['status']);
         $this->assertSame(0, $again['counts']['created'] + $again['counts']['updated'] + $again['counts']['unchanged'], 'unchanged file is skipped');
@@ -85,7 +85,7 @@ final class SourcesTest extends NodeTestCase
         $this->assertSame('manual_run', $list['items'][0]['last_run']['trigger']);
         // Schedules: due sources run from the worker.
         \Obx\Node\Support\Clock::$offset = 3700;
-        file_put_contents($site . '/export.zip', (string) file_get_contents($this->kestrelZip(str_replace('Merino Crew Sweater', 'Merino Crew Jumper', (string) file_get_contents(self::fixtures('kestrel/products.csv'))))));
+        file_put_contents($site . '/export.zip', (string) file_get_contents($this->maisonNoorZip(str_replace('Fine Merino Crew-Neck Sweater', 'Merino Crew Jumper', (string) file_get_contents(self::fixtures('maison-noor/products.csv'))))));
         $this->app->worker()->tick(30);
         $runs = $this->json($this->http('GET', '/admin/api/imports', ['browser' => 'admin', 'query' => ['source_id' => $src['id']]]));
         $this->assertSame('schedule', $runs['items'][0]['trigger']);
@@ -102,9 +102,9 @@ final class SourcesTest extends NodeTestCase
         $bucket = 'obx' . bin2hex(random_bytes(4));
         $s3 = new S3Client($bucket, 'us-east-1', 'obxtest', 'obxtestsecret', $endpoint, true);
         $this->assertSame(200, $s3->request('PUT', '')['status']);
-        $s3->put('export/products.csv', self::fixtures('kestrel/products.csv'), 'text/csv');
-        $s3->put('export/assets.csv', self::fixtures('kestrel/assets.csv'), 'text/csv');
-        foreach (glob(self::fixtures('kestrel/images/*.png')) as $img) {
+        $s3->put('export/products.csv', self::fixtures('maison-noor/products.csv'), 'text/csv');
+        $s3->put('export/assets.csv', self::fixtures('maison-noor/assets.csv'), 'text/csv');
+        foreach (glob(self::fixtures('maison-noor/images/*.png')) as $img) {
             $s3->put('export/images/' . basename($img), $img, 'image/png');
         }
         $src = $this->json($this->http('POST', '/admin/api/import-sources', ['browser' => 'admin', 'json' => [
@@ -114,8 +114,8 @@ final class SourcesTest extends NodeTestCase
         ]]), 201);
         $test = $this->json($this->http('POST', '/admin/api/import-sources/' . $src['id'] . '/test', ['browser' => 'admin']));
         $this->assertTrue($test['ok'], Json::encode($test));
-        $this->assertCount(count(glob(self::fixtures('kestrel/images/*.png'))) + 2, $test['files'], 'products.csv, assets.csv and the images');
-        $this->expectKestrel($this->runSource($src['id']));
+        $this->assertCount(count(glob(self::fixtures('maison-noor/images/*.png'))) + 2, $test['files'], 'products.csv, assets.csv and the images');
+        $this->expectMaisonNoor($this->runSource($src['id']));
         $this->http('PATCH', '/admin/api/import-sources/' . $src['id'], ['browser' => 'admin', 'json' => ['credentials' => ['secret_access_key' => 'wrong']]]);
         $bad = $this->json($this->http('POST', '/admin/api/import-sources/' . $src['id'] . '/test', ['browser' => 'admin']));
         $this->assertFalse($bad['ok']);
@@ -136,7 +136,7 @@ final class SourcesTest extends NodeTestCase
         $test = $this->json($this->http('POST', '/admin/api/import-sources/' . $src['id'] . '/test', ['browser' => 'admin']));
         $this->assertTrue($test['ok'], Json::encode($test));
         $this->assertStringStartsWith('SHA256:', (string) $test['host_key_fingerprint']);
-        $this->expectKestrel($this->runSource($src['id']));
+        $this->expectMaisonNoor($this->runSource($src['id']));
         $pinned = $this->json($this->http('GET', '/admin/api/import-sources/' . $src['id'], ['browser' => 'admin']));
         $this->assertSame($test['host_key_fingerprint'], $pinned['config']['host_key_fingerprint']);
         $this->http('PATCH', '/admin/api/import-sources/' . $src['id'], ['browser' => 'admin', 'json' => ['config' => array_replace($pinned['config'], ['host_key_fingerprint' => 'SHA256:somethingelse'])]]);
@@ -160,7 +160,7 @@ final class SourcesTest extends NodeTestCase
         ]);
         $this->setupNode();
         $token = $this->ingestToken();
-        $job = $this->importKestrel($token);
+        $job = $this->importMaisonNoor($token);
         $this->assertSame('succeeded', $job['status']);
         $keys = array_column($s3->list('b/'), 'key');
         $this->assertCount(self::fixtureCounts()['assets'] * 4, $keys, 'originals and renditions are in the bucket');
@@ -168,8 +168,8 @@ final class SourcesTest extends NodeTestCase
         $this->rmrf($this->dir . '/data/cache');
         [, $id, $secret] = $this->retailerClient();
         $client = $this->accessToken($id, $secret);
-        $asset = (string) $this->app->db->value("SELECT id FROM obx_assets WHERE external_id = 'KO-1001_NVY_1'");
+        $asset = (string) $this->app->db->value("SELECT id FROM obx_assets WHERE external_id = 'MN-1001_NVY_1'");
         $res = $this->http('GET', '/obx/v1/assets/' . $asset . '/renditions/original', ['bearer' => $client]);
-        $this->assertSame(file_get_contents(self::fixtures('kestrel/images/KO-1001_NVY_1_front.png')), $res->content());
+        $this->assertSame(file_get_contents(self::fixtures('maison-noor/images/MN-1001_NVY_1_front.png')), $res->content());
     }
 }

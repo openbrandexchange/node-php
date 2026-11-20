@@ -3,7 +3,7 @@
 # php:<version>-apache with only PDO SQLite, GD, curl, zip and mbstring, then
 #   - the web installer (server check, setup code from data/SETUP-CODE.txt, SQLite),
 #   - private folders are not reachable over the web,
-#   - the setup wizard, an upload key, a Kestrel import, a background zip download and a due
+#   - the setup wizard, an upload key, a MAISON NOOR import, a background zip download and a due
 #     scheduled import all finish WITHOUT a cron job (the portal works after its responses),
 #   - the Apache/PHP log has no warnings, notices or deprecations.
 # Two layouts: "root" (everything uploaded into public_html) and "public" (document root
@@ -14,7 +14,7 @@ set -euo pipefail
 here=$(cd "$(dirname "$0")/.." && pwd)
 versions=("$@")
 [ ${#versions[@]} -eq 0 ] && versions=(8.2 8.3 8.4)
-fixtures="$here/tests/fixtures/spec/kestrel"
+fixtures="$here/tests/fixtures/spec/maison-noor"
 work=$(mktemp -d)
 names=()
 cleanup() {
@@ -31,7 +31,7 @@ if [ -z "$zip" ]; then
   zip="$here/build/obx-portal-php-$(sed -n "s/.*public const VERSION = '\([^']*\)'.*/\1/p" "$here/src/Config.php").zip"
 fi
 (cd "$work" && unzip -q "$zip")
-(cd "$fixtures" && zip -q -r "$work/kestrel.zip" products.csv assets.csv images)
+(cd "$fixtures" && zip -q -r "$work/maison-noor.zip" products.csv assets.csv images)
 cp "$fixtures/products.csv" "$work/feed.csv"
 
 json() { python3 -c "import json,sys; d=json.load(sys.stdin); print(eval(sys.argv[1], {'d': d}))" "$1"; }
@@ -99,14 +99,14 @@ for v in "${versions[@]}"; do
     curl -fsS -c "$jar" -b "$jar" "$base/admin/api/session" >/dev/null
     csrf=$(awk '$6 == "obx_csrf" {print $7}' "$jar")
     curl -fsS -c "$jar" -b "$jar" -H "X-CSRF-Token: $csrf" -H 'Content-Type: application/json' "$base/admin/api/setup" \
-      -d "{\"setup_code\":\"$code\",\"company\":{\"name\":\"Kestrel Outfitters\",\"first_brand_name\":\"Kestrel\",\"default_language\":\"nl\",\"languages\":[\"nl\",\"en\"]},\"admin\":{\"name\":\"Ada\",\"email\":\"admin@kestrel.example\",\"password\":\"correct horse battery\"}}" >/dev/null \
+      -d "{\"setup_code\":\"$code\",\"company\":{\"name\":\"MAISON NOOR Group\",\"first_brand_name\":\"MAISON NOOR\",\"default_language\":\"nl\",\"languages\":[\"nl\",\"en\"]},\"admin\":{\"name\":\"Ada\",\"email\":\"admin@maison-noor.example\",\"password\":\"correct horse battery\"}}" >/dev/null \
       || fail "setup wizard"
     csrf=$(awk '$6 == "obx_csrf" {print $7}' "$jar")
     admin=(-fsS -c "$jar" -b "$jar" -H "X-CSRF-Token: $csrf" -H 'Content-Type: application/json')
     token=$(curl "${admin[@]}" "$base/admin/api/ingest-tokens" -d '{"name":"hosting test","scopes":["ingest:read","ingest:write","ingest:delete"]}' | json "d['secret']")
 
     # Import as a package: the job runs after the response, without cron.
-    job=$(curl -fsS -H "Authorization: Bearer $token" -F "package=@$work/kestrel.zip;type=application/zip" "$base/obx/v1/ingest/imports" | json "d['id']")
+    job=$(curl -fsS -H "Authorization: Bearer $token" -F "package=@$work/maison-noor.zip;type=application/zip" "$base/obx/v1/ingest/imports" | json "d['id']")
     for _ in $(seq 1 90); do
       st=$(curl -fsS -H "Authorization: Bearer $token" "$base/obx/v1/ingest/jobs/$job" | json "d['status']")
       [ "$st" = succeeded ] && break; [ "$st" = failed ] && fail "import failed"; sleep 1

@@ -18,15 +18,15 @@ final class FormatsTest extends TestCase
     public static function filenames(): array
     {
         return [
-            'plain' => ['KO-1001_NVY_1.jpg', ['style' => 'KO-1001', 'color' => 'NVY', 'position' => 1, 'role' => 'packshot', 'view' => null]],
-            'view' => ['KO-1001_NVY_2_back.jpg', ['style' => 'KO-1001', 'color' => 'NVY', 'position' => 2, 'role' => 'packshot', 'view' => 'back']],
-            'role' => ['KO-1003_RST_3_model.png', ['style' => 'KO-1003', 'color' => 'RST', 'position' => 3, 'role' => 'model', 'view' => null]],
+            'plain' => ['MN-1001_NVY_1.jpg', ['style' => 'MN-1001', 'color' => 'NVY', 'position' => 1, 'role' => 'packshot', 'view' => null]],
+            'view' => ['MN-1001_NVY_2_back.jpg', ['style' => 'MN-1001', 'color' => 'NVY', 'position' => 2, 'role' => 'packshot', 'view' => 'back']],
+            'role' => ['MN-1003_RST_3_model.png', ['style' => 'MN-1003', 'color' => 'RST', 'position' => 3, 'role' => 'model', 'view' => null]],
             'underscore style + both' => ['AB_12_34_BLK_2_packshot_back.JPG', ['style' => 'AB_12_34', 'color' => 'BLK', 'position' => 2, 'role' => 'packshot', 'view' => 'back']],
-            'detail' => ['KO-1004_IND_3_detail.jpg', ['style' => 'KO-1004', 'color' => 'IND', 'position' => 3, 'role' => 'detail', 'view' => 'detail']],
-            'no position' => ['KO-1001_NVY_front.jpg', null],
-            'two-part view' => ['KO-9_RED_4_tilted_left.webp', ['style' => 'KO-9', 'color' => 'RED', 'position' => 4, 'role' => 'packshot', 'view' => 'tilted_left']],
-            'leading zero' => ['KO-9_RED_01.jpg', null],
-            'not an image' => ['KO-9_RED_1.gif', null],
+            'detail' => ['MN-1004_IND_3_detail.jpg', ['style' => 'MN-1004', 'color' => 'IND', 'position' => 3, 'role' => 'detail', 'view' => 'detail']],
+            'no position' => ['MN-1001_NVY_front.jpg', null],
+            'two-part view' => ['MN-9_RED_4_tilted_left.webp', ['style' => 'MN-9', 'color' => 'RED', 'position' => 4, 'role' => 'packshot', 'view' => 'tilted_left']],
+            'leading zero' => ['MN-9_RED_01.jpg', null],
+            'not an image' => ['MN-9_RED_1.gif', null],
         ];
     }
 
@@ -123,7 +123,7 @@ final class FormatsTest extends TestCase
     public function testCsvReadsBomSemicolonsAndQuotedNewlines(): void
     {
         $f = tempnam(sys_get_temp_dir(), 'csv');
-        file_put_contents($f, "\xEF\xBB\xBFStyle Number;Name:NL;EAN;colour_code\r\nKO-1;\"Trui; \"\"warm\"\"\nzacht\";2000100101025;NVY\r\n;;;\r\nKO-2;Jas;;BLK\r\n");
+        file_put_contents($f, "\xEF\xBB\xBFStyle Number;Name:NL;EAN;colour_code\r\nMN-1;\"Trui; \"\"warm\"\"\nzacht\";2000100101025;NVY\r\n;;;\r\nMN-2;Jas;;BLK\r\n");
         $csv = Csv::read($f);
         unlink($f);
         $this->assertSame(';', $csv['delimiter']);
@@ -136,7 +136,7 @@ final class FormatsTest extends TestCase
     public function testCsvRejectsNonUtf8(): void
     {
         $f = tempnam(sys_get_temp_dir(), 'csv');
-        file_put_contents($f, "style_number,name\nKO-1,Pull \xE9t\xE9\n");
+        file_put_contents($f, "style_number,name\nMN-1,Pull \xE9t\xE9\n");
         try {
             Csv::read($f);
             file_put_contents($f, "style_number,name\xE9\n");
@@ -168,7 +168,7 @@ final class FormatsTest extends TestCase
                 $this->assertSame('import_invalid', $e->obxError);
             }
         }
-        SafeZip::assertSafeName('images/KO-1001_NVY_1.jpg');
+        SafeZip::assertSafeName('images/MN-1001_NVY_1.jpg');
         $this->assertTrue(SafeZip::ignored('__MACOSX/images/._a.jpg'));
         $this->assertTrue(SafeZip::ignored('x/.DS_Store'));
         $this->assertFalse(SafeZip::ignored('x/a.jpg'));
