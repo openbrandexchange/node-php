@@ -1,14 +1,14 @@
 #!/usr/bin/env sh
 # Puts the shared web interface (admin-ui build) into public/ui so the node serves it.
 #   scripts/vendor-ui.sh [path-to-admin-ui-checkout | path-to-built-dist]
-# With a checkout it runs `npm ci && npm run build` there (needs Node.js), then copies dist/.
+# With a checkout it runs `bun install --frozen-lockfile && bun run build` there (needs Bun), then copies dist/.
 set -eu
 here=$(cd "$(dirname "$0")/.." && pwd)
 src=${1:-"$here/../admin-ui"}
 if [ -f "$src/index.html" ] && [ -d "$src/assets" ]; then
   dist="$src"
 elif [ -f "$src/package.json" ]; then
-  (cd "$src" && npm ci --no-audit --no-fund && npm run build)
+  (cd "$src" && bun install --frozen-lockfile && bun run build)
   dist="$src/dist"
 else
   echo "usage: scripts/vendor-ui.sh [admin-ui checkout | built dist folder]" >&2
