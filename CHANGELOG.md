@@ -4,9 +4,13 @@ All notable changes to the PHP edition of the Open Brand Exchange portal ("Porta
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-21
+
+Implements Open Brand Exchange specification 0.3.1: portal appearance (Node Admin API) and the MAISON NOOR test data. The web interface is admin-ui 0.3.1.
+
 ### For brands
 
-- The web interface is admin-ui e78ccf2: the showroom redesign with the theme engine, the Appearance editor in the settings, the start page and a quick view in the portal.
+- The web interface is admin-ui 0.3.1 (e78ccf2 plus the release commit): the showroom redesign with the theme engine, the Appearance editor in the settings, the start page and a quick view in the portal.
 - **Portal appearance**: make the portal look like your own showroom. Settings → branding takes a theme (light, dark or automatic colour scheme; primary, secondary, background, surface and text colours; heading and body font from eleven bundled open fonts; corner radius, grid density, card style, how product images fit and the colour behind them), a login page (centred or split with a background image, title and text per language) and a start page for retailers built from blocks: hero, tiles, text, image with text, products, announcement and contact. Everything is optional; without it the portal looks as before. A square favicon (PNG or WebP) can be uploaded next to the logo.
 - Branding images (PNG, JPEG or WebP, up to 10 MB and 8,000 pixels per side, at most 200) are uploaded once and used on the login and start page; an image still in use cannot be deleted.
 
@@ -172,6 +176,8 @@ The first release. It implements Open Brand Exchange specification 0.1.0 (OBX Pr
 - The installer's *Open the setup wizard* link fills in the setup code (as `#code=`, never sent to the server).
 - Web interface admin-ui 0.1.1 (commit d3ee574): the cron address under Settings, web version as the first download choice, download texts without an e-mail promise, a "Get started" step to set up e-mail while none is configured.
 
+[0.3.1]: https://github.com/openbrandexchange/node-php/releases/tag/v0.3.1
+[0.3.0]: https://github.com/openbrandexchange/node-php/releases/tag/v0.3.0
 [0.2.1]: https://github.com/openbrandexchange/node-php/releases/tag/v0.2.1
 [0.2.0]: https://github.com/openbrandexchange/node-php/releases/tag/v0.2.0
 [0.1.0]: https://github.com/openbrandexchange/node-php/releases/tag/v0.1.0
